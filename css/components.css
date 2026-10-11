@@ -1,0 +1,177 @@
+/* =============================================================================
+   components.css — reusable UI parts (buttons, nav, pills, tiles, marquee...)
+   Section-specific layout lives in sections.css.
+   ========================================================================== */
+
+/* ---------- Buttons ---------- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: .6em;
+  height: 48px; padding: 0 1.4rem; border-radius: 16px; border: 0;
+  font-weight: 500; letter-spacing: -0.02em; font-size: 1rem; white-space: nowrap;
+  transition: transform .5s var(--ease-out), background .3s, color .3s, box-shadow .3s;
+  will-change: transform;
+}
+.btn:hover { transform: translateY(-2px) scale(1.02); }
+.btn:active { transform: scale(.98); }
+.btn--dark { background: var(--ink); color: #fff; box-shadow: 0 10px 24px -10px rgba(0,0,0,.5); }
+.btn--dark:hover { background: #000; box-shadow: 0 16px 32px -10px rgba(0,0,0,.55); }
+.btn--ghost { background: rgba(15,15,15,.07); color: var(--ink); backdrop-filter: blur(10px); }
+.btn--ghost:hover { background: rgba(15,15,15,.12); }
+.btn--volt { background: var(--volt); color: var(--ink); }
+.btn--xl { height: 64px; padding: 0 2.2rem; font-size: 1.2rem; border-radius: 22px; }
+
+.pill {
+  display: inline-flex; align-items: center; height: 28px; padding: 0 12px; border-radius: var(--r-pill);
+  font-family: var(--font-mono); font-size: .68rem; text-transform: uppercase; letter-spacing: .03em;
+  background: rgba(255,255,255,.72); color: var(--ink); backdrop-filter: blur(10px);
+}
+
+/* ---------- Navigation: two floating frosted pills (like the reference) ---------- */
+.nav {
+  position: fixed; inset: 14px var(--gutter) auto; z-index: var(--z-nav);
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  pointer-events: none;                                  /* only the pills catch clicks */
+}
+.nav__pill {
+  pointer-events: auto; display: flex; align-items: center;
+  background: rgba(238,238,238,.72); backdrop-filter: blur(22px) saturate(1.5); -webkit-backdrop-filter: blur(22px) saturate(1.5);
+  border-radius: 22px; padding: 8px 12px; box-shadow: 0 1px 0 rgba(255,255,255,.6) inset, 0 12px 30px -18px rgba(0,0,0,.35);
+  transition: background .4s, transform .6s var(--ease-out);
+}
+.nav__main { gap: 22px; padding-left: 18px; flex: 0 1 auto; }
+.nav__brand { display: inline-flex; align-items: center; color: var(--ink); }
+.nav__links { display: flex; gap: 2px; }
+.nav__links a { padding: 8px 14px; border-radius: 12px; font-weight: 450; letter-spacing: -0.015em; transition: background .25s; }
+.nav__links a:hover { background: rgba(15,15,15,.07); }
+.nav__links a.is-active { background: rgba(15,15,15,.08); }
+.nav__cta .btn { height: 42px; border-radius: 14px; }
+.nav__burger { display: none; width: 44px; height: 44px; border: 0; background: transparent; position: relative; border-radius: 12px; }
+.nav__burger i { position: absolute; left: 12px; right: 12px; height: 2px; background: var(--ink); border-radius: 2px; transition: transform .5s var(--ease-out), top .5s var(--ease-out); }
+.nav__burger i:nth-child(1) { top: 17px; } .nav__burger i:nth-child(2) { top: 25px; }
+.nav.is-open .nav__burger i:nth-child(1) { top: 21px; transform: rotate(45deg); }
+.nav.is-open .nav__burger i:nth-child(2) { top: 21px; transform: rotate(-45deg); }
+.nav.is-hidden .nav__pill { transform: translateY(-140%); }
+.nav.is-open .nav__pill { transform: none; }
+
+/* Mobile full-screen menu */
+.menu {
+  position: fixed; inset: 0; z-index: var(--z-menu); background: var(--ink); color: var(--on-dark);
+  display: flex; flex-direction: column; justify-content: flex-end; gap: 2rem; padding: 110px var(--gutter) 36px;
+  clip-path: inset(0 0 100% 0); transition: clip-path .8s var(--ease-io); visibility: hidden;
+}
+.nav.is-open ~ .menu, .menu.is-open { clip-path: inset(0); visibility: visible; }
+.menu a.menu__link { font-size: clamp(2.5rem, 11vw, 4.5rem); font-weight: 500; letter-spacing: -0.05em; line-height: 1.05; display: block; }
+.menu a.menu__link:hover { color: var(--volt); }
+.menu__foot { color: var(--on-dark-muted); font-family: var(--font-mono); font-size: .8rem; }
+
+@media (max-width: 860px) {
+  .nav__links, .nav__cta { display: none; }
+  .nav__burger { display: block; }
+  .nav__main { flex: 1; justify-content: space-between; padding-right: 6px; }
+}
+
+/* ---------- Puffy 3D tiles ----------
+   A tile is any shape (squircle, circle, arch, pill, flower, burst, cog…) holding a generated canvas.
+   The "inflated glass" look is made with gradients (not box-shadow) so it follows ANY clip-path shape.
+   Drop shadows go on the parent `.fx` wrapper because clip-path would cut them off. */
+.fx { filter: drop-shadow(0 26px 22px rgba(0,0,0,.30)) drop-shadow(0 6px 6px rgba(0,0,0,.18)); transform: perspective(700px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg)); transition: transform .5s var(--ease-out); }
+.tile {
+  position: relative; width: 100%; aspect-ratio: 1; border-radius: 30%;
+  overflow: hidden; isolation: isolate; background: #222;
+}
+.tile canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+/* glossy top-left highlight + bottom bounce light */
+.tile::before {
+  content: ""; position: absolute; z-index: 2; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(120% 70% at 30% -8%, rgba(255,255,255,.65), rgba(255,255,255,0) 55%),
+    radial-gradient(80% 60% at 70% 115%, rgba(255,255,255,.28), rgba(255,255,255,0) 60%);
+  mix-blend-mode: soft-light;
+}
+/* darkened rim = volume */
+.tile::after {
+  content: ""; position: absolute; z-index: 3; inset: 0; pointer-events: none;
+  background: radial-gradient(closest-side, transparent 66%, rgba(0,0,0,.34));
+}
+/* shape/aspect variants (use with or without data-shape) */
+.tile--circle { border-radius: 50%; }
+.tile--arch   { border-radius: 999px 999px 24px 24px; aspect-ratio: 3 / 4; }
+.tile--pill   { border-radius: 999px; aspect-ratio: 1 / 1.5; }
+.tile--tall   { aspect-ratio: 3 / 4; }
+.tile[data-shape] { border-radius: 0; }
+
+/* ---------- Marquee (infinite scroll, pure CSS animation; js/modules/marquee.js clones the items) ---------- */
+.marquee { overflow: hidden; position: relative; -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); }
+.marquee__track { display: flex; width: max-content; animation: marquee var(--speed, 60s) linear infinite var(--dir, normal); }
+.marquee:hover .marquee__track { animation-play-state: paused; }
+@keyframes marquee { to { transform: translateX(-50%); } }   /* track = 2 identical halves */
+@media (prefers-reduced-motion: reduce) { .marquee__track { animation: none; } }
+
+/* ---------- Range inputs ---------- */
+input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 28px; background: transparent; cursor: ew-resize; }
+input[type="range"]::-webkit-slider-runnable-track { height: 6px; border-radius: 6px; background: rgba(255,255,255,.18); }
+input[type="range"]::-moz-range-track { height: 6px; border-radius: 6px; background: rgba(255,255,255,.18); }
+input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; margin-top: -8px; border-radius: 50%; background: var(--volt); border: 0; box-shadow: 0 0 0 5px rgba(212,255,58,.2); transition: box-shadow .3s; }
+input[type="range"]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: var(--volt); border: 0; box-shadow: 0 0 0 5px rgba(212,255,58,.2); }
+input[type="range"]:hover::-webkit-slider-thumb { box-shadow: 0 0 0 9px rgba(212,255,58,.22); }
+
+/* =============================================================================
+   BRAND: the BennieTech wordmark, stickers, ribbons, splash
+   ========================================================================== */
+
+/* ---------- Logo image in the nav ---------- */
+.bt-logo-img { display: block; width: auto; margin: -10px -6px -14px; transition: transform .6s var(--ease-out); }
+.nav__brand:hover .bt-logo-img { transform: rotate(-2deg) scale(1.05); }
+
+/* ---------- THE LIVE WORDMARK ----------
+   Real text + stacked text-shadows = the logo style, but animatable. All knobs are CSS variables:
+   --ox/--oy  layer direction & spread (JS wordmark.js animates these)   --step  layer distance
+   --rot      tilt                                                       --ink   letter colour    */
+.bt-word {
+  --ox: -.15; --oy: 1; --step: .072em; --rot: -6deg; --ink: #0b0b0b;
+  display: inline-block; font-family: var(--font-brand); font-weight: 400; font-style: normal;
+  line-height: 1.05; letter-spacing: -.02em; white-space: nowrap; color: var(--ink);
+  transform: rotate(var(--rot)) skewX(-6deg);
+  text-shadow:
+    calc(var(--ox) * var(--step) * 1) calc(var(--oy) * var(--step) * 1) 0 var(--wm-1),
+    calc(var(--ox) * var(--step) * 2) calc(var(--oy) * var(--step) * 2) 0 var(--wm-2),
+    calc(var(--ox) * var(--step) * 3) calc(var(--oy) * var(--step) * 3) 0 var(--wm-3),
+    calc(var(--ox) * var(--step) * 4) calc(var(--oy) * var(--step) * 4) 0 var(--wm-4),
+    calc(var(--ox) * var(--step) * 5.5) calc(var(--oy) * var(--step) * 5.8) .09em rgba(79, 224, 230, .75);
+}
+.bt-word--light { --ink: #f4f4f4; }
+.bt-letter { display: inline-block; transition: transform .55s cubic-bezier(.3, 1.9, .5, 1); }
+.bt-letter:hover { transform: translateY(-.1em) rotate(-6deg) scale(1.08); }
+/* optional constant bobbing: add data-wave to the .bt-word (uses the individual `translate`/`rotate` props so hover can still use `transform`) */
+.bt-word[data-wave] .bt-letter { animation: letterbob 3.4s ease-in-out infinite; animation-delay: calc(var(--i) * -.28s); }
+@keyframes letterbob { 0%, 100% { translate: 0 0; rotate: 0deg; } 50% { translate: 0 -.045em; rotate: -2.5deg; } }
+
+/* ---------- Floating / spinning helpers ---------- */
+.float { animation: float 7s ease-in-out infinite; }
+.spin  { animation: spin 26s linear infinite; }
+@keyframes float { 0%, 100% { transform: translateY(0) rotate(var(--r0, -3deg)); } 50% { transform: translateY(-14px) rotate(var(--r1, 3deg)); } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .float, .spin, .bt-word[data-wave] .bt-letter { animation: none; } }
+
+/* ---------- Ribbons (crossing tilted bands carrying the name) ---------- */
+.ribbons { position: relative; height: clamp(190px, 24vw, 340px); overflow: hidden; margin-block: -1rem; }
+.ribbon { position: absolute; left: -6%; right: -6%; top: 50%; padding: .25em 0 .5em; font-size: clamp(2.4rem, 5.4vw, 5.2rem); }
+.ribbon--ink  { background: var(--ink); transform: translateY(-50%) rotate(-3.2deg); z-index: 1; box-shadow: 0 30px 40px -24px rgba(0,0,0,.5); }
+.ribbon--volt { background: var(--volt); transform: translateY(-50%) rotate(2.6deg); z-index: 2; box-shadow: 0 30px 40px -24px rgba(0,0,0,.35); }
+.ribbon .marquee { -webkit-mask-image: none; mask-image: none; }
+.ribbon .marquee__track { align-items: center; gap: .55em; padding-left: .55em; }
+.ribbon .bt-word { --rot: -1.5deg; }
+.spark { display: inline-block; width: .8em; height: .8em; flex: none; background: var(--volt); animation: spin 8s linear infinite; }
+.ribbon--volt .spark { background: var(--ink); }
+.ribbon--ink .spark { background: var(--wm-3); }
+
+/* ---------- Intro splash ---------- */
+.intro { position: fixed; inset: 0; z-index: 1000; background: #e6e6e6; display: none; place-items: center; clip-path: inset(0); transition: clip-path .9s var(--ease-io); }
+.intro.is-on { display: grid; }
+.intro.is-leaving { clip-path: inset(0 0 100% 0); }
+.intro__stage { padding: 4vw; }
+.intro__word .bt-letter { animation: introPop .8s cubic-bezier(.3, 1.6, .5, 1) both; animation-delay: calc(var(--i) * 70ms); }
+@keyframes introPop { from { transform: translateY(.6em) scale(.2) rotate(-25deg); opacity: 0; } to { transform: none; opacity: 1; } }
+html.is-intro { overflow: hidden; }
+
+.menu__logo { margin-bottom: auto; }

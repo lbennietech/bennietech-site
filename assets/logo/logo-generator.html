@@ -1,0 +1,57 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>logo gen</title>
+<style>body{margin:0;background:#dedede;display:grid;gap:20px;padding:20px}.dark{background:#0d0d0d}</style>
+</head><body>
+<div id="a"></div><div id="b" class="dark"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/opentype.js/1.3.4/opentype.min.js"></script>
+<script>
+const FONT = 'https://raw.githubusercontent.com/google/fonts/main/ofl/shrikhand/Shrikhand-Regular.ttf';
+function build(d, bb, ink) {
+  const W = Math.round((bb.x2 - bb.x1) * 1.06 + 160), H = Math.round(W * 0.37);
+  const cx = (bb.x1 + bb.x2) / 2, cy = (bb.y1 + bb.y2) / 2;
+  // back-to-front chromatic "extrusion" layers: [colour, dx, dy, blur, opacity]
+  const layers = [
+    ['#4fe0e6', -14, 128, 20, .8],
+    ['#f2c4dc', -10, 86, 3, 1],
+    ['#ffd04d', -7, 66, 2, 1],
+    ['#7fc86a', -4, 44, 2.5, 1],
+    ['#4fe0e6', -2, 22, 1.2, 1],
+  ];
+  const blurs = layers.map((l, i) =>
+    `<filter id="bl${i}" x="-20%" y="-30%" width="140%" height="180%"><feGaussianBlur stdDeviation="${l[3]}"/></filter>`).join('');
+  const uses = layers.map((l, i) =>
+    `<g filter="url(#bl${i})" opacity="${l[4]}"><use href="#bt-blob" transform="translate(${l[1]} ${l[2]})" fill="${l[0]}"/></g>`).join('\n    ');
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="BennieTech">
+  <title>BennieTech</title>
+  <defs>
+    <path id="bt-word" d="${d}"/>
+    <g id="bt-blob" filter="url(#goo)"><use href="#bt-word"/></g>
+    <!-- "goo": fattens the letters and melts corners/joins into soft blobs -->
+    <filter id="goo" x="-10%" y="-20%" width="120%" height="140%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.0035 0.009" numOctaves="2" seed="7" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="26" xChannelSelector="R" yChannelSelector="G" result="wobble"/>
+      <feMorphology operator="dilate" radius="1.2" in="wobble" result="fat"/>
+      <feGaussianBlur in="fat" stdDeviation="6" result="soft"/>
+      <feColorMatrix in="soft" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 30 -13"/>
+    </filter>
+    ${blurs}
+  </defs>
+  <g transform="translate(${W / 2} ${H / 2 - 45}) rotate(-7) skewX(-6) translate(${-cx} ${-cy})">
+    ${uses}
+    <use href="#bt-blob" fill="${ink}"/>
+  </g>
+</svg>`;
+}
+opentype.load(FONT, (err, font) => {
+  if (err) { document.body.textContent = 'ERR ' + err; return; }
+  const p = font.getPath('BennieTech', 0, 0, 300, { kerning: true, letterSpacing: -0.02 });
+  const bb = p.getBoundingBox();
+  const d = p.toPathData(1);
+  window.svgLight = build(d, bb, '#0b0b0b');
+  window.svgDark = build(d, bb, '#f4f4f4');
+  document.getElementById('a').innerHTML = window.svgLight.replace(/bt-word|bt-blob|goo|bl(\d)/g, m => 'L' + m);
+  document.getElementById('b').innerHTML = window.svgDark.replace(/bt-word|bt-blob|goo|bl(\d)/g, m => 'D' + m);
+  document.querySelectorAll('svg').forEach(s => s.style.width = '100%');
+  window.done = true;
+});
+</script></body></html>

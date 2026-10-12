@@ -98,7 +98,19 @@ export default {
       canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
       const tall = w / h < .9;
       items = (tall ? TALL : WIDE).map((it, i) => ({ ...it, ph: i * 1.7, tall }));
+      if (tall) fitAboveCopy();
       draw(2.5);
+    }
+
+    /* Portrait: on short/narrow phones the copy fills most of the hero, so squeeze the cast (positions and
+       sizes, towards the top) until it clears the eyebrow + headline. Overlapping the big name is intended. */
+    function fitAboveCopy() {
+      const copy = canvas.parentElement?.querySelector('.eyebrow, .hero__title');
+      if (!copy) return;
+      const limit = copy.getBoundingClientRect().top - canvas.getBoundingClientRect().top;
+      const reach = Math.max(...items.map(it => it.y * h + it.s * w * .62));   // .62: half-size + layers + bob
+      const k = Math.min(1, Math.max(.4, limit / reach));
+      for (const it of items) { it.y *= k; it.s *= k; }
     }
 
     function draw(t) {
@@ -128,6 +140,7 @@ export default {
     }
 
     size(); onResize(canvas, size);
+    document.fonts?.ready.then(size);   // the copy moves once the web fonts land
     if (reducedMotion()) return;
     listenPointer();
     const tick = (t) => {

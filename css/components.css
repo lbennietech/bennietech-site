@@ -1,5 +1,5 @@
 /* =============================================================================
-   components.css — reusable UI parts (buttons, nav, pills, tiles, marquee, logo, splash)
+   components.css — reusable UI parts (buttons, nav, pills, specimens, marquee, logo, splash)
    Section-specific layout lives in sections.css.
    ========================================================================== */
 
@@ -72,39 +72,28 @@
   .nav__main { flex: 1; justify-content: space-between; padding-right: 6px; }
 }
 
-/* ---------- Tiles: ONE shape everywhere — a rounded square holding live shader art ----------
-   Depth comes from inset bevel highlights + a soft drop shadow (no clip-path, so shadows just work). */
-.tile {
-  position: relative; width: 100%; aspect-ratio: 1; border-radius: var(--r-tile);
-  overflow: hidden; isolation: isolate; background: var(--ink-2);
-  transform: perspective(800px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
-  transition: transform .6s var(--ease-out);
-}
-.tile canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
-.tile::after {                                   /* glass bevel + top sheen over the artwork */
-  content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none; border-radius: inherit;
-  box-shadow: var(--shadow-tile);
-  background: linear-gradient(170deg, rgba(255,255,255,.16), rgba(255,255,255,0) 38%);
-}
-.tile { box-shadow: 0 26px 40px -24px rgba(0,0,0,.5), 0 6px 12px -8px rgba(0,0,0,.25); }
-.tile--float { animation: float 7s ease-in-out infinite; }
-@keyframes float { 0%, 100% { translate: 0 0; rotate: -2deg; } 50% { translate: 0 -10px; rotate: 2deg; } }
+/* ---------- Specimens: small artwork panels (shader art from js/gl/tile-shaders.js, SPECIMENS) ----------
+   Framed like plates in a technical folio: a hairline edge, a figure number and a note in mono. */
+.spec { position: relative; width: 100%; aspect-ratio: 4 / 5; border-radius: var(--r-md); overflow: hidden; background: var(--ink-2); isolation: isolate; }
+.spec canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.spec::before, .spec::after { position: absolute; z-index: 1; font: 500 .58rem/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: rgba(244,244,242,.55); text-shadow: 0 0 8px #000, 0 0 2px #000; pointer-events: none; }
+.spec::before { content: "Fig. " attr(data-fig); left: 12px; top: 12px; }
+.spec::after { content: attr(data-note); right: 12px; bottom: 12px; }
+.spec { outline: 1px solid rgba(255,255,255,.09); outline-offset: -1px; transition: outline-color .4s; }   /* outlines paint over the canvas */
 
-/* inline tiles inside running text (statement) */
-.itile {
-  display: inline-block; position: relative; width: 1.02em; height: 1.02em; margin: 0 .06em; vertical-align: -.14em;
-  border-radius: 26%; overflow: hidden; background: var(--ink-2);
-  box-shadow: inset 0 1px 1px rgba(255,255,255,.25), 0 10px 18px -10px rgba(0,0,0,.5);
-  transition: opacity .25s linear;
+/* inline artwork pills inside running text (statement) */
+.ipill {
+  display: inline-block; position: relative; width: 1.9em; height: .92em; margin: 0 .08em; vertical-align: -.06em;
+  border-radius: var(--r-pill); overflow: hidden; background: var(--ink); transition: opacity .25s linear;
 }
-.itile canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.ipill canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 
 /* ---------- Marquee (infinite scroll, pure CSS animation; js/modules/marquee.js clones the items) ---------- */
 .marquee { overflow: hidden; position: relative; -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); }
 .marquee__track { display: flex; width: max-content; animation: marquee var(--speed, 60s) linear infinite var(--dir, normal); }
 .marquee:hover .marquee__track { animation-play-state: paused; }
 @keyframes marquee { to { transform: translateX(-50%); } }   /* track = 2 identical halves */
-@media (prefers-reduced-motion: reduce) { .marquee__track, .tile--float { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .marquee__track { animation: none; } }
 
 /* ---------- Range inputs ---------- */
 input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 28px; background: transparent; cursor: ew-resize; }

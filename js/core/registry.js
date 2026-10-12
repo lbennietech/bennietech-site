@@ -11,7 +11,7 @@
  * - Each init() runs inside try/catch: if one module breaks, the rest of the page still works and
  *   the error is printed with the module name so you can find it fast.
  */
-import { logger } from './debug.js?v=mv54zinu';
+import { logger } from './debug.js?v=mv55min1';
 
 const log = logger('registry');
 

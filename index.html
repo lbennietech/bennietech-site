@@ -7,7 +7,7 @@
   * Any element with  data-module="name"  is picked up by js/main.js and handed to the matching module in
     js/modules/. One element can use several modules: data-module="art tilt".
   * All imagery is generated in code: the hero sculpture (WebGL, js/modules/hero-sculpt.js), the artwork in every
-    tile/card (WebGL shaders, js/gl/tile-shaders.js, used via <canvas data-module="art" data-art="…">) and the logo
+    panel/card (WebGL shaders, js/gl/tile-shaders.js, used via <canvas data-module="art" data-art="…">) and the logo
     (vector geometry, js/brand/logotype.js). There are no image files.
   * Nav + footer are rendered from js/config/site.config.js (edit contact details there).
   * To add a new section: copy a <section> below, give it a unique id, add a link in site.config.js -> nav.
@@ -30,13 +30,13 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:ital,wght@0,300..900;1,300..900&family=JetBrains+Mono:wght@400;500&display=swap">
 
-  <link rel="stylesheet" href="css/tokens.css?v=mv54zinu">
-  <link rel="stylesheet" href="css/base.css?v=mv54zinu">
-  <link rel="stylesheet" href="css/components.css?v=mv54zinu">
-  <link rel="stylesheet" href="css/sections.css?v=mv54zinu">
+  <link rel="stylesheet" href="css/tokens.css?v=mv55min1">
+  <link rel="stylesheet" href="css/base.css?v=mv55min1">
+  <link rel="stylesheet" href="css/components.css?v=mv55min1">
+  <link rel="stylesheet" href="css/sections.css?v=mv55min1">
 
   <script>document.documentElement.classList.add('js');</script>
-  <script type="module" src="js/main.js?v=mv54zinu"></script>
+  <script type="module" src="js/main.js?v=mv55min1"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -65,20 +65,20 @@
       <div class="hero__scroll" aria-hidden="true"><span>Scroll</span><i></i></div>
     </section>
 
-    <!-- ============================ 02 · STATEMENT — words light up as you scroll; tiles sit inline ============================ -->
+    <!-- ============================ 02 · STATEMENT — words light up as you scroll; small artwork pills sit inline ============================ -->
     <section class="section statement" aria-label="Introduction">
       <div class="container">
         <p class="statement__text" data-scrub data-hl="evolve,tomorrow">
           We design and engineer software
-          <span class="itile"><canvas data-module="art" data-art="chrome" data-palette="chrome" data-seed="2"></canvas></span>
+          <span class="ipill"><canvas data-module="art" data-art="globe" data-palette="ink" data-seed="2" data-density=".85"></canvas></span>
           solutions that are built to evolve
-          <span class="itile"><canvas data-module="art" data-art="dither" data-palette="blue" data-seed="5"></canvas></span>
+          <span class="ipill"><canvas data-module="art" data-art="flow" data-palette="ink" data-seed="3"></canvas></span>
           — pairing sharp product thinking
-          <span class="itile"><canvas data-module="art" data-art="type" data-text="Think" data-palette="volt" data-seed="3"></canvas></span>
+          <span class="ipill"><canvas data-module="art" data-art="isolines" data-palette="ink" data-seed="4"></canvas></span>
           with modern, composable architecture
-          <span class="itile"><canvas data-module="art" data-art="gyro" data-palette="ink" data-seed="4"></canvas></span>
+          <span class="ipill"><canvas data-module="art" data-art="lattice" data-palette="ink" data-seed="5"></canvas></span>
           so what we ship today keeps getting better
-          <span class="itile"><canvas data-module="art" data-art="scan" data-palette="ember" data-seed="6"></canvas></span>
+          <span class="ipill"><canvas data-module="art" data-art="streaks" data-palette="ink" data-seed="6"></canvas></span>
           tomorrow.
         </p>
       </div>
@@ -105,18 +105,18 @@
           </div>
           <div class="console__ruler" aria-hidden="true"><i class="console__head"></i></div>
 
-          <div class="marquee marquee--tiles" data-module="marquee" style="--speed:70s">
+          <div class="marquee marquee--caps" data-module="marquee" style="--speed:70s">
             <ul class="marquee__track">
-              <li class="tile-item"><div class="tile" data-module="tilt"><canvas data-module="art" data-art="contour" data-palette="ink" data-seed="3"></canvas></div><span class="mono">Strategy</span></li>
-              <li class="tile-item"><div class="tile" data-module="tilt"><canvas data-module="art" data-art="gyro" data-palette="ink" data-seed="5"></canvas></div><span class="mono">Architecture</span></li>
-              <li class="tile-item"><div class="tile" data-module="tilt"><canvas data-module="art" data-art="silk" data-palette="flare" data-seed="2"></canvas></div><span class="mono">Interface</span></li>
-              <li class="tile-item"><div class="tile" data-module="tilt"><canvas data-module="art" data-art="glass" data-palette="ice" data-seed="7"></canvas></div><span class="mono">Cloud</span></li>
-              <li class="tile-item"><div class="tile" data-module="tilt"><canvas data-module="art" data-art="dither" data-palette="blue" data-seed="4"></canvas></div><span class="mono">Intelligence</span></li>
-              <li class="tile-item"><div class="tile" data-module="tilt"><canvas data-module="art" data-art="type" data-text="Connect" data-palette="volt" data-seed="9"></canvas></div><span class="mono">Integration</span></li>
-              <li class="tile-item"><div class="tile" data-module="tilt"><canvas data-module="art" data-art="chrome" data-palette="chrome" data-seed="6"></canvas></div><span class="mono">Security</span></li>
-              <li class="tile-item"><div class="tile" data-module="tilt"><canvas data-module="art" data-art="scan" data-palette="blue" data-seed="8"></canvas></div><span class="mono">Data</span></li>
-              <li class="tile-item"><div class="tile" data-module="tilt"><canvas data-module="art" data-art="aurora" data-palette="flare" data-seed="14"></canvas></div><span class="mono">Signal</span></li>
-              <li class="tile-item"><div class="tile" data-module="tilt"><canvas data-module="art" data-art="type" data-text="Ship" data-palette="ember" data-seed="3"></canvas></div><span class="mono">Delivery</span></li>
+              <li class="cap"><div class="spec" data-fig="01" data-note="Isolines"><canvas data-module="art" data-art="isolines" data-palette="ink" data-seed="3"></canvas></div><span class="mono">Strategy</span></li>
+              <li class="cap"><div class="spec" data-fig="02" data-note="Lattice"><canvas data-module="art" data-art="lattice" data-palette="ink" data-seed="4"></canvas></div><span class="mono">Architecture</span></li>
+              <li class="cap"><div class="spec" data-fig="03" data-note="Moiré"><canvas data-module="art" data-art="moire" data-palette="ink" data-seed="5"></canvas></div><span class="mono">Interface</span></li>
+              <li class="cap"><div class="spec" data-fig="04" data-note="Halftone"><canvas data-module="art" data-art="halftone" data-palette="ink" data-seed="6"></canvas></div><span class="mono">Cloud</span></li>
+              <li class="cap"><div class="spec" data-fig="05" data-note="Sphere"><canvas data-module="art" data-art="globe" data-palette="ink" data-seed="7"></canvas></div><span class="mono">Intelligence</span></li>
+              <li class="cap"><div class="spec" data-fig="06" data-note="Flow"><canvas data-module="art" data-art="flow" data-palette="ink" data-seed="8"></canvas></div><span class="mono">Integration</span></li>
+              <li class="cap"><div class="spec" data-fig="07" data-note="Dials"><canvas data-module="art" data-art="rings" data-palette="ink" data-seed="9"></canvas></div><span class="mono">Security</span></li>
+              <li class="cap"><div class="spec" data-fig="08" data-note="Spectrum"><canvas data-module="art" data-art="spectrum" data-palette="ink" data-seed="10"></canvas></div><span class="mono">Data</span></li>
+              <li class="cap"><div class="spec" data-fig="09" data-note="Ridges"><canvas data-module="art" data-art="ridges" data-palette="ink" data-seed="11"></canvas></div><span class="mono">Signal</span></li>
+              <li class="cap"><div class="spec" data-fig="10" data-note="Vector"><canvas data-module="art" data-art="streaks" data-palette="ink" data-seed="12"></canvas></div><span class="mono">Delivery</span></li>
             </ul>
           </div>
         </div>
@@ -152,25 +152,25 @@
         </header>
         <div class="cards4">
           <article class="card" data-reveal style="--d:0s" data-module="tilt">
-            <div class="card__stage"><div class="tile tile--float"><canvas data-module="art" data-art="glass" data-palette="ice" data-seed="21"></canvas></div></div>
+            <div class="card__stage"><canvas data-module="art" data-art="isolines" data-palette="paper" data-seed="21"></canvas></div>
             <span class="mono card__num">01</span>
             <h3>Discover</h3>
             <p>Workshops, research and rapid prototypes that turn fuzzy problems into a sharp, shared direction.</p>
           </article>
           <article class="card" data-reveal style="--d:.08s" data-module="tilt">
-            <div class="card__stage"><div class="tile tile--float" style="animation-delay:-1.5s"><canvas data-module="art" data-art="contour" data-palette="ink" data-seed="22"></canvas></div></div>
+            <div class="card__stage"><canvas data-module="art" data-art="lattice" data-palette="paper" data-seed="22"></canvas></div>
             <span class="mono card__num">02</span>
             <h3>Design</h3>
             <p>Interfaces and system architecture designed together — so beauty and structure never fight each other.</p>
           </article>
           <article class="card" data-reveal style="--d:.16s" data-module="tilt">
-            <div class="card__stage"><div class="tile tile--float" style="animation-delay:-3s"><canvas data-module="art" data-art="silk" data-palette="blue" data-seed="11"></canvas></div></div>
+            <div class="card__stage"><canvas data-module="art" data-art="spectrum" data-palette="paper" data-seed="23"></canvas></div>
             <span class="mono card__num">03</span>
             <h3>Build</h3>
             <p>Clean, tested, documented engineering — shipped in small increments you can see and steer.</p>
           </article>
           <article class="card" data-reveal style="--d:.24s" data-module="tilt">
-            <div class="card__stage"><div class="tile tile--float" style="animation-delay:-4.5s"><canvas data-module="art" data-art="chrome" data-palette="chrome" data-seed="24"></canvas></div></div>
+            <div class="card__stage"><canvas data-module="art" data-art="flow" data-palette="paper" data-seed="24"></canvas></div>
             <span class="mono card__num">04</span>
             <h3>Evolve</h3>
             <p>Observability, iteration and continuous improvement, so your solution keeps pace with your ambition.</p>
@@ -220,7 +220,7 @@
       </div>
       <div class="marquee marquee--cards" data-module="marquee" style="--speed:90s">
         <ul class="marquee__track">
-          <li class="scard"><canvas data-module="art" data-art="type" data-text="Commerce" data-palette="volt" data-seed="41"></canvas><span class="pill">Commerce</span><h3>Composable storefronts</h3></li>
+          <li class="scard"><canvas data-module="art" data-art="ridges" data-palette="ink" data-seed="41"></canvas><span class="pill">Commerce</span><h3>Composable storefronts</h3></li>
           <li class="scard"><canvas data-module="art" data-art="glass" data-palette="ice" data-seed="42"></canvas><span class="pill">Health</span><h3>Secure patient portals</h3></li>
           <li class="scard"><canvas data-module="art" data-art="scan" data-palette="ember" data-seed="43"></canvas><span class="pill">Logistics</span><h3>Live fleet &amp; supply tracking</h3></li>
           <li class="scard"><canvas data-module="art" data-art="contour" data-palette="ink" data-seed="44"></canvas><span class="pill">Finance</span><h3>Real-time insight dashboards</h3></li>
@@ -265,15 +265,15 @@
         </header>
         <div class="bento">
           <div class="bento__card bento__card--a" data-reveal>
-            <div class="bento__art tile tile--float"><canvas data-module="art" data-art="glass" data-palette="ice" data-seed="71"></canvas></div>
+            <div class="bento__art"><canvas data-module="art" data-art="moire" data-palette="paper" data-seed="71"></canvas></div>
             <h3>Turn anything into everything.</h3><p>Reusable foundations and design systems let a single idea become a whole product family — faster, and consistently.</p>
           </div>
           <div class="bento__card bento__card--b bento__card--ink" data-reveal style="--d:.1s">
-            <div class="bento__art tile tile--float" style="animation-delay:-2s"><canvas data-module="art" data-art="gyro" data-palette="ink" data-seed="72"></canvas></div>
+            <div class="bento__art"><canvas data-module="art" data-art="streaks" data-palette="ink" data-seed="72"></canvas></div>
             <h3>Create more, faster.</h3><p>Short feedback loops, automation and clear documentation accelerate delivery without compromising quality.</p>
           </div>
           <div class="bento__card bento__card--c" data-reveal style="--d:.15s">
-            <div class="bento__art tile tile--float" style="animation-delay:-4s"><canvas data-module="art" data-art="scan" data-palette="blue" data-seed="73"></canvas></div>
+            <div class="bento__art"><canvas data-module="art" data-art="rings" data-palette="paper" data-seed="73"></canvas></div>
             <h3>Made to be handed over.</h3><p>Readable code, honest documentation and portable architecture — you’re never locked in, to us or anyone else.</p>
           </div>
           <div class="bento__card bento__card--d bento__card--volt" data-reveal style="--d:.2s">

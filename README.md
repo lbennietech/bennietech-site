@@ -2,7 +2,7 @@
 
 A single-page brochure site for **BennieTech** (software solution design).
 Plain HTML + CSS + native ES modules. **No build step, no npm, no dependencies.**
-All imagery is generated in code: a real-time 3D hero sculpture (WebGL), shader artwork in every tile and card (WebGL),
+All imagery is generated in code: a real-time 3D hero sculpture (WebGL), 2D generative artwork in every specimen panel and card (WebGL shaders),
 and a logo constructed as vector geometry. There are no image files apart from exported copies of the logo.
 
 ---
@@ -47,8 +47,8 @@ Example: <http://localhost:8080/?debug&nointro>
 |---|---|
 | Blank/unstyled page | Opened `index.html` via `file://` — use `node server.js`. |
 | `No module registered for data-module="x"` | Typo, or module not listed in `js/modules/index.js`. |
-| Tiles show a flat gradient, hero shows a flat logo | WebGL is unavailable (very old device / disabled GPU). That is the designed fallback. |
-| Slow on a weak machine | Both renderers adapt: the hero lowers its resolution, then its frame rate; tiles only render on screen, within a per-frame time budget. |
+| Artwork panels show a flat gradient, hero shows a flat logo | WebGL is unavailable (very old device / disabled GPU). That is the designed fallback. |
+| Slow on a weak machine | Both renderers adapt: the hero lowers its resolution, then its frame rate; artwork panels only render on screen, within a per-frame time budget. |
 
 ---
 
@@ -83,7 +83,7 @@ assets/logo/               Exported logo SVGs, the generator page, and archive/ 
 css/
   tokens.css               ★ Design tokens: colours, fonts, radii, spacing, motion. Start here to restyle.
   base.css                 Reset, typography, layout primitives, reveal animation states.
-  components.css           Buttons, nav, menu, tiles, marquee, sliders, splash.
+  components.css           Buttons, nav, menu, specimen panels, inline pills, marquee, sliders, splash.
   sections.css             Layout for each section, in page order.
 js/
   main.js                  Entry point.
@@ -100,8 +100,9 @@ js/
     chrome.js              Nav, mobile menu, footer, [data-logo] (from site.config.js).
     intro.js               Splash: the two halves of the mark lock together, the curtain lifts (once per session).
     hero-sculpt.js         The 3D block-B (WebGL ray marcher).
+    cta-mark.js            The contact panel's block-B, built from stacked slabs (WebGL ray marcher).
     art.js                 <canvas data-art="…"> -> live shader artwork.
-    reveal.js              Scroll reveals, split-word headings, scrubbed paragraph (keeps inline tiles).
+    reveal.js              Scroll reveals, split-word headings, scrubbed paragraph (keeps inline artwork pills).
     marquee.js, tilt.js, chips.js, embed.js
 ```
 
@@ -112,8 +113,8 @@ js/
 Behaviour is attached with a `data-module` attribute:
 
 ```html
-<div class="tile" data-module="tilt">
-  <canvas data-module="art" data-art="chrome" data-palette="chrome" data-seed="3"></canvas>
+<div class="spec" data-fig="01" data-note="Isolines">
+  <canvas data-module="art" data-art="isolines" data-palette="ink" data-seed="3"></canvas>
 </div>
 ```
 
@@ -131,7 +132,7 @@ Copy a `<section>` in `index.html`, give it an `id`, add `data-reveal` / `data-s
 
 ### Artwork
 `<canvas data-module="art" data-art="NAME" data-palette="PALETTE" data-seed="N">` inside any sized box
-(`.tile`, `.itile`, a card…). Optional `data-text="Word"` (for `type`), `data-density="1.2"`, `data-static`.
+(`.spec`, `.ipill`, `.card__stage`, `.bento__art`, a full-bleed card…). Optional `data-text="Word"` (for `type`), `data-density="1.2"`, `data-static`.
 
 | `data-art` | Look |
 |---|---|
@@ -145,12 +146,32 @@ Copy a `<section>` in `index.html`, give it an `id`, add `data-reveal` / `data-s
 | `gyro` | machined chrome gyroscope rings |
 | `aurora` | soft domain-warped gradient |
 
-Palettes (`js/art/palettes.js`): `chrome ink volt blue ice mono flare ember lime`.
-To add an artwork: add a GLSL `vec3 art(vec2 uv, vec2 fc)` to `ART` in `js/gl/tile-shaders.js` (uniforms: `uTime uSeed
-uDensity uBg uA uB uC uTex uRes`). Tiles render only while on screen, at ~30fps, through one shared WebGL context.
+**Specimens** — the small artwork panels. Precise 2D studies, hairline and dot matrix, one ink plus one accent:
 
-**Keep the visual language consistent:** one tile shape (`.tile`, a rounded square), rendered materials, restrained type.
-No clipart shapes, stickers or emoji-like icons.
+| `data-art` | Look | Used for |
+|---|---|---|
+| `isolines` | terrain contours with the route to a target lit | Strategy, Discover |
+| `lattice` | drifting plan cells, some hatched, one lit | Architecture, Design |
+| `moire` | two interfering ring fields | Interface |
+| `halftone` | weather as a rotated dot screen | Cloud |
+| `globe` | turning dot-matrix sphere with orbits | Intelligence |
+| `flow` | two streams pinched into one channel | Integration, Evolve |
+| `rings` | segmented dials turning at their own speeds | Security |
+| `spectrum` | live column analyser with a reflection | Data, Build |
+| `ridges` | stacked waveforms occluding one another | Signal |
+| `streaks` | lines leaving from one point | Delivery |
+
+Use `data-palette="ink"` on dark (lime accent) and `data-palette="paper"` on light (ultramarine accent).
+A specimen panel is `<div class="spec" data-fig="01" data-note="Isolines">` around the canvas: the figure number and
+note are printed in its corners.
+
+Palettes (`js/art/palettes.js`): `chrome ink volt blue ice mono flare ember paper lime`.
+To add an artwork: add a GLSL `vec3 art(vec2 uv, vec2 fc)` to `ART` in `js/gl/tile-shaders.js` (uniforms: `uTime uSeed
+uDensity uBg uA uB uC uTex uRes`; helpers `PX() iso() discAA() ringAA()`). Artwork renders only while on screen, at ~30fps, through one shared WebGL context.
+
+**Keep the visual language consistent:** small artwork is 2D and exact — hairlines, dot matrices, fields — in one ink
+with at most a touch of the accent, framed as a specimen plate. 3D and chrome belong to the logo (hero, contact) only.
+No clipart, illustrations, stickers, emoji-like icons or scrolling words.
 
 ---
 
@@ -168,4 +189,4 @@ Download *Inter Tight* and *JetBrains Mono* (woff2) into `/fonts`, add `@font-fa
 
 ### Browser support
 Current Chrome, Edge, Firefox, Safari. Honours `prefers-reduced-motion` (static frames, no splash/reveals).
-Without WebGL: the hero shows the flat logo mark and tiles show palette gradients.
+Without WebGL: the hero and contact panel show the flat logo mark and artwork panels show palette gradients.

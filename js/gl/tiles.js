@@ -9,10 +9,10 @@
  *   const tile = addTile({ canvas, kind: 'chrome', uniforms: () => ({...}), texture: canvas2d? });
  *   tile.visible = true/false;  tile.dirty = true (forces a redraw);  removeTile(tile)
  */
-import { program } from './gl.js?v=mv54zinu';
-import { SHADERS } from './tile-shaders.js?v=mv54zinu';
-import { addTask } from '../core/ticker.js?v=mv54zinu';
-import { logger } from '../core/debug.js?v=mv54zinu';
+import { program } from './gl.js?v=mv55min1';
+import { SHADERS } from './tile-shaders.js?v=mv55min1';
+import { addTask } from '../core/ticker.js?v=mv55min1';
+import { logger } from '../core/debug.js?v=mv55min1';
 
 const log = logger('tiles');
 const MAX = 1024;                // largest render size (px); bigger tiles are upscaled

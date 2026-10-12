@@ -3,7 +3,7 @@
  * Sets CSS variables --rx / --ry (degrees) that components.css applies as a perspective transform.
  * Disabled on touch devices and for reduced-motion users.
  */
-import { reducedMotion } from '../core/utils.js?v=mv56adpu';
+import { reducedMotion } from '../core/utils.js?v=mv56u9f9';
 
 export default {
   name: 'tilt',

@@ -2,9 +2,9 @@
  * main.js — site entry point. Intentionally tiny: boot the modules.
  * If something looks wrong, open the page with ?debug and watch the console (see core/debug.js).
  */
-import { bootModules } from './core/registry.js?v=mv4mo2pl';
-import { modules } from './modules/index.js?v=mv4mo2pl';
-import { DEBUG, logger } from './core/debug.js?v=mv4mo2pl';
+import { bootModules } from './core/registry.js?v=mv4muao0';
+import { modules } from './modules/index.js?v=mv4muao0';
+import { DEBUG, logger } from './core/debug.js?v=mv4muao0';
 
 const log = logger('main');
 

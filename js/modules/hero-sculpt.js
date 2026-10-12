@@ -10,11 +10,11 @@
  * - Motion: the pieces assemble on load, part as you scroll ("built block by block"), turn with the pointer.
  * - Resolution adapts to the GPU (drops when frames are slow). Falls back to the flat logo without WebGL.
  */
-import { createRenderer, GLSL } from '../gl/gl.js?v=mv4mo2pl';
-import { blockGeom, BLOCK, logoSVG } from '../brand/logotype.js?v=mv4mo2pl';
-import { addTask } from '../core/ticker.js?v=mv4mo2pl';
-import { whenVisible, onResize, reducedMotion, lerp, clamp } from '../core/utils.js?v=mv4mo2pl';
-import { pointer, listenPointer } from '../core/pointer.js?v=mv4mo2pl';
+import { createRenderer, GLSL } from '../gl/gl.js?v=mv4muao0';
+import { blockGeom, BLOCK, logoSVG } from '../brand/logotype.js?v=mv4muao0';
+import { addTask } from '../core/ticker.js?v=mv4muao0';
+import { whenVisible, onResize, reducedMotion, lerp, clamp } from '../core/utils.js?v=mv4muao0';
+import { pointer, listenPointer } from '../core/pointer.js?v=mv4muao0';
 
 const FRAG = GLSL.head + GLSL.tone + GLSL.studio + `
 uniform vec2 uRes; uniform float uTime; uniform vec2 uRot; uniform float uSep; uniform float uZoom; uniform vec2 uShift;
@@ -70,6 +70,22 @@ vec3 film(float c){ // thin-film interference tint
   return .55 + .45 * cos(ph + vec3(0., 2.1, 4.2));
 }
 
+vec3 shade(vec3 p, float id, vec3 rd){
+  vec3 n = normal(p), v = -rd, r = reflect(rd, n);
+  float cosT = clamp(dot(n, v), 0., 1.);
+  float occ = ao(p, n);
+  vec3 env = studio(r);
+  vec3 F0 = id < 1.5 ? vec3(.96, .962, .97) : mix(vec3(.15, .155, .165), vec3(.15, .155, .165) * film(cosT) * 1.6, .2);
+  vec3 F = F0 + (1. - F0) * pow(1. - cosT, 5.);
+  vec3 col = env * F * mix(.35, 1., occ);
+  // faces of the cut: anodised lime metal, lit from inside while the pieces are closed
+  vec2 q = logo(id < 1.5 ? pieceUp(p) : pieceLo(p));
+  float cutFace = smoothstep(.02, .0, abs(abs(sLine(q)) - uSlot.w)) * smoothstep(.6, .9, abs(dot(n, N3)));
+  float lit = smoothstep(.25, .04, uSep);
+  vec3 anod = vec3(.5, .9, .02) * (dot(env, vec3(.3)) * .75 + .08) * mix(.4, 1., occ);
+  return mix(col, anod + vec3(.55, 1., .02) * (.9 + pow(1. - cosT, 2.)) * lit, cutFace);
+}
+
 void main(){
   vec2 uv = (gl_FragCoord.xy - .5 * uRes) / uRes.y;
   uv -= uShift;
@@ -82,53 +98,54 @@ void main(){
 
   vec3 col = vec3(0.); float alpha = 0.;
   float gmin = 1e3;
+  // anti-aliasing: track how close the ray passes to the surface, measured in pixels (pixel footprint grows with t)
+  float pix = 1. / (uRes.y * 1.75);
+  float bestR = 1e9, bestT = 0.;
   // bounding sphere
   float b = dot(ro, rd), c = dot(ro, ro) - 2.6 * 2.6, disc = b * b - c;
   float t = disc > 0. ? max(0., -b - sqrt(disc)) : 1e9, tEnd = disc > 0. ? -b + sqrt(disc) : 0.;
+  t += fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) * .02;   // jitter: no banding in the glow
   vec2 h = vec2(1e9, 0.);
+  bool hit = false;
   if (disc > 0.){
     for (int i = 0; i < 120; i++){
       vec3 p = ro + rd * t;
       h = map(p);
       gmin = min(gmin, core(p));
-      if (h.x < .0007 * t || t > tEnd) break;
+      float ratio = h.x / (pix * t);
+      if (ratio < bestR){ bestR = ratio; bestT = t; }
+      if (h.x < .0007 * t){ hit = true; break; }
+      if (t > tEnd) break;
       t += h.x * .8;
     }
   }
-  if (h.x < .01 && t < tEnd){
-    vec3 p = ro + rd * t, n = normal(p), v = -rd, r = reflect(rd, n);
-    float cosT = clamp(dot(n, v), 0., 1.);
-    float occ = ao(p, n);
-    vec3 env = studio(r);
-    vec3 F0 = h.y < 1.5 ? vec3(.96, .962, .97) : mix(vec3(.15, .155, .165), vec3(.15, .155, .165) * film(cosT) * 1.6, .2);
-    vec3 F = F0 + (1. - F0) * pow(1. - cosT, 5.);
-    col = env * F * mix(.35, 1., occ);
-    // faces of the cut glow lime
-    vec3 pp = h.y < 1.5 ? pieceUp(p) : pieceLo(p);
-    vec2 q = logo(pp);
-    float cutFace = smoothstep(.02, .0, abs(abs(sLine(q)) - uSlot.w)) * smoothstep(.6, .9, abs(dot(n, N3)));
-    // cut faces: anodised lime metal, lit from inside while the pieces are closed
-    float lit = smoothstep(.25, .04, uSep);
-    vec3 anod = vec3(.5, .9, .02) * (dot(env, vec3(.3)) * .75 + .08) * mix(.4, 1., occ);
-    col = mix(col, anod + vec3(.55, 1., .02) * (.9 + pow(1. - cosT, 2.)) * lit, cutFace);
-    alpha = 1.;
-  } else {
-    // soft contact shadow on an invisible floor under the sculpture
+  // coverage of this pixel by the sculpture: 1 on a hit, fading over ~1.5px outside the silhouette
+  float cover = hit ? 1. : 1. - smoothstep(0., 1.5, bestR);
+  if (cover > 0.){
+    float ts = hit ? t : bestT;
+    vec3 p = ro + rd * ts;
+    float id = hit ? h.y : map(p).y;
+    col = shade(p, id, rd);
+    alpha = cover;
+  }
+  if (cover < 1.){
+    // soft contact shadow on an invisible floor under the sculpture (behind the object's edge pixels)
     float fy = -1.2;
     if (rd.y < 0.){
       float tf = (fy - ro.y) / rd.y;
       vec3 pf = ro + rd * tf;
       float d = map(pf + vec3(0., .02, 0.)).x;
       float sh = exp(-d * 3.2) * .34 * smoothstep(3.5, 1.2, length(pf.xz));
-      alpha = sh; col = vec3(0.);
+      alpha += sh * (1. - cover);          // shadow is black: adds alpha, no colour (premultiplied)
     }
   }
   vec3 lime = vec3(.6, 1., .05);
   float glow = (exp(-max(gmin, 0.) * 40.) * .32 + exp(-max(gmin, 0.) * 140.) * .7) * smoothstep(.25, .04, uSep);
   vec3 gl = lime * glow * (.9 + .15 * sin(uTime * 1.3));
-  col += gl; alpha = clamp(alpha + dot(gl, vec3(.3)), 0., 1.);
-  col = toSRGB(aces(col));
-  gl_FragColor = vec4(col * (alpha > 0. ? 1. : 0.), alpha);
+  // premultiplied output: object colour is weighted by its coverage; glow is additive light
+  vec3 outc = toSRGB(aces(col + gl)) * cover + toSRGB(aces(gl)) * (1. - cover);
+  alpha = clamp(alpha + dot(gl, vec3(.3)) * (1. - cover), 0., 1.);
+  gl_FragColor = vec4(outc, alpha);
 }`;
 
 export default {
@@ -147,7 +164,8 @@ export default {
       uSlot: [n[0], n[1], off, BLOCK.t / 2], uCenter: [BLOCK.wB / 2 + .02, BLOCK.H / 2],
     };
 
-    let scale = Math.min(window.devicePixelRatio || 1, 1.5), w = 0, h = 0, stop = null;
+    // render at 2x the CSS size (the browser's downscale = 4-sample supersampling); steps down on slow GPUs
+    let scale = 2, w = 0, h = 0, stop = null;
     let fit = { zoom: 1, shift: .1 };
     const sm = { x: 0, y: 0, scroll: 0 };
     const born = performance.now() / 1000;
@@ -164,6 +182,7 @@ export default {
     /* Fit the sculpture into the free band between the nav and the hero copy. The camera frames ~2.63 units of
        height at the object, and the mark is 1.69 units tall (~64% of the frame at zoom 1). */
     function layout(rect) {
+      if (!(w > 0 && h > 0)) return { zoom: 1, shift: .1 };          // not laid out yet (hidden tab)
       const copy = canvas.parentElement?.querySelector('.hero__copy > *');
       const top = Math.min(90, h * .12);
       const bottom = copy ? copy.getBoundingClientRect().top - rect.top - 24 : h * .55;

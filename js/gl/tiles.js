@@ -9,14 +9,16 @@
  *   const tile = addTile({ canvas, kind: 'chrome', uniforms: () => ({...}), texture: canvas2d? });
  *   tile.visible = true/false;  tile.dirty = true (forces a redraw);  removeTile(tile)
  */
-import { program } from './gl.js?v=mv4mo2pl';
-import { SHADERS } from './tile-shaders.js?v=mv4mo2pl';
-import { addTask } from '../core/ticker.js?v=mv4mo2pl';
-import { logger } from '../core/debug.js?v=mv4mo2pl';
+import { program } from './gl.js?v=mv4muao0';
+import { SHADERS } from './tile-shaders.js?v=mv4muao0';
+import { addTask } from '../core/ticker.js?v=mv4muao0';
+import { logger } from '../core/debug.js?v=mv4muao0';
 
 const log = logger('tiles');
 const MAX = 768;                 // largest render size (px); bigger tiles are upscaled
 const FPS = 30, BUDGET = 9;      // ms of rendering per animation frame
+// ray-marched 3D artworks are rendered at 2x and scaled down (supersampling) so their edges stay smooth
+const SUPERSAMPLE = { gyro: 2, dither: 1 };
 
 let gl = null, glCanvas = null, failed = false, stop = null, cursor = 0, acc = 0;
 const tiles = [];
@@ -50,7 +52,8 @@ function render(tile, t) {
   const pr = prog(tile.kind);
   const c = tile.canvas;
   if (!pr || !c.width) return;
-  const w = Math.min(c.width, MAX), h = Math.min(c.height, MAX);
+  const ss = SUPERSAMPLE[tile.kind] || 1;
+  const w = Math.min(Math.round(c.width * ss), MAX), h = Math.min(Math.round(c.height * ss), MAX);
   gl.useProgram(pr.p);
   gl.enableVertexAttribArray(pr.attr);
   gl.vertexAttribPointer(pr.attr, 2, gl.FLOAT, false, 0, 0);
@@ -80,6 +83,7 @@ function render(tile, t) {
   gl.viewport(0, 0, w, h);
   gl.drawArrays(gl.TRIANGLES, 0, 3);
   // the viewport sits at the bottom-left of the GL canvas
+  tile.ctx.imageSmoothingQuality = 'high';
   tile.ctx.drawImage(glCanvas, 0, MAX - h, w, h, 0, 0, c.width, c.height);
   tile.dirty = false;
 }

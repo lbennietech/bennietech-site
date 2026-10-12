@@ -5,7 +5,7 @@
  * The page only runs while the tile is on screen: it loads as it scrolls into view and is unloaded once it is
  * well out of view, so a running simulation never drains a phone's battery off-screen. Each visit starts fresh.
  */
-import { whenVisible } from '../core/utils.js?v=mv4qkrxe';
+import { whenVisible } from '../core/utils.js?v=mv54zinu';
 
 export default {
   name: 'embed',

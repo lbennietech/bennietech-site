@@ -140,8 +140,11 @@ main { position: relative; z-index: 2; background: var(--bg); border-radius: 0 0
 .cta__title { max-width: 11ch; position: relative; z-index: 1; }
 .cta .btn, .cta .eyebrow { position: relative; z-index: 1; }
 .cta .eyebrow { color: rgba(13,13,13,.6); }
-.cta__art { position: absolute; width: clamp(130px, 19vw, 280px); right: 8%; top: 50%; margin-top: calc(clamp(130px, 19vw, 280px) / -2); }
-@media (max-width: 760px) { .cta__art { top: 9%; margin-top: 0; right: 6%; width: 96px; } }
+/* the stacked block-B (js/modules/cta-mark.js): a transparent WebGL canvas, the object floats on the aurora */
+.cta__mark, .cta__fallback { position: absolute; z-index: 0; pointer-events: none; width: clamp(240px, 34vw, 500px); aspect-ratio: 1; right: 2%; top: 50%; translate: 0 -50%; }
+.cta__fallback { display: grid; place-items: center; padding: 18%; }
+.cta__fallback svg { width: 100%; height: auto; }
+@media (max-width: 760px) { .cta__mark, .cta__fallback { width: 150px; top: 0; right: 0; translate: none; } }
 
 /* ============================ FOOTER ============================ */
 .footer { position: relative; z-index: 1; margin-top: calc(var(--r-xl) * -1); padding-top: calc(var(--r-xl) + clamp(3rem, 6vw, 5rem)); background: var(--bg-2); overflow: hidden; }

@@ -10,7 +10,7 @@
  *
  * Accessibility: split text keeps its full sentence in aria-label; the per-word spans are aria-hidden.
  */
-import { reducedMotion, clamp } from '../core/utils.js?v=mv4qkrxe';
+import { reducedMotion, clamp } from '../core/utils.js?v=mv54zinu';
 
 export default {
   name: 'reveal',

@@ -9,13 +9,13 @@
  *   const tile = addTile({ canvas, kind: 'chrome', uniforms: () => ({...}), texture: canvas2d? });
  *   tile.visible = true/false;  tile.dirty = true (forces a redraw);  removeTile(tile)
  */
-import { program } from './gl.js?v=mv4muao0';
-import { SHADERS } from './tile-shaders.js?v=mv4muao0';
-import { addTask } from '../core/ticker.js?v=mv4muao0';
-import { logger } from '../core/debug.js?v=mv4muao0';
+import { program } from './gl.js?v=mv4mw8mz';
+import { SHADERS } from './tile-shaders.js?v=mv4mw8mz';
+import { addTask } from '../core/ticker.js?v=mv4mw8mz';
+import { logger } from '../core/debug.js?v=mv4mw8mz';
 
 const log = logger('tiles');
-const MAX = 768;                 // largest render size (px); bigger tiles are upscaled
+const MAX = 1024;                // largest render size (px); bigger tiles are upscaled
 const FPS = 30, BUDGET = 9;      // ms of rendering per animation frame
 // ray-marched 3D artworks are rendered at 2x and scaled down (supersampling) so their edges stay smooth
 const SUPERSAMPLE = { gyro: 2, dither: 1 };

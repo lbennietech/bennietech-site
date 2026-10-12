@@ -15,7 +15,7 @@
  * Shared uniforms: uRes (px), uTime, uSeed, uBg/uA/uB/uC (palette, 0..1 rgb), uDensity, uHue (radians), uTex.
  * Each shader defines  vec3 art(vec2 uv, vec2 fc)  where uv is centred, aspect-correct (-.5..+.5 on the short side).
  */
-import { GLSL } from './gl.js?v=mv4muao0';
+import { GLSL } from './gl.js?v=mv4mw8mz';
 
 const PRELUDE = `#extension GL_OES_standard_derivatives : enable
 precision highp float;
@@ -202,21 +202,35 @@ vec2 map(vec3 p, float t){
   if (core < m.x) m = vec2(core, 4.);
   return m;
 }
+vec3 shadeGyro(vec3 p, float id, vec3 rd, float t){
+  vec2 e = vec2(.0015, 0.);
+  vec3 n = normalize(vec3(map(p + e.xyy, t).x - map(p - e.xyy, t).x, map(p + e.yxy, t).x - map(p - e.yxy, t).x, map(p + e.yyx, t).x - map(p - e.yyx, t).x));
+  float fr = pow(1. - clamp(dot(n, -rd), 0., 1.), 5.);
+  vec3 env = studio(reflect(rd, n));
+  vec3 col = env * (id > 3.5 ? uC * 1.4 : mix(vec3(.93), uA, abs(id - 2.) < .5 ? .55 : .12)) * (.85 + fr);
+  if (id > 3.5) col += uC * .6;
+  return toSRGB(aces(col));
+}
 vec3 art(vec2 uv, vec2 fc){
   float t = uTime * .5 + uSeed;
   vec3 ro = vec3(0., .15, 2.5), rd = normalize(vec3(uv * 1.05, -1.4)); rd.yz *= rot(-.06);
-  float d = 0.; vec2 h = vec2(1.);
-  for (int i = 0; i < 70; i++){ h = map(ro + rd * d, t); if (h.x < .001 || d > 5.) break; d += h.x * .9; }
   vec3 bg = mix(uBg, uBg * 1.35 + .03, smoothstep(.7, -.5, uv.y));
-  if (h.x > .01) return bg;
-  vec3 p = ro + rd * d; vec2 e = vec2(.0015, 0.);
-  vec3 n = normalize(vec3(map(p + e.xyy, t).x - map(p - e.xyy, t).x, map(p + e.yxy, t).x - map(p - e.yxy, t).x, map(p + e.yyx, t).x - map(p - e.yyx, t).x));
-  vec3 r = reflect(rd, n);
-  float fr = pow(1. - clamp(dot(n, -rd), 0., 1.), 5.);
-  vec3 env = studio(r);
-  vec3 col = env * (h.y > 3.5 ? uC * 1.4 : mix(vec3(.93), uA, h.y == 2. ? .55 : .12)) * (.85 + fr);
-  if (h.y > 3.5) col += uC * .6;
-  return toSRGB(aces(col));
+  // anti-aliasing: closest approach of the ray to the rings, in pixels (pixel footprint grows with distance)
+  float pix = 1.05 / (min(uRes.x, uRes.y) * 1.4);
+  float d = 1.2, bestR = 1e9, bestD = 0.; vec2 h = vec2(1.); bool hit = false;
+  for (int i = 0; i < 90; i++){
+    h = map(ro + rd * d, t);
+    float ratio = h.x / (pix * d);
+    if (ratio < bestR){ bestR = ratio; bestD = d; }
+    if (h.x < .0006 * d){ hit = true; break; }
+    if (d > 4.) break;
+    d += h.x * .9;
+  }
+  float cover = hit ? 1. : 1. - smoothstep(0., 1.5, bestR);
+  if (cover <= 0.) return bg;
+  float dd = hit ? d : bestD;
+  vec3 p = ro + rd * dd;
+  return mix(bg, shadeGyro(p, hit ? h.y : map(p, t).y, rd, t), cover);
 }`,
 
   /* ---------------------------------------------------------------- aurora gradient */

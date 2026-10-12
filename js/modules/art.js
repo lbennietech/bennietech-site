@@ -12,10 +12,10 @@
  * Control from code:  canvas.__art.set({ density: 1.5, hue: 90, speed: 2, palette: 'flare' })
  * Without WebGL the canvas is hidden and its parent shows a CSS gradient in the palette colours.
  */
-import { addTile, renderNow } from '../gl/tiles.js?v=mv4muao0';
-import { PALETTES, rgb } from '../art/palettes.js?v=mv4muao0';
-import { NEEDS_TEXTURE } from '../gl/tile-shaders.js?v=mv4muao0';
-import { whenVisible, onResize, reducedMotion } from '../core/utils.js?v=mv4muao0';
+import { addTile, renderNow } from '../gl/tiles.js?v=mv4mw8mz';
+import { PALETTES, rgb } from '../art/palettes.js?v=mv4mw8mz';
+import { NEEDS_TEXTURE } from '../gl/tile-shaders.js?v=mv4mw8mz';
+import { whenVisible, onResize, reducedMotion } from '../core/utils.js?v=mv4mw8mz';
 
 export default {
   name: 'art',
@@ -47,7 +47,7 @@ export default {
 
     function size() {
       const r = canvas.getBoundingClientRect();
-      const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);       // full device resolution (capped at 2x)
       canvas.width = Math.max(2, Math.round(r.width * dpr)); canvas.height = Math.max(2, Math.round(r.height * dpr));
       tile.dirty = true;
     }

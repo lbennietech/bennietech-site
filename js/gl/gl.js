@@ -7,7 +7,7 @@
  * Returns null if WebGL is unavailable or the shader fails to compile (the error is logged with line numbers),
  * so callers can fall back to a static image.
  */
-import { logger } from '../core/debug.js?v=mv56u9f9';
+import { logger } from '../core/debug.js?v=mv5728rt';
 
 const log = logger('gl');
 const VERT = `attribute vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }`;

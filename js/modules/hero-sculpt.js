@@ -7,17 +7,18 @@
  *   Lime light leaks out of the cut between them.
  * - Ray-marched signed distance field, lit by a procedural photo studio (gl.js -> GLSL.studio), rounded bevels,
  *   ambient occlusion, soft contact shadow. Transparent background: it floats over the page.
- * - Motion: the pieces assemble on load, part as you scroll ("built block by block"), turn with the pointer.
+ * - Motion: the pieces assemble on load, then turn slowly like a showroom turntable; they part as you scroll
+ *   ("built block by block") and lean towards the pointer.
  * - Resolution adapts to the GPU (never below 1x CSS pixels; then the frame rate drops instead). Falls back to the flat logo without WebGL.
  */
-import { createRenderer, GLSL } from '../gl/gl.js?v=mv56u9f9';
-import { blockGeom, BLOCK, logoSVG } from '../brand/logotype.js?v=mv56u9f9';
-import { addTask } from '../core/ticker.js?v=mv56u9f9';
-import { whenVisible, onResize, reducedMotion, lerp, clamp } from '../core/utils.js?v=mv56u9f9';
-import { pointer, listenPointer } from '../core/pointer.js?v=mv56u9f9';
+import { createRenderer, GLSL } from '../gl/gl.js?v=mv5728rt';
+import { blockGeom, BLOCK, logoSVG } from '../brand/logotype.js?v=mv5728rt';
+import { addTask } from '../core/ticker.js?v=mv5728rt';
+import { whenVisible, onResize, reducedMotion, lerp, clamp } from '../core/utils.js?v=mv5728rt';
+import { pointer, listenPointer } from '../core/pointer.js?v=mv5728rt';
 
 const FRAG = GLSL.head + GLSL.tone + GLSL.studio + `
-uniform vec2 uRes; uniform float uTime; uniform vec2 uRot; uniform float uSep; uniform float uZoom; uniform vec2 uShift;
+uniform vec2 uRes; uniform float uTime; uniform vec2 uRot; uniform float uSpin; uniform float uSep; uniform float uZoom; uniform vec2 uShift;
 uniform vec3 uTop; uniform vec3 uBot;      // D blocks: width, y0, y1 (logo coords, y down)
 uniform vec4 uSlot;                         // slot line: normal.xy (towards the upper piece), offset, half thickness
 uniform vec2 uCenter;                       // logo centre (logo coords)
@@ -74,7 +75,8 @@ vec3 shade(vec3 p, float id, vec3 rd){
   vec3 n = normal(p), v = -rd, r = reflect(rd, n);
   float cosT = clamp(dot(n, v), 0., 1.);
   float occ = ao(p, n);
-  vec3 env = studio(r);
+  vec3 rs = r; rs.xz *= rot(-uSpin);          // the studio turns with the camera: a turntable, not an orbit
+  vec3 env = studio(rs);
   vec3 F0 = id < 1.5 ? vec3(.96, .962, .97) : mix(vec3(.15, .155, .165), vec3(.15, .155, .165) * film(cosT) * 1.6, .2);
   vec3 F = F0 + (1. - F0) * pow(1. - cosT, 5.);
   vec3 col = env * F * mix(.35, 1., occ);
@@ -148,6 +150,8 @@ void main(){
   gl_FragColor = vec4(outc, alpha);
 }`;
 
+const TAU = Math.PI * 2, SPIN = 24;                    // seconds per turn of the turntable
+
 export default {
   name: 'hero-sculpt',
   init(canvas) {
@@ -173,6 +177,7 @@ export default {
     let fit = { zoom: 1, shift: .1 };
     const sm = { x: 0, y: 0, scroll: 0 };
     const born = performance.now() / 1000;
+    let spin = 0, spinT = null;                          // turntable angle, and when it was last advanced
     let avg = 1 / 60, judged = 0, interval = 0, lastDraw = 0, ceiling = MAX_SCALE;
 
     function size() {
@@ -201,18 +206,22 @@ export default {
       const age = t - born;
       const scroll = clamp(window.scrollY / Math.max(1, innerHeight), 0, 1.2);
       const ease = p => 1 - Math.pow(1 - clamp(p, 0, 1), 4);
+      const smooth = p => (p = clamp(p, 0, 1), p * p * (3 - 2 * p));
       const assemble = reducedMotion() ? 0 : (1 - ease((age - .2) / 1.6)) * .55;     // pieces slide together on load (wall clock)
       const k = 1 - Math.exp(-Math.min(dt || .016, .1) * 4);
       sm.scroll = lerp(sm.scroll, scroll, k);
       let sep = .035 + assemble + sm.scroll * .13;
       sm.x = lerp(sm.x, pointer.active ? pointer.x : 0, k * .7);
       sm.y = lerp(sm.y, pointer.active ? pointer.y : 0, k * .7);
-      let yaw = Math.sin(t * .32) * .38 + sm.x * .7 - .28;
+      // turntable: starts once the pieces have assembled and eases up to one turn every SPIN seconds
+      spin = (spin + (spinT == null ? 0 : clamp(t - spinT, 0, .1)) * smooth((age - 1.8) / 2.5) * TAU / SPIN) % TAU;
+      spinT = t;
+      let yaw = spin + sm.x * .7 - .28;
       let pitch = -.2 + Math.sin(t * .23) * .05 + sm.y * .2;
       const o = window.__btHero;                         // debug override: window.__btHero = { yaw, pitch, sep }
       if (o) { yaw = o.yaw ?? yaw; pitch = o.pitch ?? pitch; sep = o.sep ?? sep; }
       r.draw({
-        uRes: [canvas.width, canvas.height], uTime: t, uRot: [yaw, pitch], uSep: sep,
+        uRes: [canvas.width, canvas.height], uTime: t, uRot: [yaw, pitch], uSpin: spin, uSep: sep,
         uZoom: fit.zoom, uShift: [0, fit.shift], ...geo,
       });
       adapt(t, age, dt);

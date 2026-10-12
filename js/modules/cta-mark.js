@@ -9,21 +9,21 @@
  *   hero), lit by the shared photo studio (gl.js -> GLSL.studio) with the lime panel in the lower reflections.
  *   White light leaks out of the cut.
  * - Motion: when the panel scrolls into view the slabs grow into place one after another, back to front, and the
- *   cut lights up once the stack is complete. Afterwards they ripple gently, fan open while the pointer is over
- *   the panel, and the whole stack turns towards the pointer.
+ *   cut lights up once the stack is complete. Afterwards the stack turns slowly like a showroom turntable, the
+ *   slabs ripple gently, fan open while the pointer is over the panel, and the whole stack leans towards the pointer.
  * - Transparent background with a soft contact shadow, so it floats over the lime aurora.
  *   Falls back to the flat logo mark without WebGL.
  */
-import { createRenderer, GLSL } from '../gl/gl.js?v=mv56u9f9';
-import { blockGeom, BLOCK, logoSVG } from '../brand/logotype.js?v=mv56u9f9';
-import { addTask } from '../core/ticker.js?v=mv56u9f9';
-import { whenVisible, onResize, reducedMotion, lerp, clamp } from '../core/utils.js?v=mv56u9f9';
-import { pointer, listenPointer } from '../core/pointer.js?v=mv56u9f9';
+import { createRenderer, GLSL } from '../gl/gl.js?v=mv5728rt';
+import { blockGeom, BLOCK, logoSVG } from '../brand/logotype.js?v=mv5728rt';
+import { addTask } from '../core/ticker.js?v=mv5728rt';
+import { whenVisible, onResize, reducedMotion, lerp, clamp } from '../core/utils.js?v=mv5728rt';
+import { pointer, listenPointer } from '../core/pointer.js?v=mv5728rt';
 
 const LAYERS = 5;
 
 const FRAG = GLSL.head + GLSL.tone + GLSL.studio + `
-uniform vec2 uRes; uniform float uTime; uniform vec2 uRot; uniform float uBuild; uniform float uFan; uniform float uZoom;
+uniform vec2 uRes; uniform float uTime; uniform vec2 uRot; uniform float uSpin; uniform float uBuild; uniform float uFan; uniform float uZoom;
 uniform vec3 uTop; uniform vec3 uBot;      // D blocks: width, y0, y1 (logo coords, y down)
 uniform vec4 uSlot;                         // slot line: normal.xy (towards the upper piece), offset, half thickness
 uniform vec2 uCenter;                       // logo centre (logo coords)
@@ -91,13 +91,14 @@ vec3 shade(vec3 p, float id, vec3 rd){
   vec3 n = normal(p), v = -rd, r = reflect(rd, n);
   float cosT = clamp(dot(n, v), 0., 1.);
   float occ = ao(p, n);
-  vec3 env = studio(r);
+  vec3 rs = r, ns = n; rs.xz *= rot(-uSpin); ns.xz *= rot(-uSpin);   // the studio turns with the camera: a turntable
+  vec3 env = studio(rs);
   env = mix(env, env * vec3(.85, 1.1, .3) + vec3(.05, .07, 0.), smoothstep(.15, -.45, r.y));   // the lime panel, seen in the lower half
   bool metal = mod(id, 2.) > .5;
   // chrome: mirror; lacquer: near-black base under a clear coat (Fresnel from 4%)
   vec3 F0 = metal ? vec3(.95, .955, .965) : vec3(.05);
   vec3 F = F0 + (1. - F0) * pow(1. - cosT, 5.);
-  vec3 base = metal ? vec3(0.) : vec3(.016, .016, .019) * (.4 + .6 * clamp(dot(n, normalize(vec3(-.4, .8, .5))), 0., 1.));
+  vec3 base = metal ? vec3(0.) : vec3(.016, .016, .019) * (.4 + .6 * clamp(dot(ns, normalize(vec3(-.4, .8, .5))), 0., 1.));
   vec3 col = (base + env * F) * mix(.3, 1., occ);
   // walls of the cut glow from within while the stack is closed
   vec4 o = place(id);
@@ -154,6 +155,8 @@ void main(){
   gl_FragColor = vec4(outc, alpha);
 }`;
 
+const TAU = Math.PI * 2, SPIN = 24;                    // seconds per turn of the turntable
+
 export default {
   name: 'cta-mark',
   init(canvas) {
@@ -173,6 +176,7 @@ export default {
     const panel = canvas.closest('.cta') || canvas.parentElement;
     const sm = { x: 0, y: 0, fan: 0 };
     let hover = false, builtAt = null, stop = null;
+    let spin = 0, spinT = null;                          // turntable angle, and when it was last advanced
 
     function size() {
       const rect = canvas.getBoundingClientRect();
@@ -186,12 +190,16 @@ export default {
       sm.fan = lerp(sm.fan, hover ? 1 : 0, k);
       sm.x = lerp(sm.x, pointer.active ? pointer.x : 0, k * .8);
       sm.y = lerp(sm.y, pointer.active ? pointer.y : 0, k * .8);
-      let yaw = -.62 + Math.sin(t * .3) * .22 + sm.x * .55 + sm.fan * .25;
+      // turntable: starts once the stack is built and lit, easing up to one turn every SPIN seconds
+      const after = builtAt == null ? 0 : clamp((t - builtAt - 2.2) / 2.5, 0, 1);
+      spin = (spin + (spinT == null ? 0 : clamp(t - spinT, 0, .1)) * after * after * (3 - 2 * after) * TAU / SPIN) % TAU;
+      spinT = t;
+      let yaw = -.62 + spin + sm.x * .55 + sm.fan * .25;
       let pitch = -.16 + Math.sin(t * .21) * .05 + sm.y * .18;
       let fan = sm.fan, b = build;
       const o = window.__btCta;                            // debug override: window.__btCta = { yaw, pitch, build, fan }
       if (o) { yaw = o.yaw ?? yaw; pitch = o.pitch ?? pitch; b = o.build ?? b; fan = o.fan ?? fan; }
-      r.draw({ uRes: [canvas.width, canvas.height], uTime: t, uRot: [yaw, pitch], uBuild: b, uFan: fan, uZoom: 1, ...geo });
+      r.draw({ uRes: [canvas.width, canvas.height], uTime: t, uRot: [yaw, pitch], uSpin: spin, uBuild: b, uFan: fan, uZoom: 1, ...geo });
     }
 
     size(); onResize(canvas, size);

@@ -133,9 +133,14 @@ main { position: relative; z-index: 2; background: var(--bg); border-radius: 0 0
 .bento__art { position: absolute; right: 28px; top: 28px; width: min(44%, 320px); aspect-ratio: 4 / 3; border-radius: var(--r-md); overflow: hidden; outline: 1px solid var(--line); outline-offset: -1px; }
 .bento__art canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 .bento__card--ink .bento__art { outline-color: var(--line-dark); }
+/* full-bleed art: fills the card, with a scrim so the copy stays legible */
+.bento__art--bleed { inset: 0; width: auto; aspect-ratio: auto; border-radius: 0; outline: 0; }
+.bento__art--bleed::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(to top, rgba(9,9,10,.92) 0%, rgba(9,9,10,.55) 32%, rgba(9,9,10,0) 62%); }
 .bento__card--d { justify-content: space-between; }
 .bento__logo { height: clamp(48px, 5.4vw, 78px); }
-@media (max-width: 900px) { .bento__card--a, .bento__card--b, .bento__card--c, .bento__card--d { grid-column: span 12; min-height: 300px; } .bento__art { position: relative; right: auto; top: auto; width: 100%; margin-bottom: auto; } }
+@media (max-width: 900px) { .bento__card--a, .bento__card--b, .bento__card--c, .bento__card--d { grid-column: span 12; min-height: 300px; }
+  .bento__card--d { order: 3; } .bento__card--c { order: 4; }   /* keep the volt card away from the volt CTA below */
+  .bento__art:not(.bento__art--bleed) { position: relative; right: auto; top: auto; width: 100%; margin-bottom: auto; } }
 
 /* ============================ 10 · CTA ============================ */
 .cta { position: relative; overflow: hidden; border-radius: var(--r-xl); padding: clamp(2rem, 7vw, 6rem); min-height: clamp(420px, 46vw, 600px); display: grid; align-content: center; justify-items: start; gap: 1.6rem; background: var(--volt); isolation: isolate; }

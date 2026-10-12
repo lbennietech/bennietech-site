@@ -2,7 +2,8 @@
 
 A single-page brochure site for **BennieTech** (software solution design).
 Plain HTML + CSS + native ES modules. **No build step, no npm, no dependencies.**
-All imagery is generated in JavaScript (Canvas 2D, CSS, SVG clip-paths). The only image files are the logo in `assets/logo/`.
+All imagery is generated in code: a real-time 3D hero sculpture (WebGL), shader artwork in every tile and card (WebGL),
+and a logo constructed as vector geometry. There are no image files apart from exported copies of the logo.
 
 ---
 
@@ -33,35 +34,39 @@ Add **`?debug`** to the URL. Add **`?nointro`** to skip the splash while working
 Example: <http://localhost:8080/?debug&nointro>
 
 * Every module logs when it boots (`[BT:registry] booted art → <canvas>`).
-* `window.BT` exposes `BT.booted`, `BT.modules` and `BT.art` (the artwork generators).
 * A module that throws is logged with its name and element; **the rest of the page keeps working**.
+* A shader that fails to compile is logged with numbered source lines (`[BT:gl]`).
+* `window.BT` exposes `BT.booted` and `BT.modules`. Every art canvas has `canvas.__art` (`.state`, `.set({...})`).
 * Persist debug mode: `localStorage.setItem('bt-debug','1')`.
 
 | Symptom | Likely cause |
 |---|---|
 | Blank/unstyled page | Opened `index.html` via `file://` — use `node server.js`. |
 | `No module registered for data-module="x"` | Typo, or module not listed in `js/modules/index.js`. |
-| Name looks like a plain serif | The Shrikhand font didn't load (offline?). It falls back to Cooper Black / Georgia. |
-| Shapes show as rectangles | Element is missing `data-module="shape"` (the `data-shape` attribute alone does nothing). |
-| Slow on a weak machine | Hero canvas is capped at 1.5× resolution; art only animates while on screen (see `core/ticker.js`). |
+| Tiles show a flat gradient, hero shows a flat logo | WebGL is unavailable (very old device / disabled GPU). That is the designed fallback. |
+| Slow on a weak machine | Both renderers adapt: the hero lowers its resolution, then its frame rate; tiles only render on screen, within a per-frame time budget. |
 
 ---
 
-## 3. Brand: the logo and the "funk"
+## 3. Brand
 
-The logo is **the name in Shrikhand**, tilted, near-black, with four stacked colour layers behind it
-(cyan → green → yellow → pink) and a soft cyan glow. That one treatment is reused everywhere:
+**The mark — "block B".** A solid B silhouette made of two D-shaped blocks (the lower one wider), split by one rising cut
+that runs from the left edge into the waist of the B. Software, built block by block.
+**The wordmark — "bennietech".** Drawn on a grid with a single stroke weight (monoline, true circles, butt-cut
+terminals). Every ascender (b, h, t) is cut on the same rising angle as the mark. The dot of the i is the one lime "spark".
 
-| Where | How |
-|---|---|
-| Nav bar + mobile menu | The logo files: `assets/logo/bennietech-logo.svg` / `-dark.svg` (letters converted to outlines). |
-| Hero name, splash, ribbons, footer, bento card | The **live wordmark** `.bt-word` (real text + CSS `text-shadow` layers) — animatable. |
-| Hero stickers | `js/modules/hero-funk.js`: flower, burst, smiley, cog, bolt, squiggle, sparkle… each drawn with the same layers; they fan out with the pointer exactly like the wordmark. |
-| Tiles / cards | Canvas generators `brand` ("BT" letters bobbing) and `wordfill` (colour bands inside letters). |
-| Favicon | Painted on a canvas at start-up (`js/brand/logo.js`). |
+Both are pure geometry in `js/brand/logotype.js` — not a font. `logoSVG({ layout: 'lockup' | 'mark' | 'word', ink, accent })`
+returns inline SVG; the nav, menu, footer and any `<div data-logo="lockup|mark|word">` use it.
+Static exports live in `assets/logo/` (`bennietech-logo(-dark).svg`, `bennietech-mark(-dark).svg`, `bennietech-wordmark.svg`);
+regenerate them with `assets/logo/logo-generator.html` (open it through the local server, click *Download SVGs*).
+The previous Shrikhand logo is kept in `assets/logo/archive/`.
 
-To regenerate the logo files (e.g. change colours), open `assets/logo/logo-generator.html` through the local server and export `window.svgLight` / `window.svgDark`.
-Wordmark knobs (CSS variables on `.bt-word`): `--ox/--oy` layer direction, `--step` layer distance, `--rot` tilt, `--ink` letter colour (`.bt-word--light` for dark backgrounds).
+**The hero sculpture** (`js/modules/hero-sculpt.js`) is the same mark in 3D: the geometry comes straight from `logotype.js`,
+ray-marched in a fragment shader — upper block in polished chrome, lower block in smoked titanium, lime light leaking from
+the cut, lit by a procedural photo studio (`GLSL.studio` in `js/gl/gl.js`). The pieces slide together on load, part as you
+scroll, and turn towards the pointer.
+
+**Colour.** Studio greys + ink, with acid lime `#c6f432` as the single accent; the artwork carries all other colour.
 
 ---
 
@@ -70,31 +75,30 @@ Wordmark knobs (CSS variables on `.bt-word`): `--ox/--oy` layer direction, `--st
 ```
 index.html                 The page. Sections are numbered in comments.
 server.js / start-site.bat Local static server (optional).
-assets/logo/               Logo SVG/PNG (light + dark) and logo-generator.html.
+assets/logo/               Exported logo SVGs, the generator page, and archive/ (old logo).
 css/
   tokens.css               ★ Design tokens: colours, fonts, radii, spacing, motion. Start here to restyle.
   base.css                 Reset, typography, layout primitives, reveal animation states.
-  components.css           Buttons, nav, menu, tiles (.fx/.tile), marquee, wordmark (.bt-word), ribbons, intro.
+  components.css           Buttons, nav, menu, tiles, marquee, sliders, splash.
   sections.css             Layout for each section, in page order.
 js/
   main.js                  Entry point.
   config/site.config.js    ★ Company name, contact details, nav links.
-  core/                    registry (boots modules), ticker (shared rAF), utils, debug, pointer (shared pointer + layer fan).
-  brand/logo.js            Logo markup helper + canvas favicon.
-  art/
-    palettes.js            Colour sets for artwork.
-    generators.js          12 artworks: halftone, stripes, rings, mesh, type, grid, waves, orbit, brand, wordfill, sparkles, pills.
-    shapes.js              Outline shapes: flower, flower6, burst, cog, sparkle, squircle, animated blob.
+  core/                    registry (boots modules), ticker (shared rAF), utils, debug, pointer.
+  brand/logotype.js        ★ The logo, as geometry -> SVG.
+  gl/
+    gl.js                  Minimal WebGL helper + shared GLSL (noise, tone mapping, studio environment).
+    tiles.js               ONE shared WebGL context that paints every artwork canvas.
+    tile-shaders.js        ★ The artwork library (see below).
+  art/palettes.js          Colour sets for the artwork.
   modules/
     index.js               ★ The module list (order matters).
-    chrome.js              Nav, mobile menu, footer (from site.config.js).
-    intro.js               Splash: the name pops in, curtain lifts (once per session).
-    hero-funk.js           Hero stickers (Canvas 2D).
-    wordmark.js            Letter split + layer fan for .bt-word.
-    shape.js               Clips an element to a shape via data-shape.
-    art.js                 <canvas data-art="…"> -> live artwork.
-    reveal.js              Scroll reveals, split-word headings, scrubbed paragraph.
-    marquee.js, tilt.js, chips.js, dials.js, network.js
+    chrome.js              Nav, mobile menu, footer, [data-logo] (from site.config.js).
+    intro.js               Splash: the two halves of the mark lock together, the curtain lifts (once per session).
+    hero-sculpt.js         The 3D block-B (WebGL ray marcher).
+    art.js                 <canvas data-art="…"> -> live shader artwork.
+    reveal.js              Scroll reveals, split-word headings, scrubbed paragraph (keeps inline tiles).
+    marquee.js, tilt.js, chips.js, dials.js
 ```
 
 ---
@@ -104,13 +108,13 @@ js/
 Behaviour is attached with a `data-module` attribute:
 
 ```html
-<canvas data-module="art" data-art="brand" data-text="BT" data-palette="volt"></canvas>
-<div class="tile" data-module="shape" data-shape="flower"> … </div>
-<div class="fx" data-module="tilt"> … </div>            <!-- several: data-module="art tilt" -->
+<div class="tile" data-module="tilt">
+  <canvas data-module="art" data-art="chrome" data-palette="chrome" data-seed="3"></canvas>
+</div>
 ```
 
-`core/registry.js` goes through `js/modules/index.js` **in order**; each module re-queries the DOM for its elements and calls `init(el)` inside try/catch.
-Order matters: `marquee` (clones items) runs before `art`/`shape`/`wordmark`.
+`core/registry.js` goes through `js/modules/index.js` **in order**; each module re-queries the DOM for its elements and
+calls `init(el)` inside try/catch. Order matters: `marquee` (clones items) runs before `art`.
 
 ### Adding a module
 1. `js/modules/my-thing.js`: `export default { name: 'my-thing', init(el) { … } }`
@@ -118,24 +122,46 @@ Order matters: `marquee` (clones items) runs before `art`/`shape`/`wordmark`.
 3. Put `data-module="my-thing"` on an element.
 
 ### Adding a section
-Copy a `<section>` in `index.html`, give it an `id`, add `data-reveal` / `data-split` to animate text, add a nav link in `site.config.js`, put layout CSS at the end of `css/sections.css`.
+Copy a `<section>` in `index.html`, give it an `id`, add `data-reveal` / `data-split` to animate text, add a nav link in
+`site.config.js`, put layout CSS at the end of `css/sections.css`.
 
-### Adding artwork / a shape / a palette
-* Artwork: function `(ctx, w, h, t, s)` in `js/art/generators.js`, add to `GENERATORS`, use `data-art="name"`.
-* Shape: add a function returning an SVG path in 0..1 units to `SHAPES` in `js/art/shapes.js`, use `data-module="shape" data-shape="name"`. Circles, arches and pills use the CSS classes `.tile--circle / --arch / --pill`.
-* Palette: entry in `js/art/palettes.js`, then `data-palette="name"`.
-* **Shadows on clipped shapes:** `clip-path` cuts `box-shadow`, so put the shadow on a parent with class `.fx` (it uses `filter: drop-shadow`).
+### Artwork
+`<canvas data-module="art" data-art="NAME" data-palette="PALETTE" data-seed="N">` inside any sized box
+(`.tile`, `.itile`, a card…). Optional `data-text="Word"` (for `type`), `data-density="1.2"`, `data-static`.
+
+| `data-art` | Look |
+|---|---|
+| `chrome` | liquid chrome surface, studio-lit |
+| `silk` | iridescent folded silk |
+| `dither` | a turning 3D torus in 1-bit ordered dither |
+| `glass` | light caustics through rippled glass |
+| `type` | kinetic type rows, warped + chromatic split |
+| `scan` | vertical light-streak slit-scan |
+| `contour` | topographic contour lines |
+| `gyro` | machined chrome gyroscope rings |
+| `aurora` | soft domain-warped gradient |
+
+Palettes (`js/art/palettes.js`): `chrome ink volt blue ice mono flare ember lime`.
+To add an artwork: add a GLSL `vec3 art(vec2 uv, vec2 fc)` to `ART` in `js/gl/tile-shaders.js` (uniforms: `uTime uSeed
+uDensity uBg uA uB uC uTex uRes`). Tiles render only while on screen, at ~30fps, through one shared WebGL context.
+
+**Keep the visual language consistent:** one tile shape (`.tile`, a rounded square), rendered materials, restrained type.
+No clipart shapes, stickers or emoji-like icons.
 
 ---
 
 ## 6. Content & contact details
 
-Edit **`js/config/site.config.js`**. Only the email (`bennie.luke@outlook.com`) is set; fill in `phone`, `location`, `linkedin` and they appear in the footer automatically (blank values are hidden). Marketing copy lives in `index.html`.
+Edit **`js/config/site.config.js`**. Only the email (`bennie.luke@outlook.com`) is set; fill in `phone`, `location`,
+`linkedin` and they appear in the footer automatically (blank values are hidden). Marketing copy lives in `index.html`.
 
 > The "Solutions" cards are *illustrative archetypes*, not client case studies — replace them with real work when you have it.
 
 ### Fonts (self-hosting)
-Download *Inter Tight*, *JetBrains Mono* and *Shrikhand* (woff2) into `/fonts`, add `@font-face` rules at the top of `css/base.css` (family names exactly `"Inter Tight"`, `"JetBrains Mono"`, `"Shrikhand"`), then delete the three Google Fonts `<link>` tags in `index.html`.
+Download *Inter Tight* and *JetBrains Mono* (woff2) into `/fonts`, add `@font-face` rules at the top of `css/base.css`
+(family names exactly `"Inter Tight"`, `"JetBrains Mono"`), then delete the Google Fonts `<link>` tags in `index.html`.
+(The logo does not depend on any font.)
 
 ### Browser support
 Current Chrome, Edge, Firefox, Safari. Honours `prefers-reduced-motion` (static frames, no splash/reveals).
+Without WebGL: the hero shows the flat logo mark and tiles show palette gradients.

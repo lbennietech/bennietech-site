@@ -4,8 +4,9 @@
  *   data-reveal        fade/slide the element up when it enters the viewport.
  *                      Optional per-element delay:  style="--d:.2s"
  *   data-split         split a heading into words that slide up one by one (masked line reveal).
- *   data-scrub         a paragraph whose words light up as you scroll past it.
- *                      Optional highlight colours:  data-hl="evolve:blue,composable:pink"
+ *   data-scrub         a paragraph whose words light up as you scroll past it. Inline elements inside it
+ *                      (e.g. <span class="itile">) are kept and light up in turn.
+ *                      Optional highlighted words:  data-hl="evolve,tomorrow"
  *
  * Accessibility: split text keeps its full sentence in aria-label; the per-word spans are aria-hidden.
  */
@@ -33,21 +34,30 @@ export default {
       });
     });
 
-    /* ---- scrubbed paragraphs ---- */
+    /* ---- scrubbed paragraphs: text is split into words; inline elements (e.g. art tiles) are kept and
+            light up in sequence like a word ---- */
     const scrubs = [...root.querySelectorAll('[data-scrub]')].map(el => {
-      const hl = {};
-      (el.dataset.hl || '').split(',').forEach(pair => { const [w, c] = pair.split(':'); if (w) hl[w.trim().toLowerCase()] = c?.trim(); });
-      const text = el.textContent.trim();
-      el.setAttribute('aria-label', text);
-      el.textContent = '';
-      const words = text.split(/\s+/).map(word => {
-        const s = document.createElement('span');
-        s.className = 'scrub-word'; s.setAttribute('aria-hidden', 'true');
-        s.textContent = word + ' ';
-        const key = word.replace(/[^a-z]/gi, '').toLowerCase();
-        if (hl[key]) s.classList.add('hl-' + hl[key]);
-        el.appendChild(s);
-        return s;
+      const hl = new Set((el.dataset.hl || '').split(',').map(w => w.trim().toLowerCase()).filter(Boolean));
+      el.setAttribute('aria-label', el.textContent.replace(/\s+/g, ' ').trim());
+      const words = [];
+      [...el.childNodes].forEach(node => {
+        if (node.nodeType === Node.TEXT_NODE) {
+          const frag = document.createDocumentFragment();
+          node.textContent.split(/\s+/).filter(Boolean).forEach(word => {
+            const s = document.createElement('span');
+            s.className = 'scrub-word'; s.setAttribute('aria-hidden', 'true');
+            s.textContent = word;
+            if (hl.has(word.replace(/[^a-z]/gi, '').toLowerCase())) s.classList.add('hl');
+            frag.append(s, ' ');
+            words.push(s);
+          });
+          node.replaceWith(frag);
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
+          node.setAttribute('aria-hidden', 'true');
+          node.classList.add('scrub-word');
+          words.push(node);
+          node.after(' ');
+        }
       });
       return { el, words };
     });

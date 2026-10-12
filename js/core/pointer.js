@@ -1,13 +1,8 @@
 /**
- * pointer.js — shared pointer tracking + the "layer fan" used by everything that wears the logo style.
- *
- * fan(t) returns { ox, oy }: the direction/spread of the stacked colour layers behind logo-style things.
- *  - While the pointer is moving, the layers swing away from it (like a 3D extrusion seen from the cursor).
- *  - Otherwise (touch screens, idle) they sway gently on their own.
- * Used by modules/wordmark.js (text) and modules/hero-funk.js (stickers) so they always move in sync.
+ * pointer.js — shared pointer tracking: pointer.x / pointer.y in -1..1 across the viewport.
+ * `active` turns false 2.5 s after the last move (touch screens, idle), so animations can drift back to rest.
+ * Used by modules/hero-sculpt.js to turn the 3D mark towards the cursor.
  */
-import { clamp } from './utils.js';
-
 export const pointer = { x: 0, y: 0, active: false };
 let timer = 0, listening = false;
 
@@ -21,11 +16,4 @@ export function listenPointer() {
     clearTimeout(timer);
     timer = setTimeout(() => (pointer.active = false), 2500);
   }, { passive: true });
-}
-
-export function fan(t) {
-  return {
-    ox: pointer.active ? pointer.x * 1.5 : Math.sin(t * .7) * 1.1,
-    oy: clamp(pointer.active ? 1 + pointer.y * .55 : 1 + Math.cos(t * .55) * .3, .3, 1.8),
-  };
 }

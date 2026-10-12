@@ -1,95 +1,92 @@
 /**
- * art.js — turns any  <canvas data-module="art" data-art="halftone" data-palette="blue" data-seed="3">
- * into live generative artwork.
+ * art.js — turns  <canvas data-module="art" data-art="chrome" data-palette="ink" data-seed="3">  into live
+ * shader artwork (painted by the shared WebGL renderer in js/gl/tiles.js).
  *
- * Attributes:  data-art      generator name (see js/art/generators.js)
- *              data-palette  palette name   (see js/art/palettes.js)
+ * Attributes:  data-art      shader name (see js/gl/tile-shaders.js)
+ *              data-palette  palette name (see js/art/palettes.js)
  *              data-seed     number, changes the variation
- *              data-text     text for the "type" generator
- *              data-static   present => draw once, don't animate
+ *              data-text     words for the "type" shader
+ *              data-density  scale of the pattern (default 1)
+ *              data-static   present => render once, don't animate
  *
- * Performance: each canvas only animates while on screen, at ~30fps, via the shared ticker.
- * Control from code:  canvas.__art.set({ density: 1.5, hue: 90, speed: 2, palette: 'pink' })
+ * Control from code:  canvas.__art.set({ density: 1.5, hue: 90, speed: 2, palette: 'flare' })
+ * Without WebGL the canvas is hidden and its parent shows a CSS gradient in the palette colours.
  */
-import { GENERATORS } from '../art/generators.js';
-import { PALETTES } from '../art/palettes.js';
-import { addTask } from '../core/ticker.js';
-import { shiftHue, whenVisible, onResize, reducedMotion } from '../core/utils.js';
-import { logger } from '../core/debug.js';
-
-const log = logger('art');
-const FRAME = 1 / 30;     // seconds between redraws
+import { addTile, renderNow } from '../gl/tiles.js';
+import { PALETTES, rgb } from '../art/palettes.js';
+import { NEEDS_TEXTURE } from '../gl/tile-shaders.js';
+import { whenVisible, onResize, reducedMotion } from '../core/utils.js';
 
 export default {
   name: 'art',
   init(canvas) {
     const kind = canvas.dataset.art;
-    const draw = GENERATORS[kind];
-    if (!draw) { log.warn(`Unknown data-art="${kind}"`, canvas); return; }
-
-    const ctx = canvas.getContext('2d');
     const state = {
       seed: Number(canvas.dataset.seed) || 1,
-      palette: canvas.dataset.palette || 'volt',
-      text: canvas.dataset.text || 'BT',
-      density: 1, hue: 0, speed: 1,
-      colors: null,
+      palette: canvas.dataset.palette || 'ink',
+      density: Number(canvas.dataset.density) || 1, hue: 0, speed: 1,
     };
-    let w = 0, h = 0, time = 2 + state.seed, lastDraw = -1, stopTask = null;
-    const animate = !canvas.hasAttribute('data-static') && !reducedMotion();
+    let col = null, time = state.seed * 3.7, last = null;
+    const resolve = () => {
+      const p = PALETTES[state.palette] || PALETTES.ink;
+      col = { uBg: rgb(p.bg), uA: rgb(p.a), uB: rgb(p.b), uC: rgb(p.c) };
+    };
+    resolve();
 
-    function resolveColors() {
-      const p = PALETTES[state.palette] || PALETTES.volt;
-      state.colors = state.hue
-        ? { bg: p.bg, a: shiftHue(p.a, state.hue), b: p.b, c: shiftHue(p.c, state.hue) }
-        : p;
-    }
+    const texture = NEEDS_TEXTURE.has(kind) ? typeTexture(canvas.dataset.text || 'BENNIETECH') : null;
+    const tile = addTile({
+      canvas, kind, texture,
+      animate: !canvas.hasAttribute('data-static') && !reducedMotion(),
+      uniforms(t) {
+        if (last != null) time += (t - last) * state.speed;
+        last = t;
+        return { uTime: time, uSeed: state.seed * .37, uDensity: state.density, uHue: (state.hue * Math.PI) / 180, ...col };
+      },
+    });
+    if (!tile) { cssFallback(canvas, state.palette); return; }
 
     function size() {
       const r = canvas.getBoundingClientRect();
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
-      w = Math.max(2, Math.round(r.width)); h = Math.max(2, Math.round(r.height));
-      canvas.width = w * dpr; canvas.height = h * dpr;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      render();
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+      canvas.width = Math.max(2, Math.round(r.width * dpr)); canvas.height = Math.max(2, Math.round(r.height * dpr));
+      tile.dirty = true;
     }
+    size(); onResize(canvas, size);
+    whenVisible(canvas, v => (tile.visible = v), '80px');
+    if (texture) document.fonts?.ready.then(() => { drawType(texture, canvas.dataset.text || 'BENNIETECH'); tile.texDirty = true; tile.dirty = true; });
 
-    function render() {
-      if (!w) return;
-      try { draw(ctx, w, h, time, state); }
-      catch (e) { log.error(`generator "${kind}" threw`, e); }
-    }
-
-    function tick(_now, dt) {
-      time += dt * state.speed;
-      lastDraw += dt;
-      if (lastDraw < FRAME) return;
-      lastDraw = 0;
-      render();
-    }
-
-    resolveColors();
-    size();
-    onResize(canvas, size);
-    // redraw once webfonts are ready (type / brand / wordfill generators use them)
-    document.fonts?.ready.then(render);
-    document.fonts?.load('400 64px Shrikhand').then(render).catch(() => {});
-
-    if (animate) {
-      whenVisible(canvas, visible => {
-        if (visible && !stopTask) stopTask = addTask(tick);
-        else if (!visible && stopTask) { stopTask(); stopTask = null; }
-      });
-    }
-
-    // Public handle for other modules (e.g. the "dials" demo) and for debugging.
     canvas.__art = {
-      state,
-      set(params) {
-        Object.assign(state, params);
-        resolveColors();
-        if (!animate || !stopTask) render();
-      },
+      state, tile,
+      set(params) { Object.assign(state, params); resolve(); tile.dirty = true; },
+      render: () => renderNow(tile, time),
     };
   },
 };
+
+/* Text for the "type" shader: rows of a word in heavy caps, white on black (the shader colours it). */
+function typeTexture(text) {
+  const c = document.createElement('canvas');
+  c.width = 1024; c.height = 256;
+  drawType(c, text);
+  return c;
+}
+function drawType(c, text) {
+  const g = c.getContext('2d');
+  g.fillStyle = '#000'; g.fillRect(0, 0, c.width, c.height);
+  g.fillStyle = '#fff';
+  g.font = '800 200px "Inter Tight", "Helvetica Neue", Arial, sans-serif';
+  g.textBaseline = 'middle';
+  const word = text.toUpperCase() + '. ';
+  const w = g.measureText(word).width;
+  // squeeze so a whole number of repeats fills the width exactly (seamless wrap)
+  const reps = Math.max(1, Math.round(c.width / w));
+  g.save(); g.scale(c.width / (w * reps), 1);
+  for (let i = 0; i < reps; i++) g.fillText(word, i * w, c.height * .54);
+  g.restore();
+}
+
+function cssFallback(canvas, palette) {
+  const p = PALETTES[palette] || PALETTES.ink;
+  canvas.style.display = 'none';
+  if (canvas.parentElement) canvas.parentElement.style.background = `radial-gradient(120% 90% at 30% 20%, ${p.a}, ${p.bg} 70%)`;
+}

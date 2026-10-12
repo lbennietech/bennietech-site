@@ -6,7 +6,7 @@
  * All text comes from js/config/site.config.js, so non-developers only edit that file.
  */
 import { siteConfig as cfg } from '../config/site.config.js';
-import { logoHTML } from '../brand/logo.js';
+import { logoSVG } from '../brand/logotype.js';
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -16,7 +16,7 @@ export const chromeNav = {
   init(el) {
     el.innerHTML = `
       <div class="nav__pill nav__main">
-        <a class="nav__brand" href="#top" aria-label="${esc(cfg.company.name)} — home">${logoHTML({ height: '4.1rem' })}</a>
+        <a class="nav__brand" href="#top" aria-label="${esc(cfg.company.name)} — home">${logoSVG()}</a>
         <nav class="nav__links" aria-label="Sections">
           ${cfg.nav.map(n => `<a href="${esc(n.href)}">${esc(n.label)}</a>`).join('')}
         </nav>
@@ -28,7 +28,7 @@ export const chromeNav = {
     const menu = document.createElement('div');
     menu.className = 'menu'; menu.id = 'menu';
     menu.innerHTML = `
-      <div class="menu__logo">${logoHTML({ height: "4.6rem", dark: true })}</div>
+      <div class="menu__logo">${logoSVG({ ink: '#f4f4f2' })}</div>
       <nav aria-label="Mobile">
         ${cfg.nav.map(n => `<a class="menu__link" href="${esc(n.href)}">${esc(n.label)}</a>`).join('')}
       </nav>
@@ -83,18 +83,22 @@ export const chromeFooter = {
       <div class="container">
         <div class="footer__cols">
           <div class="footer__col footer__brand">
+            <div class="footer__mark">${logoSVG({ layout: 'mark' })}</div>
             <p>${esc(cfg.company.blurb)}</p>
           </div>
           <div class="footer__col"><h4>Explore</h4>${cfg.nav.map(n => `<a href="${esc(n.href)}">${esc(n.label)}</a>`).join('')}</div>
           <div class="footer__col"><h4>Get in touch</h4>${rows}</div>
           <div class="footer__col"><h4>Studio</h4><span>${esc(cfg.company.tagline)}</span><span>Design · Engineering · Strategy</span></div>
         </div>
-        <div class="footer__word" data-module="wordmark"><span class="bt-word" data-wave>${esc(cfg.company.name)}</span></div>
+        <div class="footer__word">${logoSVG({ layout: 'word' })}</div>
         <div class="footer__legal">
           <span>© ${cfg.company.year} ${esc(cfg.company.name)}</span>
           <span>All rights reserved.</span>
         </div>
       </div>`;
+
+    // Any element with data-logo="lockup|mark|word" gets the logo drawn into it (optional data-accent="#hex")
+    document.querySelectorAll('[data-logo]').forEach(n => { n.innerHTML = logoSVG({ layout: n.dataset.logo || 'lockup', ...(n.dataset.accent && { accent: n.dataset.accent }) }); });
 
     // Any element with data-contact="email-cta" becomes a mailto link
     document.querySelectorAll('[data-contact="email-cta"]').forEach(a => {

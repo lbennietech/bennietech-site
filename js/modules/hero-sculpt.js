@@ -11,11 +11,11 @@
  *   ("built block by block") and lean towards the pointer.
  * - Resolution adapts to the GPU (never below 1x CSS pixels; then the frame rate drops instead). Falls back to the flat logo without WebGL.
  */
-import { createRenderer, GLSL } from '../gl/gl.js?v=mv5728rt';
-import { blockGeom, BLOCK, logoSVG } from '../brand/logotype.js?v=mv5728rt';
-import { addTask } from '../core/ticker.js?v=mv5728rt';
-import { whenVisible, onResize, reducedMotion, lerp, clamp } from '../core/utils.js?v=mv5728rt';
-import { pointer, listenPointer } from '../core/pointer.js?v=mv5728rt';
+import { createRenderer, GLSL } from '../gl/gl.js?v=mv58cl40';
+import { blockGeom, BLOCK, logoSVG } from '../brand/logotype.js?v=mv58cl40';
+import { addTask } from '../core/ticker.js?v=mv58cl40';
+import { whenVisible, onResize, reducedMotion, lerp, clamp } from '../core/utils.js?v=mv58cl40';
+import { pointer, listenPointer } from '../core/pointer.js?v=mv58cl40';
 
 const FRAG = GLSL.head + GLSL.tone + GLSL.studio + `
 uniform vec2 uRes; uniform float uTime; uniform vec2 uRot; uniform float uSpin; uniform float uSep; uniform float uZoom; uniform vec2 uShift;

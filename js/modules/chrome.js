@@ -5,8 +5,8 @@
  *   chrome-footer  <footer data-module="chrome-footer">
  * All text comes from js/config/site.config.js, so non-developers only edit that file.
  */
-import { siteConfig as cfg } from '../config/site.config.js?v=mv5728rt';
-import { logoSVG } from '../brand/logotype.js?v=mv5728rt';
+import { siteConfig as cfg } from '../config/site.config.js?v=mv58cl40';
+import { logoSVG } from '../brand/logotype.js?v=mv58cl40';
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 

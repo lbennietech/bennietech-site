@@ -1,7 +1,7 @@
 /**
  * chips.js — cycles a highlight through the chips in the console bar (decorative). data-module="chips"
  */
-import { reducedMotion } from '../core/utils.js?v=mv5728rt';
+import { reducedMotion } from '../core/utils.js?v=mv58cl40';
 
 export default {
   name: 'chips',

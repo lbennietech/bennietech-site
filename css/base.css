@@ -57,8 +57,9 @@ h3 { font-size: var(--fs-h3); font-weight: 500; letter-spacing: -0.03em; line-he
 }
 .js [data-reveal].is-in { opacity: 1; transform: none; }
 
-/* split-heading words: each word sits in a clipping mask and slides up */
-.split-word { display: inline-block; overflow: hidden; vertical-align: top; padding-bottom: .12em; margin-bottom: -.12em; }
+/* split-heading words: each word sits in a clipping mask and slides up. The mask is padded at the sides and bottom
+   (cancelled by negative margins) so tight letter-spacing never lets a glyph overhang it and get clipped */
+.split-word { display: inline-block; overflow: hidden; vertical-align: top; padding: 0 .1em .12em; margin: 0 -.1em -.12em; }
 .split-word > span {
   display: inline-block; transform: translateY(110%);
   transition: transform 1.1s var(--ease-out) calc(var(--i, 0) * 45ms);

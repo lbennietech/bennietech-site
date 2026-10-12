@@ -39,7 +39,6 @@
   --r-md: 18px;
   --r-lg: 26px;
   --r-xl: 38px;
-  --r-tile: 24%;                   /* the one tile shape: a squircle-ish rounded square */
   --r-pill: 999px;
   --gutter: clamp(16px, 3vw, 40px);
   --container: 1440px;
@@ -55,8 +54,5 @@
   --z-menu: 90;
 
   /* ---- Depth ---- */
-  --shadow-tile:
-    inset 0 1px 1px rgba(255,255,255,.28), inset 0 -10px 24px -12px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.06),
-    0 1px 1px rgba(0,0,0,.08), 0 24px 44px -22px rgba(0,0,0,.55);
   --shadow-card: 0 1px 0 rgba(255,255,255,.75) inset, 0 20px 50px -34px rgba(0,0,0,.28);
 }

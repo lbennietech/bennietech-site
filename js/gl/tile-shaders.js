@@ -12,10 +12,17 @@
  *   gyro     machined chrome gyroscope rings (ray-marched)
  *   aurora   soft domain-warped gradient with film grain
  *
+ * SPECIMENS — the small artwork panels: precise 2D studies in hairline and dot matrix, one ink + one accent (uC):
+ *   isolines  terrain contours + the route to a target      lattice   drifting plan cells, hatched, one lit
+ *   moire     two interfering ring fields                    halftone  weather as a rotated dot screen
+ *   globe     turning dot-matrix sphere with orbits          flow      two streams pinched into one channel
+ *   rings     segmented dials at their own speeds            spectrum  live column analyser
+ *   ridges    stacked waveforms occluding each other         streaks   lines leaving from one point
+ *
  * Shared uniforms: uRes (px), uTime, uSeed, uBg/uA/uB/uC (palette, 0..1 rgb), uDensity, uHue (radians), uTex.
  * Each shader defines  vec3 art(vec2 uv, vec2 fc)  where uv is centred, aspect-correct (-.5..+.5 on the short side).
  */
-import { GLSL } from './gl.js?v=mv4qkrxe';
+import { GLSL } from './gl.js?v=mv56adpu';
 
 const PRELUDE = `#extension GL_OES_standard_derivatives : enable
 precision highp float;
@@ -31,6 +38,11 @@ vec3 hueShift(vec3 c, float a){            // rotate hue in YIQ space
   return toR * vec3(y.x, ch * cos(h), ch * sin(h));
 }
 vec3 film(float c, float shift){ return .5 + .5 * cos(TAU * (c * 1.6 + shift) + vec3(0., 2.1, 4.2)); }
+float PX(){ return 1. / min(uRes.x, uRes.y); }                     // one pixel, in uv units
+// anti-aliased hairline at every integer of k (w = width in px)
+float iso(float k, float w){ float d = abs(fract(k + .5) - .5) / max(fwidth(k), 1e-5); return 1. - smoothstep(w * .5 - .5, w * .5 + .5, d); }
+float discAA(float d, float r){ return 1. - smoothstep(r - PX() * .7, r + PX() * .7, d); }
+float ringAA(vec2 uv, vec2 c, float r, float w){ return 1. - smoothstep(w * .5 - .5, w * .5 + .5, abs(length(uv - c) - r) / PX()); }
 `;
 
 const MAIN = `
@@ -245,6 +257,207 @@ vec3 art(vec2 uv, vec2 fc){
   col = mix(col, uC, pow(smoothstep(.5, .8, f * w.y * 1.9), 2.) * .9);
   float light = smoothstep(.9, .0, length(uv - vec2(-.3 + .2 * sin(t * 2.), .35)));
   return col + light * .12;
+}`,
+
+  /* =============================================================================================================
+     SPECIMENS — precise 2D generative studies: hairlines and dot matrices in one ink, one accent (uC).
+     Used for every small artwork panel (capabilities, statement, approach, bento). uB = secondary/grid ink.
+     ============================================================================================================ */
+
+  /* ---------------------------------------------------------------- isolines: a terrain with the route to a target */
+  isolines: `
+float fieldI(vec2 uv, float t){ vec2 d = uv - vec2(.16, .08), p = uv * 1.6 * uDensity; return vnoise(vec3(p, t)) * .75 + vnoise(vec3(p * 2.1 + 3., t)) * .25 - .45 * exp(-dot(d, d) * 12.); }
+vec3 art(vec2 uv, vec2 fc){
+  float t = uTime * .035 + uSeed;
+  float f = fieldI(uv, t), ft = fieldI(vec2(.16, .08), t);
+  vec3 col = uBg;
+  col = mix(col, uB, iso(f * 24., 1.) * .45);
+  col = mix(col, uA, iso(f * 6., 1.1) * .75);
+  float path = 1. - smoothstep(.7, 1.7, abs(f - ft - .012) / max(fwidth(f), 1e-5));
+  col = mix(col, uC, path * .9);
+  col = mix(col, uC, ringAA(uv, vec2(.16, .08), .035, 1.4) + discAA(length(uv - vec2(.16, .08)), .009));
+  return col;
+}`,
+
+  /* ---------------------------------------------------------------- lattice: drifting cells, hatched and lit, like a plan */
+  lattice: `
+vec2 h2(vec2 p){ return fract(sin(vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)))) * 43758.5453); }
+vec2 pt(vec2 c, float t){ return .5 + .4 * sin(t + TAU * h2(c)); }
+vec3 art(vec2 uv, vec2 fc){
+  float t = uTime * .18 + uSeed, S = 4.4 * uDensity, px = PX();
+  vec2 x = uv * S + uSeed * 7.3, n = floor(x), f = fract(x), mg, mr; float md = 8.;
+  for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++){
+    vec2 g = vec2(float(i), float(j)), r = g + pt(n + g, t) - f; float d = dot(r, r);
+    if (d < md){ md = d; mr = r; mg = g; }
+  }
+  md = 8.;
+  for (int j = -2; j <= 2; j++) for (int i = -2; i <= 2; i++){
+    vec2 g = mg + vec2(float(i), float(j)), r = g + pt(n + g, t) - f;
+    if (dot(mr - r, mr - r) > 1e-5) md = min(md, dot(.5 * (mr + r), normalize(r - mr)));
+  }
+  float hc = h2(n + mg + 17.31).x;
+  vec3 col = uBg;
+  if (hc > .96) col = mix(col, uC, .9);
+  else if (hc > .66) col = mix(col, uB, iso(dot(fc, vec2(.7071)) / 7., 1.) * .45);    // hatched cells
+  col = mix(col, uA, discAA(length(mr) / S, 1.8 * px) * .8);                          // cell centres
+  col = mix(col, uA, (1. - smoothstep(.3, 1.1, md / (S * px))) * .7);                 // walls
+  return col;
+}`,
+
+  /* ---------------------------------------------------------------- moire: two ring fields interfering; their beats lit */
+  moire: `
+vec3 art(vec2 uv, vec2 fc){
+  float t = uTime * .1 + uSeed;
+  vec2 c1 = vec2(sin(t) * .12 - .09, cos(t * .8) * .08), c2 = vec2(cos(t * .7) * .12 + .1, sin(t * .9) * .1);
+  float N = 34. * uDensity;
+  float a = iso(length(uv - c1) * N, 1.), b = iso(length(uv - c2) * N, 1.);
+  vec3 col = mix(uBg, uB, max(a, b) * .7);
+  col = mix(col, uA, a * b * .9);                                                  // where the fields agree
+  col = mix(col, uC, discAA(length(uv - c1), .012) + discAA(length(uv - c2), .012));
+  return col;
+}`,
+
+  /* ---------------------------------------------------------------- halftone: weather as a rotated dot screen */
+  halftone: `
+vec3 art(vec2 uv, vec2 fc){
+  float t = uTime * .05 + uSeed, G = 30. * uDensity, ang = .26;
+  vec2 q = uv * rot(ang) * G, cell = floor(q) + .5, lp = fract(q) - .5;
+  vec2 cu = (cell / G) * rot(-ang);
+  float v = smoothstep(.42, .8, fbm(vec3(cu * 2.1 + vec2(t * .7, 0.), t)));
+  float r = .42 * sqrt(v), fw = G * PX();
+  float d = 1. - smoothstep(r - fw * .6, r + fw * .6, length(lp));
+  vec3 ink = v > .85 && hash(cell + uSeed) > .9 ? uC : uA * .85;
+  return mix(uBg, ink, d * step(.04, v));
+}`,
+
+  /* ---------------------------------------------------------------- globe: a turning dot-matrix sphere with orbits */
+  globe: `
+float orbit(vec2 uv, float tilt, float rx, float ry){
+  vec2 e = uv * rot(tilt), ab = vec2(rx, ry);
+  float k = length(e / ab), g = length(e / (ab * ab));
+  return abs(k * (k - 1.) / g) / PX();
+}
+vec3 art(vec2 uv, vec2 fc){
+  float t = uTime * .12 + uSeed, R = .3 / uDensity, px = PX(), r = length(uv);
+  vec3 col = uBg;
+  float o1 = orbit(uv, .38, .46, .12), o2 = orbit(uv, -.5, .43, .09);
+  float lines = max(1. - smoothstep(.3, 1.1, o1), 1. - smoothstep(.3, 1.1, o2));
+  col = mix(col, uB, lines * .9);
+  float inside = 1. - smoothstep(R - px, R + px, r);
+  col = mix(col, uBg, inside);                                                        // the sphere hides the orbits behind it
+  vec3 n = vec3(uv, sqrt(max(R * R - r * r, 0.))) / R;
+  vec3 m = n; m.yz *= rot(.35); m.xz *= rot(t);
+  float rows = 20., lat = asin(clamp(m.y, -1., 1.));
+  float li = floor(lat / 3.1416 * rows + .5), latc = li * 3.1416 / rows;
+  float cols = max(1., floor(rows * 2. * cos(latc) + .5));
+  float lj = floor(atan(m.z, m.x) / TAU * cols + .5), lonc = lj * TAU / cols;
+  vec3 cd = vec3(cos(latc) * cos(lonc), sin(latc), cos(latc) * sin(lonc));
+  float angd = acos(clamp(dot(m, cd), -1., 1.));
+  float nz = fbm(cd * 2.3 + uSeed);
+  float light = clamp(dot(n, normalize(vec3(-.5, .55, .7))), 0., 1.);
+  float size = (.3 + .7 * smoothstep(.42, .68, nz)) * (.35 + .65 * light) * .5 * 3.1416 / rows;
+  float fw = px / (R * max(n.z, .25)) * .8;
+  float dm = (1. - smoothstep(size - fw, size + fw, angd)) * inside * smoothstep(0., .25, n.z);
+  col = mix(col, nz > .64 && hash(vec2(li, lj) + uSeed) > .6 ? uC : uA, dm);
+  float front = step((uv * rot(.38)).y, 0.) * (1. - smoothstep(.3, 1.1, o1));        // front arc of the main orbit
+  col = mix(col, uA, front * .9);
+  vec2 sat = vec2(cos(t * 2.3) * .46, sin(t * 2.3) * .12) * rot(-.38);
+  col = mix(col, uC, discAA(length(uv - sat), .011) * (sin(t * 2.3) < 0. ? 1. : 1. - inside));
+  return col;
+}`,
+
+  /* ---------------------------------------------------------------- flow: two streams pinched into one channel */
+  flow: `
+vec3 art(vec2 uv, vec2 fc){
+  float t = uTime * .2 + uSeed;
+  float pinch = .3 + .7 * (1. - exp(-uv.x * uv.x * 9.));
+  float psi = uv.y / pinch + .05 * sin(uv.x * 7. + t) + .03 * sin(uv.x * 13. - uv.y * 6. - t * 1.3);
+  float k = psi * 10. * uDensity;
+  vec3 col = mix(uBg, uA, iso(k, 1.) * .6);
+  float id = floor(k + .5), h = hash(vec2(id, 4.) + uSeed);
+  float seg = step(fract(uv.x * 1.1 - t * .3 + h), .09) * step(.75, h);
+  col = mix(col, uC, iso(k, 1.4) * seg);
+  float axis = (1. - smoothstep(.3, 1.1, abs(uv.x) / PX())) * step(.5, fract(uv.y * 28.));
+  col = mix(col, uB, axis * .6);
+  return col;
+}`,
+
+  /* ---------------------------------------------------------------- rings: segmented dials turning at their own speeds */
+  rings: `
+vec3 art(vec2 uv, vec2 fc){
+  float t = uTime * .2 + uSeed, px = PX(), B = 16. * uDensity;
+  float r = length(uv), a = atan(uv.y, uv.x) / TAU + .5;
+  float bi = floor(r * B), fr = fract(r * B) - .5;
+  float h1 = hash(vec2(bi, 1.) + uSeed), h2 = hash(vec2(bi, 2.) + uSeed), h3 = hash(vec2(bi, 3.) + uSeed);
+  float w = mix(.08, .7, h1 * h1);
+  float band = 1. - smoothstep(-.5, .5, (abs(fr) - w * .5) / (B * px));
+  float n = floor(mix(2., 46., h2)), duty = mix(.3, .9, h3);
+  float s = fract((a + t * (h1 - .5) * .5) * n);
+  float edge = min(s, duty - s) / n * TAU * r / px;
+  float seg = smoothstep(-.5, .5, edge);
+  float on = band * seg * step(.2, h2) * step(1.5, bi) * step(bi, B * .47);
+  vec3 col = uBg;
+  col = mix(col, uB, ((1. - smoothstep(.3, 1., abs(uv.y) / px)) + (1. - smoothstep(.3, 1., abs(uv.x) / px))) * .3);
+  col = mix(col, hash(vec2(bi, 9.) + uSeed) > .93 ? uC : uA * .8, on);
+  col = mix(col, uC, discAA(r, .016));
+  return col;
+}`,
+
+  /* ---------------------------------------------------------------- spectrum: a live column analyser with a reflection */
+  spectrum: `
+vec3 art(vec2 uv, vec2 fc){
+  float t = uTime * .5 + uSeed, px = PX();
+  float N = 40. * uDensity, x = (uv.x + .42) / .84 * N;
+  float id = floor(x), lx = (fract(x) - .5) * .84 / N;
+  float h = .05 + .5 * pow(fbm(vec3(id * .13, t * .35, uSeed)), 1.8) * 1.6;
+  float y0 = -.24, inx = step(0., x) * step(x, N);
+  float stem = 1. - smoothstep(.6, 1.5, abs(lx) / px);
+  float bar = stem * step(y0, uv.y) * step(uv.y, y0 + h) * inx;
+  float cap = discAA(length(vec2(lx, uv.y - y0 - h - .02)), 1.9 * px) * inx;
+  float refl = stem * step(uv.y, y0 - .012) * step(y0 - .012 - h * .35, uv.y) * inx * .28;
+  float lead = step(abs(id - floor(mod(t * 3., N))), .5);
+  vec3 col = uBg;
+  col = mix(col, uB, iso((uv.y - y0) * 8., 1.) * .35 * step(y0, uv.y));
+  col = mix(col, uA, max(bar, refl));
+  col = mix(col, lead > .5 ? uC : uA, cap);
+  col = mix(col, uA, (1. - smoothstep(.4, 1.2, abs(uv.y - y0 + .006) / px)) * step(abs(uv.x), .44));
+  return col;
+}`,
+
+  /* ---------------------------------------------------------------- ridges: stacked waveforms hiding one another */
+  ridges: `
+vec3 art(vec2 uv, vec2 fc){
+  float t = uTime * .22 + uSeed;
+  vec3 col = uBg;
+  float clip = 1. - smoothstep(.43, .44, abs(uv.x));
+  for (int i = 0; i < 34; i++){
+    float fi = float(i);
+    float n = vnoise(vec3(uv.x * 7. * uDensity, fi * .8, t)) * .65 + vnoise(vec3(uv.x * 16. * uDensity, fi * 1.7, t * 1.4)) * .35;
+    float y = .36 - fi * .021 + exp(-uv.x * uv.x * 12.) * n * n * .17;
+    float dy = uv.y - y;
+    col = mix(col, uBg, step(dy, 0.) * clip);
+    float ln = (1. - smoothstep(.3, 1.1, abs(dy) / max(fwidth(dy), 1e-5))) * clip;
+    col = mix(col, i == 19 ? uC : uA * .8, ln);
+  }
+  return col;
+}`,
+
+  /* ---------------------------------------------------------------- streaks: everything leaving from one point */
+  streaks: `
+vec3 art(vec2 uv, vec2 fc){
+  float t = uTime * .5 + uSeed, px = PX();
+  vec2 o = vec2(-.3, -.04), d = uv - o;
+  float r = length(d), a = atan(d.y, d.x), N = 150.;
+  float k = a / TAU * N, id = floor(k), f = fract(k) - .5;
+  float h = hash(vec2(id, 7.) + uSeed), h2 = hash(vec2(id, 3.) + uSeed);
+  float head = fract(t * (.12 + h * .2) + h2) * 1.2;
+  float len = .04 + .3 * h * h;
+  float seg = smoothstep(head - len, head, r) * step(r, head) * step(.3, h2);
+  float w = abs(f) / N * TAU * r / px;
+  float ln = (1. - smoothstep(.35, 1.1, w)) * seg * smoothstep(.02, .1, r);
+  vec3 col = mix(uBg, h > .97 ? uC : uA * .85, ln);
+  col = mix(col, uC, ringAA(uv, o, .022, 1.2) + discAA(r, .006));
+  return col;
 }`,
 };
 

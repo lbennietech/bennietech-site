@@ -12,6 +12,7 @@ export const PALETTES = {
   ink:    { bg: '#09090a', a: '#f4f4f2', b: '#7a7d85', c: '#c6f432' },
   flare:  { bg: '#14060d', a: '#ff3e8a', b: '#ffc2db', c: '#fff1f6' },
   ember:  { bg: '#140803', a: '#ff6a2b', b: '#ffd2a8', c: '#fff4e6' },
+  paper:  { bg: '#e7e7e3', a: '#141415', b: '#a3a39e', c: '#2e3cff' },   // light specimens: ink on paper, ultramarine accent
   lime:   { bg: '#c6f432', a: '#e9ffad', b: '#a8de00', c: '#ffffff' },   // bright, for the CTA panel
 };
 

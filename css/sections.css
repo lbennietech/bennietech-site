@@ -13,7 +13,7 @@ main { position: relative; z-index: 2; background: var(--bg); border-radius: 0 0
 }
 .hero::after { content: ""; position: absolute; inset: auto 0 0; height: 30%; background: linear-gradient(transparent, var(--bg)); pointer-events: none; }
 .hero__canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; }
-.hero__fallback { position: absolute; inset: 12% 0 auto; height: 38%; display: grid; place-items: center; z-index: 1; }
+.hero__fallback { position: absolute; inset: 12% 0 auto; height: 33%; display: flex; justify-content: center; z-index: 1; }
 .hero__fallback svg { height: 100%; width: auto; }
 .hero__copy { position: relative; z-index: 2; text-align: center; display: grid; justify-items: center; gap: 1.3rem; padding-bottom: clamp(2.5rem, 7vh, 5rem); pointer-events: none; }
 .hero__copy > * { pointer-events: auto; }
@@ -52,10 +52,11 @@ main { position: relative; z-index: 2; background: var(--bg); border-radius: 0 0
 .console__head { position: absolute; top: 0; bottom: -10px; width: 2px; background: var(--volt); left: 8%; box-shadow: 0 0 14px var(--volt); animation: playhead 9s linear infinite; }
 .console__head::before { content: ""; position: absolute; top: -2px; left: -5px; width: 12px; height: 12px; border-radius: 3px; background: var(--volt); }
 @keyframes playhead { from { left: 0; } to { left: 100%; } }
-.marquee--tiles .marquee__track { gap: 18px; padding-left: 18px; align-items: start; }
-.tile-item { width: clamp(140px, 14vw, 200px); display: grid; gap: 14px; justify-items: center; text-align: center; }
-.tile-item .tile { width: 100%; }
-.tile-item > span { color: var(--on-dark-muted); }
+.marquee--caps .marquee__track { gap: 14px; padding-left: 14px; align-items: start; }
+.cap { width: clamp(150px, 15vw, 220px); display: grid; gap: 12px; }
+.cap > span { color: var(--on-dark-muted); padding-left: 2px; transition: color .4s; }
+.cap:hover .spec { outline-color: rgba(198,244,50,.6); }
+.cap:hover > span { color: var(--on-dark); }
 
 /* ============================ 04 · DIALS ============================ */
 .dials { display: grid; grid-template-columns: 1fr 1.15fr; gap: clamp(2rem, 6vw, 6rem); align-items: center; }
@@ -73,13 +74,13 @@ main { position: relative; z-index: 2; background: var(--bg); border-radius: 0 0
 .cards4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
 .card { background: var(--bg-2); border-radius: var(--r-lg); padding: 10px 10px 26px; display: grid; gap: 8px; align-content: start; box-shadow: var(--shadow-card); transform: perspective(900px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg)); transition: transform .5s var(--ease-out), opacity var(--dur) var(--ease-out) var(--d,0s); }
 .card__stage { aspect-ratio: 1; display: grid; place-items: center; border-radius: calc(var(--r-lg) - 8px); background: radial-gradient(90% 70% at 50% 25%, #fbfbfa, #e0e0dc); margin-bottom: 14px; overflow: hidden; position: relative; }
-.card__stage::after { content: ""; position: absolute; left: 26%; right: 26%; bottom: 10%; height: 6%; background: radial-gradient(closest-side, rgba(0,0,0,.24), transparent); filter: blur(5px); }
-.card__stage .tile { width: 56%; z-index: 1; }
+.card__stage { outline: 1px solid var(--line); outline-offset: -1px; }
+.card__stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 .card__num { color: var(--muted); padding-inline: 14px; }
 .card h3, .card p { padding-inline: 14px; }
 .card p { color: var(--muted); font-size: .98rem; line-height: 1.4; }
 @media (max-width: 1100px) { .cards4 { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 560px) { .cards4 { grid-template-columns: 1fr; } .card__stage { aspect-ratio: 16/11; } .card__stage .tile { width: 40%; } }
+@media (max-width: 560px) { .cards4 { grid-template-columns: 1fr; } .card__stage { aspect-ratio: 16/11; } }
 
 /* ============================ 06 · THREE WAYS ============================ */
 .ways { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
@@ -129,10 +130,12 @@ main { position: relative; z-index: 2; background: var(--bg); border-radius: 0 0
 .bento__card p { color: var(--muted); max-width: 32ch; position: relative; z-index: 1; }
 .bento__card--ink { background: var(--ink); color: var(--on-dark); } .bento__card--ink p { color: var(--on-dark-muted); }
 .bento__card--volt { background: var(--volt); } .bento__card--volt p { color: rgba(13,13,13,.66); }
-.bento__art { position: absolute; width: clamp(110px, 12vw, 180px); right: 7%; top: 9%; }
+.bento__art { position: absolute; right: 28px; top: 28px; width: min(44%, 320px); aspect-ratio: 4 / 3; border-radius: var(--r-md); overflow: hidden; outline: 1px solid var(--line); outline-offset: -1px; }
+.bento__art canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.bento__card--ink .bento__art { outline-color: var(--line-dark); }
 .bento__card--d { justify-content: space-between; }
 .bento__logo { height: clamp(48px, 5.4vw, 78px); }
-@media (max-width: 900px) { .bento__card--a, .bento__card--b, .bento__card--c, .bento__card--d { grid-column: span 12; min-height: 300px; } }
+@media (max-width: 900px) { .bento__card--a, .bento__card--b, .bento__card--c, .bento__card--d { grid-column: span 12; min-height: 300px; } .bento__art { position: relative; right: auto; top: auto; width: 100%; margin-bottom: auto; } }
 
 /* ============================ 10 · CTA ============================ */
 .cta { position: relative; overflow: hidden; border-radius: var(--r-xl); padding: clamp(2rem, 7vw, 6rem); min-height: clamp(420px, 46vw, 600px); display: grid; align-content: center; justify-items: start; gap: 1.6rem; background: var(--volt); isolation: isolate; }
@@ -140,8 +143,11 @@ main { position: relative; z-index: 2; background: var(--bg); border-radius: 0 0
 .cta__title { max-width: 11ch; position: relative; z-index: 1; }
 .cta .btn, .cta .eyebrow { position: relative; z-index: 1; }
 .cta .eyebrow { color: rgba(13,13,13,.6); }
-.cta__art { position: absolute; width: clamp(130px, 19vw, 280px); right: 8%; top: 50%; margin-top: calc(clamp(130px, 19vw, 280px) / -2); }
-@media (max-width: 760px) { .cta__art { top: 9%; margin-top: 0; right: 6%; width: 96px; } }
+/* the stacked block-B (js/modules/cta-mark.js): a transparent WebGL canvas, the object floats on the aurora */
+.cta__mark, .cta__fallback { position: absolute; z-index: 0; pointer-events: none; width: clamp(240px, 34vw, 500px); aspect-ratio: 1; right: 2%; top: 50%; translate: 0 -50%; }
+.cta__fallback { display: flex; justify-content: center; align-items: center; }
+.cta__fallback svg { height: 58%; width: auto; }
+@media (max-width: 760px) { .cta__mark, .cta__fallback { width: 150px; top: 0; right: 0; translate: none; } }
 
 /* ============================ FOOTER ============================ */
 .footer { position: relative; z-index: 1; margin-top: calc(var(--r-xl) * -1); padding-top: calc(var(--r-xl) + clamp(3rem, 6vw, 5rem)); background: var(--bg-2); overflow: hidden; }

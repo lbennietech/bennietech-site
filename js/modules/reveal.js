@@ -5,12 +5,12 @@
  *                      Optional per-element delay:  style="--d:.2s"
  *   data-split         split a heading into words that slide up one by one (masked line reveal).
  *   data-scrub         a paragraph whose words light up as you scroll past it. Inline elements inside it
- *                      (e.g. <span class="itile">) are kept and light up in turn.
+ *                      (e.g. <span class="ipill">) are kept and light up in turn.
  *                      Optional highlighted words:  data-hl="evolve,tomorrow"
  *
  * Accessibility: split text keeps its full sentence in aria-label; the per-word spans are aria-hidden.
  */
-import { reducedMotion, clamp } from '../core/utils.js?v=mv4qkrxe';
+import { reducedMotion, clamp } from '../core/utils.js?v=mv56adpu';
 
 export default {
   name: 'reveal',
@@ -34,7 +34,7 @@ export default {
       });
     });
 
-    /* ---- scrubbed paragraphs: text is split into words; inline elements (e.g. art tiles) are kept and
+    /* ---- scrubbed paragraphs: text is split into words; inline elements (e.g. artwork pills) are kept and
             light up in sequence like a word ---- */
     const scrubs = [...root.querySelectorAll('[data-scrub]')].map(el => {
       const hl = new Set((el.dataset.hl || '').split(',').map(w => w.trim().toLowerCase()).filter(Boolean));

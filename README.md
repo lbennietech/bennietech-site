@@ -102,7 +102,7 @@ js/
     hero-sculpt.js         The 3D block-B (WebGL ray marcher).
     art.js                 <canvas data-art="…"> -> live shader artwork.
     reveal.js              Scroll reveals, split-word headings, scrubbed paragraph (keeps inline tiles).
-    marquee.js, tilt.js, chips.js, dials.js
+    marquee.js, tilt.js, chips.js, embed.js
 ```
 
 ---

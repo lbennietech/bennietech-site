@@ -8,13 +8,13 @@
  * - Ray-marched signed distance field, lit by a procedural photo studio (gl.js -> GLSL.studio), rounded bevels,
  *   ambient occlusion, soft contact shadow. Transparent background: it floats over the page.
  * - Motion: the pieces assemble on load, part as you scroll ("built block by block"), turn with the pointer.
- * - Resolution adapts to the GPU (drops when frames are slow). Falls back to the flat logo without WebGL.
+ * - Resolution adapts to the GPU (never below 1x CSS pixels; then the frame rate drops instead). Falls back to the flat logo without WebGL.
  */
-import { createRenderer, GLSL } from '../gl/gl.js?v=mv4mw8mz';
-import { blockGeom, BLOCK, logoSVG } from '../brand/logotype.js?v=mv4mw8mz';
-import { addTask } from '../core/ticker.js?v=mv4mw8mz';
-import { whenVisible, onResize, reducedMotion, lerp, clamp } from '../core/utils.js?v=mv4mw8mz';
-import { pointer, listenPointer } from '../core/pointer.js?v=mv4mw8mz';
+import { createRenderer, GLSL } from '../gl/gl.js?v=mv4qkrxe';
+import { blockGeom, BLOCK, logoSVG } from '../brand/logotype.js?v=mv4qkrxe';
+import { addTask } from '../core/ticker.js?v=mv4qkrxe';
+import { whenVisible, onResize, reducedMotion, lerp, clamp } from '../core/utils.js?v=mv4qkrxe';
+import { pointer, listenPointer } from '../core/pointer.js?v=mv4qkrxe';
 
 const FRAG = GLSL.head + GLSL.tone + GLSL.studio + `
 uniform vec2 uRes; uniform float uTime; uniform vec2 uRot; uniform float uSep; uniform float uZoom; uniform vec2 uShift;
@@ -164,12 +164,16 @@ export default {
       uSlot: [n[0], n[1], off, BLOCK.t / 2], uCenter: [BLOCK.wB / 2 + .02, BLOCK.H / 2],
     };
 
-    // render at 2x the CSS size (the browser's downscale = 4-sample supersampling); steps down on slow GPUs
-    let scale = 2, w = 0, h = 0, stop = null;
+    /* Render at 2x the CSS size (the browser's downscale = 4-sample supersampling), or the screen's own pixel
+       density if that is higher (up to 3x). Slow GPUs step down, but never below one pixel per CSS pixel: past
+       that the frame rate drops instead, because a pixelated logo looks worse than a slower one. */
+    const dpr = window.devicePixelRatio || 1;
+    const MAX_SCALE = clamp(dpr, 2, 3), MIN_SCALE = 1;
+    let scale = Math.min(2, MAX_SCALE), w = 0, h = 0, stop = null;
     let fit = { zoom: 1, shift: .1 };
     const sm = { x: 0, y: 0, scroll: 0 };
     const born = performance.now() / 1000;
-    let slow = 0, lowPower = false, lastDraw = 0;
+    let avg = 1 / 60, judged = 0, interval = 0, lastDraw = 0, ceiling = MAX_SCALE;
 
     function size() {
       const rect = canvas.getBoundingClientRect();
@@ -192,7 +196,7 @@ export default {
     }
 
     function frame(t, dt) {
-      if (lowPower && t - lastDraw < .5) return;                                     // weak GPU: ~2 fps
+      if (interval && t - lastDraw < interval) return;                               // weak GPU: fewer frames
       lastDraw = t;
       const age = t - born;
       const scroll = clamp(window.scrollY / Math.max(1, innerHeight), 0, 1.2);
@@ -211,10 +215,26 @@ export default {
         uRes: [canvas.width, canvas.height], uTime: t, uRot: [yaw, pitch], uSep: sep,
         uZoom: fit.zoom, uShift: [0, fit.shift], ...geo,
       });
-      // adaptive resolution: if frames are slow, render fewer pixels; if that's not enough, drop the frame rate
-      if (!lowPower && dt > .045) {
-        if (++slow >= 3) { slow = 0; if (scale > .45) { scale *= .7; size(); } else lowPower = true; }
-      } else slow = Math.max(0, slow - 1);
+      adapt(t, age, dt);
+    }
+
+    /* Adaptive quality, judged on the average frame time over a second or more. The first seconds are ignored:
+       page load, web fonts and the tiles compiling their shaders stall every phone briefly, and those stalls used
+       to knock the sculpture down to a fraction of its resolution for good. Single long frames (a scroll hitch,
+       an in-app browser pausing the page) are ignored too. */
+    function adapt(t, age, dt) {
+      if (age < 3 || interval || !dt || dt >= .1) return;
+      avg += (dt - avg) * .05;
+      if (t - judged < 1.2) return;
+      if (avg > 1 / 40) {                                   // under ~40 fps
+        judged = t;
+        if (scale > MIN_SCALE) { scale = ceiling = Math.max(MIN_SCALE, scale * .8); size(); }   // never climbs back past this
+        else interval = 1 / 30;
+        avg = 1 / 60;
+      } else if (avg < 1 / 55 && scale < ceiling && t - judged > 4) {   // smooth for a while: win pixels back
+        judged = t;
+        scale = Math.min(ceiling, scale / .8); size();
+      }
     }
 
     size(); onResize(canvas, size);

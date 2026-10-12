@@ -30,13 +30,13 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:ital,wght@0,300..900;1,300..900&family=JetBrains+Mono:wght@400;500&display=swap">
 
-  <link rel="stylesheet" href="css/tokens.css?v=mv4mw8mz">
-  <link rel="stylesheet" href="css/base.css?v=mv4mw8mz">
-  <link rel="stylesheet" href="css/components.css?v=mv4mw8mz">
-  <link rel="stylesheet" href="css/sections.css?v=mv4mw8mz">
+  <link rel="stylesheet" href="css/tokens.css?v=mv4qkrxe">
+  <link rel="stylesheet" href="css/base.css?v=mv4qkrxe">
+  <link rel="stylesheet" href="css/components.css?v=mv4qkrxe">
+  <link rel="stylesheet" href="css/sections.css?v=mv4qkrxe">
 
   <script>document.documentElement.classList.add('js');</script>
-  <script type="module" src="js/main.js?v=mv4mw8mz"></script>
+  <script type="module" src="js/main.js?v=mv4qkrxe"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -123,27 +123,22 @@
       </div>
     </section>
 
-    <!-- ============================ 04 · DIALS (interactive) ============================ -->
+    <!-- ============================ 04 · ADAPTABLE — a live simulation in the device frame ============================ -->
     <section class="section section--tight" aria-labelledby="dial-title">
-      <div class="container dials" data-module="dials">
+      <div class="container dials">
         <div class="dials__copy">
           <p class="eyebrow" data-reveal>(02) Adaptable by design</p>
           <h2 class="h2" id="dial-title" data-split>Infinitely adaptable.</h2>
-          <p class="lede" data-reveal>Great systems flex. We build solutions with real dials and sliders — configurable, composable and ready for the requirements you haven’t met yet. Try it.</p>
+          <p class="lede" data-reveal>Great systems flex. We build solutions with real dials and sliders — configurable, composable and ready for the requirements you haven’t met yet.</p>
         </div>
         <div class="dials__stage" data-reveal>
-          <div class="dials__art"><canvas data-module="art" data-art="silk" data-palette="blue" data-seed="11" data-role="dial-target"></canvas></div>
-          <form class="dials__panel" onsubmit="return false" aria-label="Live demo controls">
-            <label><span class="mono">Density</span><input type="range" min="0.5" max="2.2" step="0.01" value="1" data-param="density"></label>
-            <label><span class="mono">Hue</span><input type="range" min="0" max="360" step="1" value="0" data-param="hue"></label>
-            <label><span class="mono">Motion</span><input type="range" min="0" max="3" step="0.01" value="1" data-param="speed"></label>
-            <div class="dials__swatches" role="group" aria-label="Palette">
-              <button type="button" data-palette="blue" aria-label="Blue palette"></button>
-              <button type="button" data-palette="chrome" aria-label="Chrome palette"></button>
-              <button type="button" data-palette="flare" aria-label="Flare palette"></button>
-              <button type="button" data-palette="ember" aria-label="Ember palette"></button>
-            </div>
-          </form>
+          <div class="dials__art">
+            <iframe data-module="embed" data-src="https://lbennietech.github.io/pocket-universe/?embed&amp;scene=formation" title="Pocket Universe: a solar system forming, simulated live" tabindex="-1" referrerpolicy="no-referrer"></iframe>
+          </div>
+          <div class="dials__bar">
+            <span class="mono">Pocket Universe · a solar system forming, live</span>
+            <a class="mono" href="https://lbennietech.github.io/pocket-universe/" target="_blank" rel="noopener">Play it ↗</a>
+          </div>
         </div>
       </div>
     </section>
@@ -169,7 +164,7 @@
             <p>Interfaces and system architecture designed together — so beauty and structure never fight each other.</p>
           </article>
           <article class="card" data-reveal style="--d:.16s" data-module="tilt">
-            <div class="card__stage"><div class="tile tile--float" style="animation-delay:-3s"><canvas data-module="art" data-art="gyro" data-palette="ink" data-seed="23"></canvas></div></div>
+            <div class="card__stage"><div class="tile tile--float" style="animation-delay:-3s"><canvas data-module="art" data-art="silk" data-palette="blue" data-seed="11"></canvas></div></div>
             <span class="mono card__num">03</span>
             <h3>Build</h3>
             <p>Clean, tested, documented engineering — shipped in small increments you can see and steer.</p>

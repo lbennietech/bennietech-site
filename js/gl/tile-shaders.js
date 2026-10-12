@@ -22,7 +22,7 @@
  * Shared uniforms: uRes (px), uTime, uSeed, uBg/uA/uB/uC (palette, 0..1 rgb), uDensity, uHue (radians), uTex.
  * Each shader defines  vec3 art(vec2 uv, vec2 fc)  where uv is centred, aspect-correct (-.5..+.5 on the short side).
  */
-import { GLSL } from './gl.js?v=mv55min1';
+import { GLSL } from './gl.js?v=mv56adpu';
 
 const PRELUDE = `#extension GL_OES_standard_derivatives : enable
 precision highp float;

@@ -10,11 +10,11 @@
  * - Motion: the pieces assemble on load, part as you scroll ("built block by block"), turn with the pointer.
  * - Resolution adapts to the GPU (never below 1x CSS pixels; then the frame rate drops instead). Falls back to the flat logo without WebGL.
  */
-import { createRenderer, GLSL } from '../gl/gl.js?v=mv55min1';
-import { blockGeom, BLOCK, logoSVG } from '../brand/logotype.js?v=mv55min1';
-import { addTask } from '../core/ticker.js?v=mv55min1';
-import { whenVisible, onResize, reducedMotion, lerp, clamp } from '../core/utils.js?v=mv55min1';
-import { pointer, listenPointer } from '../core/pointer.js?v=mv55min1';
+import { createRenderer, GLSL } from '../gl/gl.js?v=mv56adpu';
+import { blockGeom, BLOCK, logoSVG } from '../brand/logotype.js?v=mv56adpu';
+import { addTask } from '../core/ticker.js?v=mv56adpu';
+import { whenVisible, onResize, reducedMotion, lerp, clamp } from '../core/utils.js?v=mv56adpu';
+import { pointer, listenPointer } from '../core/pointer.js?v=mv56adpu';
 
 const FRAG = GLSL.head + GLSL.tone + GLSL.studio + `
 uniform vec2 uRes; uniform float uTime; uniform vec2 uRot; uniform float uSep; uniform float uZoom; uniform vec2 uShift;

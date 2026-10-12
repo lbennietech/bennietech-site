@@ -12,10 +12,10 @@
  * Control from code:  canvas.__art.set({ density: 1.5, hue: 90, speed: 2, palette: 'flare' })
  * Without WebGL the canvas is hidden and its parent shows a CSS gradient in the palette colours.
  */
-import { addTile, renderNow } from '../gl/tiles.js';
-import { PALETTES, rgb } from '../art/palettes.js';
-import { NEEDS_TEXTURE } from '../gl/tile-shaders.js';
-import { whenVisible, onResize, reducedMotion } from '../core/utils.js';
+import { addTile, renderNow } from '../gl/tiles.js?v=mv4mo2pl';
+import { PALETTES, rgb } from '../art/palettes.js?v=mv4mo2pl';
+import { NEEDS_TEXTURE } from '../gl/tile-shaders.js?v=mv4mo2pl';
+import { whenVisible, onResize, reducedMotion } from '../core/utils.js?v=mv4mo2pl';
 
 export default {
   name: 'art',

@@ -21,6 +21,10 @@ Open <http://localhost:8080>. `PORT=3000 node server.js` for another port.
 > `server.js` is only a convenience: the folder is 100% static and can be dropped on **any** host
 > (IIS, nginx, Apache, Netlify, Cloudflare Pages, S3, GitHub Pages…) unchanged.
 
+### Deploying (GitHub Pages)
+Run **`node tools/stamp.mjs`** before committing CSS/JS changes, then commit and push. It appends `?v=<stamp>` to every
+CSS/JS URL and module import, so browsers never mix a new page with cached old scripts (Pages caches files for 10 min).
+
 ### Moving to another host / stack
 1. Copy the folder (you can leave out `server.js`, `start-site.bat`, `README.md`).
 2. Serve it as static files, with `.js` served as `text/javascript`. Done.

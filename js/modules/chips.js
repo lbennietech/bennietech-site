@@ -1,16 +1,20 @@
 /**
- * chips.js — cycles a highlight through the chips in the console bar (decorative). data-module="chips"
+ * chips.js — cycles a highlight through the chips in the console bar (decorative).
+ * Only runs while the console is on screen: an interval that fires forever, off-screen, shows up in
+ * battery profiles without anyone ever seeing it.
  */
-import { reducedMotion } from '../core/utils.js?v=mv58cl40';
+import { whenVisible, reducedMotion } from '../core/utils.js?v=mvl2tiq1';
 
 export default {
   name: 'chips',
   init(el) {
     const chips = [...el.children];
-    if (!chips.length) return;
-    let i = 0;
+    if (!chips.length || reducedMotion()) return;
+    let i = 0, timer = null;
     const step = () => { chips.forEach((c, k) => c.classList.toggle('is-active', k === i)); i = (i + 1) % chips.length; };
-    step();
-    if (!reducedMotion()) setInterval(step, 2200);
+    whenVisible(el, visible => {
+      if (visible && !timer) { step(); timer = setInterval(step, 2200); }
+      else if (!visible && timer) { clearInterval(timer); timer = null; }
+    });
   },
 };

@@ -16,6 +16,7 @@ const TYPES = {
   '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
   '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml',
   '.png': 'image/png', '.jpg': 'image/jpeg', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.txt': 'text/plain',
+  '.xml': 'application/xml; charset=utf-8',
 };
 
 http.createServer((req, res) => {
@@ -25,7 +26,14 @@ http.createServer((req, res) => {
   if (fs.existsSync(file) && fs.statSync(file).isDirectory()) file = path.join(file, 'index.html');
 
   fs.readFile(file, (err, data) => {
-    if (err) { res.writeHead(404, { 'Content-Type': 'text/plain' }); return res.end('Not found'); }
+    if (err) {
+      // mirror GitHub Pages: unknown paths get the site's own 404 page
+      fs.readFile(path.join(ROOT, '404.html'), (e2, page) => {
+        res.writeHead(404, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(e2 ? 'Not found' : page);
+      });
+      return;
+    }
     res.writeHead(200, {
       'Content-Type': TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream',
       'Cache-Control': 'no-cache',                 // always fresh while developing

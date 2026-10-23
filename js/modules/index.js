@@ -5,16 +5,16 @@
  *   3. put data-module="my-thing" on any element in index.html
  * ORDER MATTERS (see core/registry.js): list modules that create DOM before modules that use it.
  */
-import intro from './intro.js?v=mv58cl40';                          // splash; defines window.__btIntro that `reveal` waits for
-import { chromeNav, chromeFooter } from './chrome.js?v=mv58cl40';   // renders nav + footer + [data-logo] logos
-import marquee from './marquee.js?v=mv58cl40';                      // clones items -> must precede art
-import art from './art.js?v=mv58cl40';                              // shader artwork in every tile / card
-import embed from './embed.js?v=mv58cl40';                          // live pages framed in tiles
-import reveal from './reveal.js?v=mv58cl40';
-import tilt from './tilt.js?v=mv58cl40';
-import chips from './chips.js?v=mv58cl40';
-import heroSculpt from './hero-sculpt.js?v=mv58cl40';               // the 3D block-B in the hero
-import ctaMark from './cta-mark.js?v=mv58cl40';                     // the stacked block-B in the contact panel
+import intro from './intro.js?v=mvl2tiq1';                          // splash; defines window.__btIntro that `reveal` waits for
+import { chromeNav, chromeFooter } from './chrome.js?v=mvl2tiq1';   // renders nav + footer + [data-logo] logos
+import marquee from './marquee.js?v=mvl2tiq1';                      // clones items -> must precede art
+import art from './art.js?v=mvl2tiq1';                              // shader artwork in every tile / card
+import embed from './embed.js?v=mvl2tiq1';                          // live pages framed in tiles
+import reveal from './reveal.js?v=mvl2tiq1';
+import tilt from './tilt.js?v=mvl2tiq1';
+import chips from './chips.js?v=mvl2tiq1';
+import heroSculpt from './hero-sculpt.js?v=mvl2tiq1';               // the 3D block-B in the hero
+import ctaMark from './cta-mark.js?v=mvl2tiq1';                     // the stacked block-B in the contact panel
 
 export const modules = [
   intro,

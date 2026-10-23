@@ -12,31 +12,67 @@
   * Nav + footer are rendered from js/config/site.config.js (edit contact details there).
   * To add a new section: copy a <section> below, give it a unique id, add a link in site.config.js -> nav.
 -->
-<html lang="en">
+<html lang="en-AU">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>BennieTech — Software Solution Design</title>
   <meta name="description" content="BennieTech designs and engineers forward-thinking software solutions — from first sketch to resilient production systems.">
   <meta name="theme-color" content="#f3f3f1">
+  <meta name="color-scheme" content="light">
+  <link rel="canonical" href="https://bennienet.cloud/">
   <meta property="og:title" content="BennieTech — Software Solution Design">
   <meta property="og:description" content="Forward-thinking software solutions, designed to evolve.">
   <meta property="og:type" content="website">
+  <meta property="og:url" content="https://bennienet.cloud/">
+  <meta property="og:site_name" content="BennieTech">
+  <meta property="og:image" content="https://bennienet.cloud/assets/og/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="The BennieTech block-B mark in ink on acid lime.">
+  <meta name="twitter:card" content="summary_large_image">
   <link rel="icon" href="assets/logo/bennietech-mark.svg" type="image/svg+xml">
+  <link rel="icon" href="assets/icons/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
 
-  <!-- Typography: Inter Tight (display/body) and JetBrains Mono (labels).
-       To self-host, download the fonts, add @font-face rules in css/base.css and delete these 3 lines. -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:ital,wght@0,300..900;1,300..900&family=JetBrains+Mono:wght@400;500&display=swap">
+  <!-- Typography: Inter Tight (display/body) and JetBrains Mono (labels), self-hosted in /fonts.
+       Variable woff2, latin + latin-ext only — no third-party CSS or font request at runtime. -->
+  <link rel="preload" href="fonts/inter-tight-4.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/jetbrains-mono-2.woff2" as="font" type="font/woff2" crossorigin>
 
-  <link rel="stylesheet" href="css/tokens.css?v=mv58cl40">
-  <link rel="stylesheet" href="css/base.css?v=mv58cl40">
-  <link rel="stylesheet" href="css/components.css?v=mv58cl40">
-  <link rel="stylesheet" href="css/sections.css?v=mv58cl40">
+  <link rel="stylesheet" href="css/fonts.css?v=mvl2tiq1">
+  <link rel="stylesheet" href="css/tokens.css?v=mvl2tiq1">
+  <link rel="stylesheet" href="css/base.css?v=mvl2tiq1">
+  <link rel="stylesheet" href="css/components.css?v=mvl2tiq1">
+  <link rel="stylesheet" href="css/sections.css?v=mvl2tiq1">
 
   <script>document.documentElement.classList.add('js');</script>
-  <script type="module" src="js/main.js?v=mv58cl40"></script>
+  <script type="module" src="js/main.js?v=mvl2tiq1"></script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://bennienet.cloud/#org",
+        "name": "BennieTech",
+        "url": "https://bennienet.cloud/",
+        "logo": "https://bennienet.cloud/assets/og/og-image.png",
+        "email": "bennie.luke@outlook.com",
+        "description": "Design-led studio for forward-thinking software — strategy, interface design and cloud architecture, from first sketch to resilient production systems.",
+        "knowsAbout": ["Software design", "Solution architecture", "Product design", "Cloud engineering"]
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://bennienet.cloud/#site",
+        "url": "https://bennienet.cloud/",
+        "name": "BennieTech",
+        "publisher": { "@id": "https://bennienet.cloud/#org" },
+        "inLanguage": "en-AU"
+      }
+    ]
+  }
+  </script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -95,7 +131,7 @@
         <!-- A "timeline console" panel, echoing a product UI -->
         <div class="console" data-reveal>
           <div class="console__bar">
-            <span class="console__play" aria-hidden="true"></span>
+            <button class="console__play" type="button" id="cap-play" aria-label="Pause artwork motion" aria-pressed="false"></button>
             <span class="console__time mono" aria-hidden="true">00:01:25 / 00:12</span>
             <span class="console__title mono">Library <b>|</b> Capabilities</span>
             <div class="console__chips" data-module="chips" aria-hidden="true">
@@ -104,7 +140,7 @@
           </div>
           <div class="console__ruler" aria-hidden="true"><i class="console__head"></i></div>
 
-          <div class="marquee marquee--caps" data-module="marquee" style="--speed:70s">
+          <div class="marquee marquee--caps" data-module="marquee" data-motion-toggle="#cap-play" style="--speed:70s">
             <ul class="marquee__track">
               <li class="cap"><div class="spec" data-fig="01" data-note="Isolines"><canvas data-module="art" data-art="isolines" data-palette="ink" data-seed="3"></canvas></div><span class="mono">Strategy</span></li>
               <li class="cap"><div class="spec" data-fig="02" data-note="Lattice"><canvas data-module="art" data-art="lattice" data-palette="ink" data-seed="4"></canvas></div><span class="mono">Architecture</span></li>
@@ -178,6 +214,13 @@
       </div>
     </section>
 
+    <!-- ============================ 05b · INTERLUDE — the page's one scale break ============================ -->
+    <section class="interlude" id="interlude" aria-label="Statement">
+      <div class="container">
+        <p class="interlude__text" data-reveal>Software,<span class="interlude__line">built block by block.</span></p>
+      </div>
+    </section>
+
     <!-- ============================ 06 · THREE WAYS ============================ -->
     <section class="section section--tight" aria-labelledby="ways-title">
       <div class="container">
@@ -217,7 +260,8 @@
           <p class="lede" data-reveal>A glimpse of the kinds of systems we design and engineer.</p>
         </header>
       </div>
-      <div class="marquee marquee--cards" data-module="marquee" style="--speed:90s">
+      <div class="marquee-wrap">
+      <div class="marquee marquee--cards" data-module="marquee" data-motion-toggle style="--speed:90s">
         <ul class="marquee__track">
           <li class="scard"><canvas data-module="art" data-art="ridges" data-palette="ink" data-seed="41"></canvas><span class="pill">Commerce</span><h3>Composable storefronts</h3></li>
           <li class="scard"><canvas data-module="art" data-art="glass" data-palette="ice" data-seed="42"></canvas><span class="pill">Health</span><h3>Secure patient portals</h3></li>
@@ -229,6 +273,7 @@
           <li class="scard"><canvas data-module="art" data-art="chrome" data-palette="chrome" data-seed="48"></canvas><span class="pill">Intelligence</span><h3>AI-assisted decision tools</h3></li>
           <li class="scard"><canvas data-module="art" data-art="scan" data-palette="volt" data-seed="49"></canvas><span class="pill">Realtime</span><h3>Live event streams</h3></li>
         </ul>
+      </div>
       </div>
     </section>
 

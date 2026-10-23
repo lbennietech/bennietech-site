@@ -3,7 +3,8 @@
 A single-page brochure site for **BennieTech** (software solution design).
 Plain HTML + CSS + native ES modules. **No build step, no npm, no dependencies.**
 All imagery is generated in code: a real-time 3D hero sculpture (WebGL), 2D generative artwork in every specimen panel and card (WebGL shaders),
-and a logo constructed as vector geometry. There are no image files apart from exported copies of the logo.
+and a logo constructed as vector geometry. The only raster files are the social card (`assets/og/og-image.png`)
+and the touch icons (`assets/icons/`) — both generated from the same mark.
 
 ---
 
@@ -49,6 +50,7 @@ Example: <http://localhost:8080/?debug&nointro>
 | `No module registered for data-module="x"` | Typo, or module not listed in `js/modules/index.js`. |
 | Artwork panels show a flat gradient, hero shows a flat logo | WebGL is unavailable (very old device / disabled GPU). That is the designed fallback. |
 | Slow on a weak machine | Both renderers adapt: the hero lowers its resolution, then its frame rate; artwork panels only render on screen, within a per-frame time budget. |
+| Scrolling artwork won't stop | Use the play/pause square in the capabilities console bar, or the *Pause* button under the solutions marquee (hover and keyboard focus also pause it). |
 
 ---
 
@@ -78,9 +80,15 @@ scroll, and turn towards the pointer.
 
 ```
 index.html                 The page. Sections are numbered in comments.
+404.html                   Not-found page (GitHub Pages serves it automatically).
+robots.txt, sitemap.xml    Crawler hints; the sitemap lists the one page.
 server.js / start-site.bat Local static server (optional).
 assets/logo/               Exported logo SVGs, the generator page, and archive/ (old logo).
+assets/og/                 og-image.png — 1200x630 link-preview card (mark on lime).
+assets/icons/              apple-touch-icon.png, favicon-32.png.
+fonts/                     Self-hosted woff2: Inter Tight, JetBrains Mono (variable, latin + latin-ext).
 css/
+  fonts.css                ★ @font-face for the self-hosted woff2 (rules generated from the Google CSS API).
   tokens.css               ★ Design tokens: colours, fonts, radii, spacing, motion. Start here to restyle.
   base.css                 Reset, typography, layout primitives, reveal animation states.
   components.css           Buttons, nav, menu, specimen panels, inline pills, marquee, sliders, splash.
@@ -182,9 +190,12 @@ Edit **`js/config/site.config.js`**. Only the email (`bennie.luke@outlook.com`) 
 
 > The "Solutions" cards are *illustrative archetypes*, not client case studies — replace them with real work when you have it.
 
-### Fonts (self-hosting)
-Download *Inter Tight* and *JetBrains Mono* (woff2) into `/fonts`, add `@font-face` rules at the top of `css/base.css`
-(family names exactly `"Inter Tight"`, `"JetBrains Mono"`), then delete the Google Fonts `<link>` tags in `index.html`.
+### Fonts (already self-hosted)
+*Inter Tight* and *JetBrains Mono* live in `/fonts` as variable woff2 (latin + latin-ext only) with the `@font-face`
+rules in **`css/fonts.css`**; `index.html` preloads the two latin files it needs first. Nothing loads from Google.
+To change a family, drop new woff2 files into `/fonts` and edit `fonts.css` — keep the family names exactly
+`"Inter Tight"` and `"JetBrains Mono"`, or update `--font-sans` / `--font-mono` in `tokens.css` to match.
+Total font payload is ~75 KB on a normal visit (the other subsets never download).
 (The logo does not depend on any font.)
 
 ### Browser support

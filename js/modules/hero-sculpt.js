@@ -11,11 +11,11 @@
  *   ("built block by block") and lean towards the pointer.
  * - Resolution adapts to the GPU (never below 1x CSS pixels; then the frame rate drops instead). Falls back to the flat logo without WebGL.
  */
-import { createRenderer, GLSL } from '../gl/gl.js?v=mv58cl40';
-import { blockGeom, BLOCK, logoSVG } from '../brand/logotype.js?v=mv58cl40';
-import { addTask } from '../core/ticker.js?v=mv58cl40';
-import { whenVisible, onResize, reducedMotion, lerp, clamp } from '../core/utils.js?v=mv58cl40';
-import { pointer, listenPointer } from '../core/pointer.js?v=mv58cl40';
+import { createRenderer, GLSL } from '../gl/gl.js?v=mvl2tiq1';
+import { blockGeom, BLOCK, logoSVG } from '../brand/logotype.js?v=mvl2tiq1';
+import { addTask } from '../core/ticker.js?v=mvl2tiq1';
+import { whenVisible, onResize, reducedMotion, lerp, clamp } from '../core/utils.js?v=mvl2tiq1';
+import { pointer, listenPointer } from '../core/pointer.js?v=mvl2tiq1';
 
 const FRAG = GLSL.head + GLSL.tone + GLSL.studio + `
 uniform vec2 uRes; uniform float uTime; uniform vec2 uRot; uniform float uSpin; uniform float uSep; uniform float uZoom; uniform vec2 uShift;
@@ -189,15 +189,21 @@ export default {
     }
 
     /* Fit the sculpture into the free band between the nav and the hero copy. The camera frames ~2.63 units of
-       height at the object, and the mark is 1.69 units tall (~64% of the frame at zoom 1). */
+       height at the object, and the mark is 1.69 units tall (~64% of the frame at zoom 1).
+       From 1100px the hero is asymmetric: the copy holds a left column, so the object is framed in the right
+       half, centred vertically. uv is measured in canvas heights, hence the /h terms. */
     function layout(rect) {
-      if (!(w > 0 && h > 0)) return { zoom: 1, shift: .1 };          // not laid out yet (hidden tab)
+      if (!(w > 0 && h > 0)) return { zoom: 1, shift: .1, shiftX: 0 };   // not laid out yet (hidden tab)
+      if (w >= 1100) {
+        const objH = Math.min(h * .60, w * .40);
+        return { zoom: objH / (h * .64), shift: 0, shiftX: (w * .73 - w * .5) / h };
+      }
       const copy = canvas.parentElement?.querySelector('.hero__copy > *');
       const top = Math.min(90, h * .12);
       const bottom = copy ? copy.getBoundingClientRect().top - rect.top - 24 : h * .55;
       const band = Math.max(120, bottom - top);
       const objH = Math.min(band * .86, w * 1.05);                 // keep it inside narrow screens too
-      return { zoom: objH / (h * .64), shift: .5 - (top + band / 2) / h };
+      return { zoom: objH / (h * .64), shift: .5 - (top + band / 2) / h, shiftX: 0 };
     }
 
     function frame(t, dt) {
@@ -222,7 +228,7 @@ export default {
       if (o) { yaw = o.yaw ?? yaw; pitch = o.pitch ?? pitch; sep = o.sep ?? sep; }
       r.draw({
         uRes: [canvas.width, canvas.height], uTime: t, uRot: [yaw, pitch], uSpin: spin, uSep: sep,
-        uZoom: fit.zoom, uShift: [0, fit.shift], ...geo,
+        uZoom: fit.zoom, uShift: [fit.shiftX || 0, fit.shift], ...geo,
       });
       adapt(t, age, dt);
     }

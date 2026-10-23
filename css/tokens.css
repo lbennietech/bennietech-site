@@ -11,13 +11,16 @@
   --ink:       #0d0d0d;            /* primary text + dark panels */
   --ink-2:     #171718;            /* raised dark surface */
   --ink-3:     #232325;
-  --muted:     rgba(13, 13, 13, .5);
+  --muted:     rgba(13, 13, 13, .62);   /* body / lede / meta — 5.3:1 on --bg (AA) */
+  --muted-2:   rgba(13, 13, 13, .5);    /* decorative only: rules, inactive marks */
   --line:      rgba(13, 13, 13, .1);
   --on-dark:   #f4f4f2;
   --on-dark-muted: rgba(244, 244, 242, .56);
   --line-dark: rgba(255, 255, 255, .1);
 
-  /* ---- Colour: accents (used sparingly — the artwork carries the colour) ---- */
+  /* ---- Colour: accents (used sparingly — the artwork carries the colour) ----
+     Rule: --volt is brand (surfaces, the i-dot, the cut). --blue is the interactive
+     accent only (focus rings, link hover). Nothing else may introduce a third hue. */
   --volt:      #c6f432;            /* acid lime: the brand "spark" (logo i-dot, the light in the cut) */
   --blue:      #2e3cff;            /* electric ultramarine: focus rings, links */
   --flare:     #ff3e8a;
@@ -43,16 +46,20 @@
   --gutter: clamp(16px, 3vw, 40px);
   --container: 1440px;
   --section-y: clamp(4.5rem, 11vw, 9.5rem);
+  --ratio-plate: 4 / 5;            /* the specimen plate ratio: every artwork plate uses it */
 
   /* ---- Motion ---- */
   --ease-out: cubic-bezier(.16, 1, .3, 1);
   --ease-io:  cubic-bezier(.65, 0, .35, 1);
-  --dur: .9s;
+  --dur: .6s;
 
   /* ---- Layering ---- */
   --z-nav: 100;
   --z-menu: 90;
 
-  /* ---- Depth ---- */
-  --shadow-card: 0 1px 0 rgba(255,255,255,.75) inset, 0 20px 50px -34px rgba(0,0,0,.28);
+  /* ---- Depth: exactly three elevations, everything else inherits one ----
+     1 = floating chrome (nav pills, chips)   2 = content cards   3 = dark panels */
+  --shadow-1: 0 1px 0 rgba(255,255,255,.65) inset, 0 12px 30px -20px rgba(0,0,0,.30);
+  --shadow-2: 0 1px 0 rgba(255,255,255,.75) inset, 0 20px 50px -34px rgba(0,0,0,.30);
+  --shadow-3: inset 0 1px 0 rgba(255,255,255,.06), 0 50px 90px -40px rgba(0,0,0,.50);
 }

@@ -5,8 +5,8 @@
  *   chrome-footer  <footer data-module="chrome-footer">
  * All text comes from js/config/site.config.js, so non-developers only edit that file.
  */
-import { siteConfig as cfg } from '../config/site.config.js?v=mv58cl40';
-import { logoSVG } from '../brand/logotype.js?v=mv58cl40';
+import { siteConfig as cfg } from '../config/site.config.js?v=mvl2tiq1';
+import { logoSVG } from '../brand/logotype.js?v=mvl2tiq1';
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -36,16 +36,35 @@ export const chromeNav = {
     el.after(menu);
 
     const burger = el.querySelector('.nav__burger');
+    const focusables = () => [...menu.querySelectorAll('a[href]')];
+    let returnTo = null;
     const setOpen = open => {
       el.classList.toggle('is-open', open);
       menu.classList.toggle('is-open', open);
       burger.setAttribute('aria-expanded', open);
       burger.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
       document.body.style.overflow = open ? 'hidden' : '';
+      // the overlay is full-screen: keep the page behind it out of the tab order and the a11y tree
+      document.querySelectorAll('main, footer').forEach(n => n.toggleAttribute('inert', open));
+      if (open) {
+        returnTo = document.activeElement;
+        (focusables()[0] || burger).focus();
+      } else if (returnTo) {
+        returnTo.focus();
+        returnTo = null;
+      }
     };
     burger.addEventListener('click', () => setOpen(!el.classList.contains('is-open')));
     menu.addEventListener('click', e => { if (e.target.closest('a')) setOpen(false); });
-    window.addEventListener('keydown', e => { if (e.key === 'Escape') setOpen(false); });
+    window.addEventListener('keydown', e => {
+      if (e.key === 'Escape') setOpen(false);
+      if (e.key !== 'Tab' || !el.classList.contains('is-open')) return;
+      const f = focusables();
+      if (!f.length) return;
+      const first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    });
 
     // Hide the nav when scrolling down, reveal when scrolling up (keeps content clear on phones)
     let lastY = scrollY;

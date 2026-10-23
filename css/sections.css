@@ -18,7 +18,7 @@ main { position: relative; z-index: 2; background: var(--bg); border-radius: 0 0
 .hero__copy { position: relative; z-index: 2; text-align: center; display: grid; justify-items: center; gap: 1.3rem; padding-bottom: clamp(2.5rem, 7vh, 5rem); pointer-events: none; }
 .hero__copy > * { pointer-events: auto; }
 .hero__title { max-width: 15ch; }
-.hero__lede { max-width: 36rem; color: rgba(13,13,13,.6); }
+.hero__lede { max-width: 36rem; color: var(--muted); }
 .hero__actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: .3rem; }
 .hero__spec { position: absolute; z-index: 2; left: var(--gutter); bottom: 30px; display: grid; gap: 4px; color: var(--muted); font-size: .66rem; }
 .hero__spec span:first-child { color: var(--ink); }
@@ -27,6 +27,16 @@ main { position: relative; z-index: 2; background: var(--bg); border-radius: 0 0
 @keyframes scrollcue { 0% { transform: scaleY(0); } 50% { transform: scaleY(1); } 100% { transform: scaleY(1); opacity: 0; } }
 @media (max-width: 700px) { .hero__scroll, .hero__spec { display: none; } .hero__title { max-width: 11ch; } }
 
+/* ≥1100px: asymmetric hero — copy holds the left column, the sculpture is framed in the right one
+   (hero-sculpt.js shifts the object right and re-fits it; below this width the centred layout stays). */
+@media (min-width: 1100px) {
+  .hero { display: grid; grid-template-columns: minmax(0, 46%) minmax(0, 54%); align-items: center; }
+  .hero__copy { grid-column: 1; justify-items: start; text-align: left; align-self: center; padding-bottom: 0; }
+  .hero__title { max-width: 14ch; }
+  .hero__lede { max-width: 33rem; }
+  .hero__actions { justify-content: flex-start; }
+}
+
 /* ============================ 02 · STATEMENT ============================ */
 .statement__text {
   font-size: clamp(1.9rem, 4.6vw, 4.2rem); font-weight: 500; letter-spacing: -0.045em; line-height: 1.08; max-width: 22ch; margin-inline: auto; text-align: center; text-wrap: balance;
@@ -34,11 +44,15 @@ main { position: relative; z-index: 2; background: var(--bg); border-radius: 0 0
 .statement__text .scrub-word.hl { color: var(--ink); background: linear-gradient(var(--volt), var(--volt)) no-repeat 0 88% / 100% .14em; }
 
 /* ============================ 03 · CAPABILITIES — dark console ============================ */
-.console { background: var(--ink); color: var(--on-dark); border-radius: var(--r-lg); padding: 14px 14px 30px; overflow: hidden; box-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 50px 90px -40px rgba(0,0,0,.55); }
+.console { background: var(--ink); color: var(--on-dark); border-radius: var(--r-lg); padding: 14px 14px 30px; overflow: hidden; box-shadow: var(--shadow-3); }
 .console__bar { display: flex; align-items: center; gap: 14px; padding: 6px 8px 14px; flex-wrap: wrap; }
-.console__play { width: 32px; height: 28px; border-radius: 8px; background: var(--ink-3); position: relative; flex: none; }
-.console__play::before, .console__play::after { content: ""; position: absolute; top: 8px; width: 3px; height: 12px; background: #fff; border-radius: 1px; }
+.console__play { width: 32px; height: 28px; border-radius: 8px; background: var(--ink-3); position: relative; flex: none; border: 0; padding: 0; cursor: pointer; transition: background .25s; }
+.console__play:hover { background: var(--ink-3); filter: brightness(1.35); }
+.console__play::before, .console__play::after { content: ""; position: absolute; top: 8px; width: 3px; height: 12px; background: #fff; border-radius: 1px; transition: all .2s; }
 .console__play::before { left: 11px; } .console__play::after { left: 18px; }
+/* paused: the two bars become a play triangle */
+.console__play[aria-pressed="true"]::before { left: 12px; top: 8px; width: 0; height: 0; background: none; border-left: 9px solid #fff; border-top: 6px solid transparent; border-bottom: 6px solid transparent; border-radius: 0; }
+.console__play[aria-pressed="true"]::after { display: none; }
 .console__time, .console__title { color: var(--on-dark-muted); }
 .console__title b { color: var(--on-dark); font-weight: 400; margin-inline: .35em; }
 .console__chips { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
@@ -61,7 +75,7 @@ main { position: relative; z-index: 2; background: var(--bg); border-radius: 0 0
 /* ============================ 04 · DIALS ============================ */
 .dials { display: grid; grid-template-columns: 1fr 1.15fr; gap: clamp(2rem, 6vw, 6rem); align-items: center; }
 .dials__copy { display: grid; gap: 1.25rem; }
-.dials__stage { position: relative; background: var(--ink); border-radius: var(--r-lg); padding: 12px; display: grid; gap: 12px; box-shadow: 0 50px 90px -40px rgba(0,0,0,.5); }
+.dials__stage { position: relative; background: var(--ink); border-radius: var(--r-lg); padding: 12px; display: grid; gap: 12px; box-shadow: var(--shadow-3); }
 .dials__art { border-radius: var(--r-md); overflow: hidden; aspect-ratio: 16/10; background: #111; position: relative; }
 .dials__art iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; pointer-events: none; opacity: 0; transition: opacity .8s var(--ease-out); }
 .dials__art iframe.is-live { opacity: 1; }
@@ -72,26 +86,39 @@ main { position: relative; z-index: 2; background: var(--bg); border-radius: 0 0
 
 /* ============================ 05 · APPROACH — objects on a grey shelf ============================ */
 .cards4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
-.card { background: var(--bg-2); border-radius: var(--r-lg); padding: 10px 10px 26px; display: grid; gap: 8px; align-content: start; box-shadow: var(--shadow-card); transform: perspective(900px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg)); transition: transform .5s var(--ease-out), opacity var(--dur) var(--ease-out) var(--d,0s); }
+.card { background: var(--bg-2); border-radius: var(--r-lg); padding: 10px 10px 26px; display: grid; gap: 8px; align-content: start; box-shadow: var(--shadow-2); transform: perspective(900px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg)); transition: transform .5s var(--ease-out), opacity var(--dur) var(--ease-out) var(--d,0s); }
 .card__stage { aspect-ratio: 1; display: grid; place-items: center; border-radius: calc(var(--r-lg) - 8px); background: radial-gradient(90% 70% at 50% 25%, #fbfbfa, #e0e0dc); margin-bottom: 14px; overflow: hidden; position: relative; }
 .card__stage { outline: 1px solid var(--line); outline-offset: -1px; }
 .card__stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 .card__num { color: var(--muted); padding-inline: 14px; }
 .card h3, .card p { padding-inline: 14px; }
+/* three card-title steps: small (.card / .scard), medium (.bento), large (.way) */
+.card h3 { font-size: clamp(1.25rem, 1.6vw, 1.5rem); }
 .card p { color: var(--muted); font-size: .98rem; line-height: 1.4; }
 @media (max-width: 1100px) { .cards4 { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 560px) { .cards4 { grid-template-columns: 1fr; } .card__stage { aspect-ratio: 16/11; } }
+
+/* ============================ 05b · INTERLUDE ============================
+   The page's one scale break: full-bleed type, hairline rules, no artwork, no lede. Everything else is a
+   card grid at the same volume; this is the breath between them. Unnumbered on purpose. */
+.interlude { padding-block: clamp(5rem, 13vw, 11rem); border-block: 1px solid var(--line); }
+.interlude__text {
+  font-size: clamp(2.6rem, 8.4vw, 8.2rem); font-weight: 500; letter-spacing: -.06em; line-height: .92;
+  text-wrap: balance;
+}
+.interlude__line { display: block; padding-left: 14vw; }
+@media (max-width: 700px) { .interlude__line { padding-left: 0; } }
 
 /* ============================ 06 · THREE WAYS ============================ */
 .ways { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
 .way { position: relative; overflow: hidden; border-radius: var(--r-lg); min-height: clamp(380px, 36vw, 520px); padding: 28px; display: flex; flex-direction: column; justify-content: flex-end; gap: 12px; isolation: isolate; color: #fff; background: var(--ink);
   transform: perspective(900px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg)); transition: transform .5s var(--ease-out), opacity var(--dur) var(--ease-out) var(--d,0s);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.1), 0 40px 70px -40px rgba(0,0,0,.5); }
+  box-shadow: var(--shadow-3); }
 .way__bg { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; }
 .way::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(transparent 35%, rgba(0,0,0,.6)); }
 .way--light { color: var(--ink); }
 .way--light::after { background: linear-gradient(transparent 40%, rgba(255,255,255,.55)); }
-.way h3 { font-size: clamp(2.2rem, 3.8vw, 3.4rem); letter-spacing: -0.05em; line-height: 1; }
+.way h3 { font-size: clamp(2.4rem, 3.6vw, 3.2rem); letter-spacing: -0.05em; line-height: 1; }
 .way p { max-width: 28ch; font-size: 1rem; line-height: 1.35; }
 .way .mono { opacity: .75; }
 @media (max-width: 900px) { .ways { grid-template-columns: 1fr; } .way { min-height: 320px; } }
@@ -100,12 +127,12 @@ main { position: relative; z-index: 2; background: var(--bg); border-radius: 0 0
 .marquee--cards { padding: 30px 0 40px; }
 .marquee--cards .marquee__track { gap: 16px; padding-left: 16px; }
 .scard { position: relative; flex: none; width: clamp(240px, 22vw, 320px); aspect-ratio: 3/4; border-radius: var(--r-lg); overflow: hidden; background: var(--ink); isolation: isolate; color: #fff; transition: transform .6s var(--ease-out);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 30px 50px -30px rgba(0,0,0,.5); }
+  box-shadow: var(--shadow-2); }
 .scard:hover { transform: translateY(-6px); }
 .scard canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: -1; }
 .scard::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(transparent 50%, rgba(0,0,0,.62)); }
 .scard .pill { position: absolute; left: 14px; top: 14px; }
-.scard h3 { position: absolute; left: 18px; right: 18px; bottom: 18px; font-size: 1.35rem; letter-spacing: -0.035em; }
+.scard h3 { position: absolute; left: 18px; right: 18px; bottom: 18px; font-size: clamp(1.25rem, 1.5vw, 1.45rem); letter-spacing: -0.035em; }
 
 /* ============================ 08 · FORWARD-THINKING TECH ============================ */
 .future { position: relative; overflow: hidden; background: var(--ink); color: var(--on-dark); border-radius: var(--r-xl); padding: clamp(1.5rem, 5vw, 5rem); isolation: isolate; }
@@ -122,11 +149,11 @@ main { position: relative; z-index: 2; background: var(--bg); border-radius: 0 0
 
 /* ============================ 09 · PRINCIPLES — bento ============================ */
 .bento { display: grid; grid-template-columns: repeat(12, 1fr); gap: 14px; }
-.bento__card { position: relative; overflow: hidden; background: var(--bg-2); border-radius: var(--r-lg); padding: 28px; min-height: clamp(300px, 28vw, 400px); display: flex; flex-direction: column; justify-content: flex-end; gap: 12px; box-shadow: var(--shadow-card); transition: transform .5s var(--ease-out), opacity var(--dur) var(--ease-out) var(--d,0s); }
+.bento__card { position: relative; overflow: hidden; background: var(--bg-2); border-radius: var(--r-lg); padding: 28px; min-height: clamp(300px, 28vw, 400px); display: flex; flex-direction: column; justify-content: flex-end; gap: 12px; box-shadow: var(--shadow-2); transition: transform .5s var(--ease-out), opacity var(--dur) var(--ease-out) var(--d,0s); }
 .bento__card:hover { transform: translateY(-6px); }
 .bento__card--a { grid-column: span 5; } .bento__card--b { grid-column: span 7; }
 .bento__card--c { grid-column: span 7; } .bento__card--d { grid-column: span 5; }
-.bento__card h3 { font-size: clamp(1.6rem, 2.6vw, 2.3rem); letter-spacing: -0.045em; line-height: 1; max-width: 13ch; position: relative; z-index: 1; }
+.bento__card h3 { font-size: clamp(1.75rem, 2.4vw, 2.15rem); letter-spacing: -0.045em; line-height: 1; max-width: 13ch; position: relative; z-index: 1; }
 .bento__card p { color: var(--muted); max-width: 32ch; position: relative; z-index: 1; }
 .bento__card--ink { background: var(--ink); color: var(--on-dark); } .bento__card--ink p { color: var(--on-dark-muted); }
 .bento__card--volt { background: var(--volt); } .bento__card--volt p { color: rgba(13,13,13,.66); }

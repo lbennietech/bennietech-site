@@ -5,8 +5,8 @@
  *   chrome-footer  <footer data-module="chrome-footer">
  * All text comes from js/config/site.config.js, so non-developers only edit that file.
  */
-import { siteConfig as cfg } from '../config/site.config.js?v=mvlra7gn';
-import { logoSVG } from '../brand/logotype.js?v=mvlra7gn';
+import { siteConfig as cfg } from '../config/site.config.js?v=mvlusce4';
+import { logoSVG } from '../brand/logotype.js?v=mvlusce4';
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const INK = '#f5f5f2';   // the studio-black edition draws the logo in light ink
@@ -67,13 +67,26 @@ export const chromeNav = {
       else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
     });
 
-    // Hide the bar when scrolling down, reveal when scrolling up (keeps content clear on phones)
-    let lastY = scrollY;
+    // Hide the bar only while the user is actively scrolling down with a wheel or finger. Anchor jumps,
+    // page-down keys and scrollbar drags move the page too — hiding the nav during those made the links
+    // look broken (the page jumped and the bar vanished with it).
+    let lastY = scrollY, userScrolling = false, idleTimer = 0;
+    const markUserScroll = () => {
+      userScrolling = true;
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => { userScrolling = false; }, 420);
+    };
+    window.addEventListener('wheel', markUserScroll, { passive: true });
+    window.addEventListener('touchmove', markUserScroll, { passive: true });
     window.addEventListener('scroll', () => {
-      const y = scrollY, goingDown = y > lastY && y > 240;
-      if (!el.classList.contains('is-open')) el.classList.toggle('is-hidden', goingDown);
+      const y = scrollY;
+      if (userScrolling && !el.classList.contains('is-open')) {
+        el.classList.toggle('is-hidden', y > lastY && y > 240);
+      }
       lastY = y;
     }, { passive: true });
+    // any deliberate click on a link always brings the bar back
+    el.addEventListener('click', e => { if (e.target.closest('a')) el.classList.remove('is-hidden'); });
 
     // Highlight the link of the section currently in view
     const links = [...el.querySelectorAll('.nav__links a')];

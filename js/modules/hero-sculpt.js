@@ -11,11 +11,11 @@
  *   ("built block by block") and lean towards the pointer.
  * - Resolution adapts to the GPU (never below 1x CSS pixels; then the frame rate drops instead). Falls back to the flat logo without WebGL.
  */
-import { createRenderer, GLSL } from '../gl/gl.js?v=mvlra7gn';
-import { blockGeom, BLOCK, logoSVG } from '../brand/logotype.js?v=mvlra7gn';
-import { addTask } from '../core/ticker.js?v=mvlra7gn';
-import { whenVisible, onResize, reducedMotion, lerp, clamp } from '../core/utils.js?v=mvlra7gn';
-import { pointer, listenPointer } from '../core/pointer.js?v=mvlra7gn';
+import { createRenderer, GLSL } from '../gl/gl.js?v=mvlusce4';
+import { blockGeom, BLOCK, logoSVG } from '../brand/logotype.js?v=mvlusce4';
+import { addTask } from '../core/ticker.js?v=mvlusce4';
+import { whenVisible, onResize, reducedMotion, lerp, clamp } from '../core/utils.js?v=mvlusce4';
+import { pointer, listenPointer } from '../core/pointer.js?v=mvlusce4';
 
 const FRAG = GLSL.head + GLSL.tone + GLSL.studio + `
 uniform vec2 uRes; uniform float uTime; uniform vec2 uRot; uniform float uSpin; uniform float uSep; uniform float uZoom; uniform vec2 uShift;
@@ -195,8 +195,8 @@ export default {
     function layout(rect) {
       if (!(w > 0 && h > 0)) return { zoom: 1, shift: .1, shiftX: 0 };   // not laid out yet (hidden tab)
       if (w >= 1100) {
-        const objH = Math.min(h * .76, w * .56);
-        return { zoom: objH / (h * .64), shift: -.02, shiftX: (w * .655 - w * .5) / h };
+        const objH = Math.min(h * .68, w * .52);
+        return { zoom: objH / (h * .64), shift: .012, shiftX: (w * .655 - w * .5) / h };
       }
       const copy = canvas.parentElement?.querySelector('.hero__copy > *');
       const top = Math.min(90, h * .12);

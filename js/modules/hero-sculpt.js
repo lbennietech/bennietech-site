@@ -11,11 +11,11 @@
  *   ("built block by block") and lean towards the pointer.
  * - Resolution adapts to the GPU (never below 1x CSS pixels; then the frame rate drops instead). Falls back to the flat logo without WebGL.
  */
-import { createRenderer, GLSL } from '../gl/gl.js?v=mvl2tiq1';
-import { blockGeom, BLOCK, logoSVG } from '../brand/logotype.js?v=mvl2tiq1';
-import { addTask } from '../core/ticker.js?v=mvl2tiq1';
-import { whenVisible, onResize, reducedMotion, lerp, clamp } from '../core/utils.js?v=mvl2tiq1';
-import { pointer, listenPointer } from '../core/pointer.js?v=mvl2tiq1';
+import { createRenderer, GLSL } from '../gl/gl.js?v=mvlra7gn';
+import { blockGeom, BLOCK, logoSVG } from '../brand/logotype.js?v=mvlra7gn';
+import { addTask } from '../core/ticker.js?v=mvlra7gn';
+import { whenVisible, onResize, reducedMotion, lerp, clamp } from '../core/utils.js?v=mvlra7gn';
+import { pointer, listenPointer } from '../core/pointer.js?v=mvlra7gn';
 
 const FRAG = GLSL.head + GLSL.tone + GLSL.studio + `
 uniform vec2 uRes; uniform float uTime; uniform vec2 uRot; uniform float uSpin; uniform float uSep; uniform float uZoom; uniform vec2 uShift;
@@ -188,21 +188,21 @@ export default {
       frame(performance.now() / 1000, 0);
     }
 
-    /* Fit the sculpture into the free band between the nav and the hero copy. The camera frames ~2.63 units of
-       height at the object, and the mark is 1.69 units tall (~64% of the frame at zoom 1).
-       From 1100px the hero is asymmetric: the copy holds a left column, so the object is framed in the right
-       half, centred vertically. uv is measured in canvas heights, hence the /h terms. */
+    /* Fit the sculpture into the dark room. The camera frames ~2.63 units of height at the object, and the mark
+       is 1.69 units tall (~64% of the frame at zoom 1). From 1100px the object sits large, right of centre, and
+       the headline occupies the lower-left; below that it keeps to the band above the copy. uv is measured in
+       canvas heights, hence the /h terms. */
     function layout(rect) {
       if (!(w > 0 && h > 0)) return { zoom: 1, shift: .1, shiftX: 0 };   // not laid out yet (hidden tab)
       if (w >= 1100) {
-        const objH = Math.min(h * .60, w * .40);
-        return { zoom: objH / (h * .64), shift: 0, shiftX: (w * .73 - w * .5) / h };
+        const objH = Math.min(h * .76, w * .56);
+        return { zoom: objH / (h * .64), shift: -.02, shiftX: (w * .655 - w * .5) / h };
       }
       const copy = canvas.parentElement?.querySelector('.hero__copy > *');
       const top = Math.min(90, h * .12);
       const bottom = copy ? copy.getBoundingClientRect().top - rect.top - 24 : h * .55;
       const band = Math.max(120, bottom - top);
-      const objH = Math.min(band * .86, w * 1.05);                 // keep it inside narrow screens too
+      const objH = Math.min(band * .92, w * 1.05);                 // keep it inside narrow screens too
       return { zoom: objH / (h * .64), shift: .5 - (top + band / 2) / h, shiftX: 0 };
     }
 
@@ -267,6 +267,6 @@ export default {
 function fallback(canvas) {
   const div = document.createElement('div');
   div.className = canvas.className + ' hero__fallback';
-  div.innerHTML = logoSVG({ layout: 'mark' });
+  div.innerHTML = logoSVG({ layout: 'mark', ink: 'currentColor' });
   canvas.replaceWith(div);
 }

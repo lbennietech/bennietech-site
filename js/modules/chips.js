@@ -3,7 +3,7 @@
  * Only runs while the console is on screen: an interval that fires forever, off-screen, shows up in
  * battery profiles without anyone ever seeing it.
  */
-import { whenVisible, reducedMotion } from '../core/utils.js?v=mvl2tiq1';
+import { whenVisible, reducedMotion } from '../core/utils.js?v=mvlra7gn';
 
 export default {
   name: 'chips',

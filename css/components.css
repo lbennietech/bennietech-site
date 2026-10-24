@@ -1,134 +1,146 @@
 /* =============================================================================
-   components.css — reusable UI parts (buttons, nav, pills, specimens, marquee, logo, splash)
-   Section-specific layout lives in sections.css.
+   components.css — chrome, buttons, plates, marquee, splash
    ========================================================================== */
 
 /* ---------- Buttons ---------- */
 .btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: .6em;
-  height: 48px; padding: 0 1.4rem; border-radius: 15px; border: 0;
-  font-weight: 500; letter-spacing: -0.02em; font-size: 1rem; white-space: nowrap;
-  transition: transform .5s var(--ease-out), background .3s, color .3s, box-shadow .3s;
+  display: inline-flex; align-items: center; justify-content: center; gap: .65em;
+  height: 52px; padding: 0 1.6rem; border-radius: var(--r-sm); border: 0;
+  font-weight: 500; letter-spacing: -0.015em; font-size: 1rem; white-space: nowrap;
+  transition: transform .45s var(--ease-out), background .25s, color .25s, box-shadow .25s;
 }
 .btn:hover { transform: translateY(-2px); }
-.btn:active { transform: scale(.98); }
-.btn--dark { background: var(--ink); color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 10px 24px -12px rgba(0,0,0,.6); }
+.btn:active { transform: scale(.99); }
+.btn--volt { background: var(--volt); color: var(--volt-ink); }
+.btn--volt:hover { background: #d3ff45; }
+.btn--dark { background: var(--paper-text); color: var(--paper); }
 .btn--dark:hover { background: #000; }
-.btn--ghost { background: rgba(13,13,13,.1); color: var(--ink); box-shadow: inset 0 0 0 1px rgba(13,13,13,.14); backdrop-filter: blur(10px); }
-.btn--ghost:hover { background: rgba(13,13,13,.16); box-shadow: inset 0 0 0 1px rgba(13,13,13,.2); }
-.btn--xl { height: 62px; padding: 0 2.1rem; font-size: 1.15rem; border-radius: 20px; }
+.btn--ghost { background: transparent; color: currentColor; box-shadow: inset 0 0 0 1px var(--line); }
+.btn--ghost:hover { box-shadow: inset 0 0 0 1px var(--text-2); }
+.btn--xl { height: 64px; padding: 0 2.2rem; font-size: 1.1rem; }
 
-.pill {
-  display: inline-flex; align-items: center; height: 26px; padding: 0 11px; border-radius: var(--r-pill);
-  font-family: var(--font-mono); font-size: .66rem; text-transform: uppercase; letter-spacing: .04em;
-  background: rgba(255,255,255,.78); color: var(--ink); backdrop-filter: blur(10px);
-}
-
-/* ---------- Logo (inline SVG from js/brand/logotype.js) ---------- */
+/* ---------- Logo ---------- */
 .bt-logo { display: block; height: 100%; width: auto; overflow: visible; }
 
-/* ---------- Navigation: two floating frosted pills ---------- */
+/* ---------- Navigation: one hairline bar, not floating pills ---------- */
 .nav {
-  position: fixed; inset: 14px var(--gutter) auto; z-index: var(--z-nav);
-  display: flex; justify-content: space-between; align-items: center; gap: 12px;
-  pointer-events: none;
+  position: fixed; inset: 0 0 auto; z-index: var(--z-nav);
+  height: 76px; padding-inline: var(--gutter);
+  display: flex; align-items: center; justify-content: space-between; gap: 2rem;
+  background: color-mix(in srgb, var(--page) 72%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(1.3); backdrop-filter: blur(20px) saturate(1.3);
+  border-bottom: 1px solid var(--line-soft);
+  transition: transform .55s var(--ease-out);
 }
-.nav__pill {
-  pointer-events: auto; display: flex; align-items: center;
-  background: rgba(236,236,233,.74); backdrop-filter: blur(22px) saturate(1.4); -webkit-backdrop-filter: blur(22px) saturate(1.4);
-  border-radius: 20px; padding: 8px 10px; box-shadow: var(--shadow-1);
-  transition: background .4s, transform .6s var(--ease-out);
+.nav.is-hidden { transform: translateY(-101%); }
+.nav__brand { display: inline-flex; align-items: center; height: 26px; color: var(--text); }
+.nav__links { display: flex; align-items: center; gap: clamp(1rem, 2vw, 2.2rem); }
+.nav__links a {
+  font-family: var(--font-mono); font-size: .69rem; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--text-2); padding: 6px 0; position: relative; transition: color .25s;
 }
-.nav__main { gap: 26px; padding-left: 20px; flex: 0 1 auto; min-height: 58px; }
-.nav__brand { display: inline-flex; align-items: center; height: 24px; color: var(--ink); }
-.nav__links { display: flex; gap: 2px; }
-.nav__links a { padding: 8px 14px; border-radius: 12px; font-weight: 450; letter-spacing: -0.015em; transition: background .25s; }
-.nav__links a:hover { background: rgba(13,13,13,.06); }
-.nav__links a.is-active { background: rgba(13,13,13,.08); }
-.nav__cta .btn { height: 42px; border-radius: 13px; }
-.nav__burger { display: none; width: 44px; height: 44px; border: 0; background: transparent; position: relative; border-radius: 12px; }
-.nav__burger i { position: absolute; left: 12px; right: 12px; height: 2px; background: var(--ink); border-radius: 2px; transition: transform .5s var(--ease-out), top .5s var(--ease-out); }
-.nav__burger i:nth-child(1) { top: 17px; } .nav__burger i:nth-child(2) { top: 25px; }
+.nav__links a::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px;
+  background: var(--volt); transform: scaleX(0); transform-origin: left; transition: transform .4s var(--ease-out);
+}
+.nav__links a:hover { color: var(--text); }
+.nav__links a:hover::after, .nav__links a.is-active::after { transform: scaleX(1); }
+.nav__links a.is-active { color: var(--text); }
+.nav__actions { display: flex; align-items: center; gap: 1.4rem; }
+.nav__cta {
+  display: inline-flex; align-items: center; gap: .55em;
+  font-size: .95rem; font-weight: 500; letter-spacing: -0.01em; color: var(--text);
+}
+.nav__cta span { color: var(--volt); transition: transform .35s var(--ease-out); }
+.nav__cta:hover span { transform: translateX(4px); }
+.nav__burger { display: none; width: 42px; height: 42px; border: 0; background: transparent; position: relative; }
+.nav__burger i { position: absolute; left: 10px; right: 10px; height: 1.5px; background: var(--text); transition: transform .45s var(--ease-out), top .45s var(--ease-out); }
+.nav__burger i:nth-child(1) { top: 18px; } .nav__burger i:nth-child(2) { top: 24px; }
 .nav.is-open .nav__burger i:nth-child(1) { top: 21px; transform: rotate(45deg); }
 .nav.is-open .nav__burger i:nth-child(2) { top: 21px; transform: rotate(-45deg); }
-.nav.is-hidden .nav__pill { transform: translateY(-140%); }
-.nav.is-open .nav__pill { transform: none; }
 
 /* Mobile full-screen menu */
 .menu {
-  position: fixed; inset: 0; z-index: var(--z-menu); background: var(--ink); color: var(--on-dark);
-  display: flex; flex-direction: column; justify-content: flex-end; gap: 2rem; padding: 110px var(--gutter) 36px;
-  clip-path: inset(0 0 100% 0); transition: clip-path .8s var(--ease-io); visibility: hidden;
+  position: fixed; inset: 0; z-index: var(--z-menu); background: var(--page); color: var(--text);
+  display: flex; flex-direction: column; justify-content: flex-end; gap: 2rem;
+  padding: 104px var(--gutter) 40px;
+  clip-path: inset(0 0 100% 0); transition: clip-path .75s var(--ease-io); visibility: hidden;
 }
 .nav.is-open ~ .menu, .menu.is-open { clip-path: inset(0); visibility: visible; }
-.menu a.menu__link { font-size: clamp(2.5rem, 11vw, 4.5rem); font-weight: 500; letter-spacing: -0.05em; line-height: 1.05; display: block; }
+.menu a.menu__link {
+  display: block; font-size: clamp(2.6rem, 11vw, 4.6rem); font-weight: 500;
+  letter-spacing: -0.055em; line-height: 1.02; color: var(--text);
+}
 .menu a.menu__link:hover { color: var(--volt); }
-.menu__foot { color: var(--on-dark-muted); font-family: var(--font-mono); font-size: .8rem; }
+.menu__foot { color: var(--text-2); font-family: var(--font-mono); font-size: .78rem; letter-spacing: .06em; }
 .menu__logo { margin-bottom: auto; height: 30px; }
 
-@media (max-width: 860px) {
+@media (max-width: 940px) {
   .nav__links, .nav__cta { display: none; }
   .nav__burger { display: block; }
-  .nav__main { flex: 1; justify-content: space-between; padding-right: 6px; }
 }
 
-/* ---------- Specimens: small artwork panels (shader art from js/gl/tile-shaders.js, SPECIMENS) ----------
-   Framed like plates in a technical folio: a hairline edge, a figure number and a note in mono. */
-.spec { position: relative; width: 100%; aspect-ratio: var(--ratio-plate); border-radius: var(--r-md); overflow: hidden; background: var(--ink-2); isolation: isolate; }
+/* ---------- Specimen plates ---------- */
+.spec {
+  position: relative; width: 100%; aspect-ratio: var(--ratio-plate, 4 / 5);
+  border-radius: var(--r-sm); overflow: hidden; background: var(--surface); isolation: isolate;
+  outline: 1px solid var(--line-soft); outline-offset: -1px;
+}
 .spec canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
-/* labels sit on a small ink plate so they stay legible over any artwork */
-.spec::before, .spec::after { position: absolute; z-index: 1; font: 500 .58rem/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: rgba(244,244,242,.92); background: rgba(9,9,10,.68); padding: 5px 7px; border-radius: 5px; pointer-events: none; }
-.spec::before { content: "Fig. " attr(data-fig); left: 10px; top: 10px; }
-.spec::after { content: attr(data-note); right: 10px; bottom: 10px; }
-.spec { outline: 1px solid rgba(255,255,255,.09); outline-offset: -1px; transition: outline-color .4s; }   /* outlines paint over the canvas */
+.spec::before, .spec::after {
+  position: absolute; z-index: 1; font: 500 .56rem/1 var(--font-mono);
+  letter-spacing: .12em; text-transform: uppercase; color: rgba(246,246,243,.92);
+  background: rgba(6,6,8,.72); padding: 5px 6px; border-radius: 2px; pointer-events: none;
+}
+.spec::before { content: "Fig. " attr(data-fig); left: 8px; top: 8px; }
+.spec::after { content: attr(data-note); right: 8px; bottom: 8px; }
 
-/* inline artwork pills inside running text (statement) */
+/* inline artwork pills inside running text */
 .ipill {
-  display: inline-block; position: relative; width: 1.9em; height: .92em; margin: 0 .08em; vertical-align: -.06em;
-  border-radius: var(--r-pill); overflow: hidden; background: var(--ink); transition: opacity .25s linear;
+  display: inline-block; position: relative; width: 1.9em; height: .92em; margin: 0 .08em;
+  vertical-align: -.06em; border-radius: 2px; overflow: hidden; background: var(--surface);
+  transition: opacity .25s linear;
 }
 .ipill canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 
-/* Artwork canvases are transparent until the shader draws its first frame. A poster tone close to the palette
-   stops a slow GPU from flashing a grid of black boxes before the art appears. */
-canvas[data-art] { background: #121216; }
-canvas[data-art][data-palette="paper"] { background: #e3e3de; }
-
-/* ---------- Marquee (infinite scroll, pure CSS animation; js/modules/marquee.js clones the items) ---------- */
-.marquee { overflow: hidden; position: relative; -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); }
-.marquee__track { display: flex; width: max-content; animation: marquee var(--speed, 60s) linear infinite var(--dir, normal); }
-/* WCAG 2.2.2: moving content must be pausable — hover, keyboard focus, or the toggle below */
+/* ---------- Marquee ---------- */
+.marquee {
+  overflow: hidden; position: relative;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
+}
+.marquee__track { display: flex; width: max-content; animation: marquee var(--speed, 70s) linear infinite var(--dir, normal); }
 .marquee:hover .marquee__track,
 .marquee:focus-within .marquee__track,
 .marquee.is-paused .marquee__track { animation-play-state: paused; }
-@keyframes marquee { to { transform: translateX(-50%); } }   /* track = 2 identical halves */
-@media (prefers-reduced-motion: reduce) { .marquee__track { animation: none; } }
-
+@keyframes marquee { to { transform: translateX(-50%); } }
 .marquee-wrap { position: relative; }
 .marquee__toggle {
-  position: absolute; z-index: 4; right: var(--gutter); bottom: 10px;
-  height: 30px; padding: 0 12px; border-radius: var(--r-pill);
-  border: 1px solid rgba(13,13,13,.14); background: rgba(255,255,255,.8); color: var(--ink);
-  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
-  font: 500 .66rem/1 var(--font-mono); letter-spacing: .05em; text-transform: uppercase;
-  transition: background .25s, border-color .25s;
+  position: absolute; z-index: 4; right: var(--gutter); bottom: 12px;
+  height: 34px; padding: 0 14px; border-radius: var(--r-pill);
+  border: 1px solid var(--line); background: transparent; color: var(--text-2);
+  font: 500 .62rem/1 var(--font-mono); letter-spacing: .12em; text-transform: uppercase;
+  transition: color .25s, border-color .25s, background .25s;
 }
-.marquee__toggle:hover { background: #fff; border-color: rgba(13,13,13,.24); }
-.marquee__toggle[aria-pressed="true"] { background: var(--ink); color: var(--on-dark); border-color: var(--ink); }
+.marquee__toggle:hover { color: var(--text); border-color: var(--text-2); }
+.marquee__toggle[aria-pressed="true"] { background: var(--text); color: var(--page); border-color: var(--text); }
+@media (prefers-reduced-motion: reduce) { .marquee__track { animation: none; } }
 
 /* ---------- Range inputs ---------- */
-input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 28px; background: transparent; cursor: ew-resize; }
-input[type="range"]::-webkit-slider-runnable-track { height: 4px; border-radius: 4px; background: rgba(255,255,255,.16); }
-input[type="range"]::-moz-range-track { height: 4px; border-radius: 4px; background: rgba(255,255,255,.16); }
-input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; margin-top: -7px; border-radius: 50%; background: #f4f4f2; border: 0; box-shadow: 0 0 0 4px rgba(198,244,50,.0), 0 2px 6px rgba(0,0,0,.5); transition: box-shadow .3s; }
-input[type="range"]::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: #f4f4f2; border: 0; }
-input[type="range"]:hover::-webkit-slider-thumb { box-shadow: 0 0 0 6px rgba(198,244,50,.35), 0 2px 6px rgba(0,0,0,.5); }
+input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 26px; background: transparent; cursor: ew-resize; }
+input[type="range"]::-webkit-slider-runnable-track { height: 2px; border-radius: 2px; background: var(--line); }
+input[type="range"]::-moz-range-track { height: 2px; border-radius: 2px; background: var(--line); }
+input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -6px; border-radius: 50%; background: var(--volt); border: 0; }
+input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--volt); border: 0; }
 
-/* ---------- Intro splash: the mark's two halves lock together, the cut flashes lime, the curtain lifts ---------- */
-.intro { position: fixed; inset: 0; z-index: 1000; background: var(--bg); display: none; place-items: center; clip-path: inset(0); transition: clip-path .9s var(--ease-io); }
+/* ---------- Intro splash: the mark assembles out of the dark ---------- */
+.intro {
+  position: fixed; inset: 0; z-index: 1000; background: var(--page); display: none; place-items: center;
+  clip-path: inset(0); transition: clip-path .9s var(--ease-io);
+}
 .intro.is-on { display: grid; }
 .intro.is-leaving { clip-path: inset(0 0 100% 0); }
-.intro__mark { height: clamp(150px, 24vw, 260px); }
+.intro__mark { height: clamp(160px, 26vw, 280px); }
 .intro__mark svg { height: 100%; width: auto; overflow: visible; }
 .intro__mark .bt-up { animation: lockUp 1s var(--ease-out) both; }
 .intro__mark .bt-lo { animation: lockLo 1s var(--ease-out) both; }

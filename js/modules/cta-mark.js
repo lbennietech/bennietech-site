@@ -14,11 +14,11 @@
  * - Transparent background with a soft contact shadow, so it floats over the lime aurora.
  *   Falls back to the flat logo mark without WebGL.
  */
-import { createRenderer, GLSL } from '../gl/gl.js?v=mvl2tiq1';
-import { blockGeom, BLOCK, logoSVG } from '../brand/logotype.js?v=mvl2tiq1';
-import { addTask } from '../core/ticker.js?v=mvl2tiq1';
-import { whenVisible, onResize, reducedMotion, lerp, clamp } from '../core/utils.js?v=mvl2tiq1';
-import { pointer, listenPointer } from '../core/pointer.js?v=mvl2tiq1';
+import { createRenderer, GLSL } from '../gl/gl.js?v=mvlra7gn';
+import { blockGeom, BLOCK, logoSVG } from '../brand/logotype.js?v=mvlra7gn';
+import { addTask } from '../core/ticker.js?v=mvlra7gn';
+import { whenVisible, onResize, reducedMotion, lerp, clamp } from '../core/utils.js?v=mvlra7gn';
+import { pointer, listenPointer } from '../core/pointer.js?v=mvlra7gn';
 
 const LAYERS = 5;
 

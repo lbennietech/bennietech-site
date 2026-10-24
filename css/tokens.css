@@ -1,65 +1,68 @@
 /* =============================================================================
-   tokens.css — DESIGN TOKENS (the single source of truth for the look)
-   Change a value here and it updates everywhere. Nothing else in the CSS
-   hard-codes colours, radii or fonts.
+   tokens.css — the design system, in one file.
+
+   Studio Black: the page is a dark exhibition space; paper sections are inserts
+   that break the rhythm; chrome and lime are the only light in the room.
+   Change a value here and it updates everywhere.
    ========================================================================== */
 :root {
-  /* ---- Colour: neutrals (a warm studio grey, like a photo cyclorama) ---- */
-  --bg:        #f3f3f1;            /* page background */
-  --bg-2:      #e9e9e6;            /* cards / shelves on light */
-  --bg-3:      #dededa;
-  --ink:       #0d0d0d;            /* primary text + dark panels */
-  --ink-2:     #171718;            /* raised dark surface */
-  --ink-3:     #232325;
-  --muted:     rgba(13, 13, 13, .62);   /* body / lede / meta — 5.3:1 on --bg (AA) */
-  --muted-2:   rgba(13, 13, 13, .5);    /* decorative only: rules, inactive marks */
-  --line:      rgba(13, 13, 13, .1);
-  --on-dark:   #f4f4f2;
-  --on-dark-muted: rgba(244, 244, 242, .56);
-  --line-dark: rgba(255, 255, 255, .1);
+  /* ---- Surfaces ---- */
+  --page:        #08080a;            /* the dark room */
+  --page-2:      #0e0e11;
+  --surface:     #131317;
+  --surface-2:   #1b1b20;
+  --paper:       #f2f2ee;            /* the inserts */
+  --paper-2:     #e7e7e1;
 
-  /* ---- Colour: accents (used sparingly — the artwork carries the colour) ----
-     Rule: --volt is brand (surfaces, the i-dot, the cut). --blue is the interactive
-     accent only (focus rings, link hover). Nothing else may introduce a third hue. */
-  --volt:      #c6f432;            /* acid lime: the brand "spark" (logo i-dot, the light in the cut) */
-  --blue:      #2e3cff;            /* electric ultramarine: focus rings, links */
-  --flare:     #ff3e8a;
+  /* ---- Text ---- */
+  --text:        #f5f5f2;
+  --text-2:      rgba(245, 245, 242, .64);
+  --text-3:      rgba(245, 245, 242, .40);
+  --paper-text:  #0a0a0c;
+  --paper-text-2: rgba(10, 10, 12, .62);
+  --paper-text-3: rgba(10, 10, 12, .40);
+
+  /* ---- Hairlines ---- */
+  --line:        rgba(245, 245, 242, .16);
+  --line-soft:   rgba(245, 245, 242, .08);
+  --paper-line:  rgba(10, 10, 12, .16);
+  --paper-line-soft: rgba(10, 10, 12, .08);
+
+  /* ---- Accents ----
+     --volt is the brand (the cut, the i-dot, one CTA). --blue is interaction only (focus). */
+  --volt:        #c6f432;
+  --volt-ink:    #0a0a0c;
+  --blue:        #9aa4ff;
 
   /* ---- Typography ---- */
   --font-sans: "Inter Tight", "Helvetica Neue", Arial, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 
-  /* Fluid type scale (min, preferred, max) */
-  --fs-display: clamp(2.9rem, 7.4vw, 7.6rem);
-  --fs-h2:      clamp(2.2rem, 5.2vw, 4.9rem);
-  --fs-h3:      clamp(1.2rem, 1.7vw, 1.5rem);
-  --fs-lede:    clamp(1.05rem, 1.45vw, 1.3rem);
-  --fs-body:    1rem;
-  --fs-mono:    .72rem;
+  /* Fluid scale (min, preferred, max) */
+  --fs-display: clamp(3.1rem, 8.4vw, 9.4rem);
+  --fs-h2:      clamp(2.3rem, 5.6vw, 5.2rem);
+  --fs-h3:      clamp(1.35rem, 1.9vw, 1.8rem);
+  --fs-lede:    clamp(1.1rem, 1.45vw, 1.35rem);
+  --fs-body:    1.0625rem;
+  --fs-mono:    .69rem;
 
-  /* ---- Shape & space ---- */
-  --r-sm: 12px;
-  --r-md: 18px;
-  --r-lg: 26px;
-  --r-xl: 38px;
+  /* ---- Shape: near-square, editorial ---- */
+  --r-sm: 3px;
+  --r-md: 6px;
+  --r-lg: 10px;
+  --r-xl: 16px;
   --r-pill: 999px;
-  --gutter: clamp(16px, 3vw, 40px);
-  --container: 1440px;
-  --section-y: clamp(4.5rem, 11vw, 9.5rem);
-  --ratio-plate: 4 / 5;            /* the specimen plate ratio: every artwork plate uses it */
+  --gutter: clamp(18px, 3.2vw, 54px);
+  --container: 1560px;
+  --section-y: clamp(5rem, 11vw, 10.5rem);
 
   /* ---- Motion ---- */
   --ease-out: cubic-bezier(.16, 1, .3, 1);
   --ease-io:  cubic-bezier(.65, 0, .35, 1);
-  --dur: .6s;
+  --dur: .7s;
 
   /* ---- Layering ---- */
   --z-nav: 100;
   --z-menu: 90;
-
-  /* ---- Depth: exactly three elevations, everything else inherits one ----
-     1 = floating chrome (nav pills, chips)   2 = content cards   3 = dark panels */
-  --shadow-1: 0 1px 0 rgba(255,255,255,.65) inset, 0 12px 30px -20px rgba(0,0,0,.30);
-  --shadow-2: 0 1px 0 rgba(255,255,255,.75) inset, 0 20px 50px -34px rgba(0,0,0,.30);
-  --shadow-3: inset 0 1px 0 rgba(255,255,255,.06), 0 50px 90px -40px rgba(0,0,0,.50);
+  --z-grain: 60;
 }

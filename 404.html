@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Page not found — BennieTech</title>
   <meta name="robots" content="noindex">
-  <meta name="theme-color" content="#f3f3f1">
-  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#08080a">
+  <meta name="color-scheme" content="dark">
   <link rel="icon" href="/assets/logo/bennietech-mark.svg" type="image/svg+xml">
   <link rel="icon" href="/assets/icons/favicon-32.png" sizes="32x32" type="image/png">
   <link rel="stylesheet" href="/css/fonts.css">
@@ -15,15 +15,15 @@
   <link rel="stylesheet" href="/css/components.css">
   <link rel="stylesheet" href="/css/sections.css">
   <style>
-    .lost { min-height: 100svh; display: grid; place-items: center; padding: var(--gutter); background: var(--bg); }
-    .lost__inner { width: min(100%, 46rem); display: grid; gap: 1.5rem; }
+    .lost { min-height: 100svh; display: grid; place-items: end start; padding: clamp(2rem, 6vw, 5rem) var(--gutter); }
+    .lost__inner { width: min(100%, 54rem); display: grid; gap: 1.6rem; }
     .lost__code {
-      font-size: clamp(5rem, 22vw, 15rem); font-weight: 500; letter-spacing: -.07em; line-height: .8;
-      color: var(--ink);
+      font-size: clamp(6rem, 24vw, 18rem); font-weight: 500; letter-spacing: -.07em; line-height: .78;
+      color: var(--text);
     }
     .lost__code span { color: var(--volt); }
-    .lost__text { font-size: var(--fs-lede); color: var(--muted); max-width: 30ch; letter-spacing: -.02em; text-wrap: pretty; }
-    .lost__mark { height: 40px; width: fit-content; color: var(--ink); }
+    .lost__text { font-size: var(--fs-lede); color: var(--text-2); max-width: 32ch; letter-spacing: -.015em; text-wrap: pretty; }
+    .lost__mark { height: 34px; width: fit-content; color: var(--text); }
     .lost__mark svg { display: block; }
     .lost__rule { height: 1px; background: var(--line); }
   </style>
@@ -31,12 +31,12 @@
 <body>
   <main class="lost">
     <div class="lost__inner">
-      <div class="lost__mark"><svg viewBox="-0.030 -0.720 1.260 1.750" width="29" height="40" role="img" aria-label="BennieTech" xmlns="http://www.w3.org/2000/svg"><mask id="m" maskUnits="userSpaceOnUse" x="-1" y="-2" width="4" height="4"><g transform="translate(0 -0.69)"><g fill="#fff"><path d="M0 0H0.57A0.43 0.43 0 0 1 0.57 0.86H0Z"/><path d="M0 0.71H0.71A0.49 0.49 0 0 1 0.71 1.69H0Z"/></g><path fill="#000" d="M-0.4 1.024L1.2709 0.5582L1.2709 0.6931L-0.4 1.159Z"/></g></mask><rect x="0" y="-1.19" width="3" height="3" fill="currentColor" mask="url(#m)"/></svg></div>
+      <div class="lost__mark"><svg viewBox="-0.030 -0.720 1.260 1.750" width="25" height="34" role="img" aria-label="BennieTech" xmlns="http://www.w3.org/2000/svg"><mask id="m" maskUnits="userSpaceOnUse" x="-1" y="-2" width="4" height="4"><g transform="translate(0 -0.69)"><g fill="#fff"><path d="M0 0H0.57A0.43 0.43 0 0 1 0.57 0.86H0Z"/><path d="M0 0.71H0.71A0.49 0.49 0 0 1 0.71 1.69H0Z"/></g><path fill="#000" d="M-0.4 1.024L1.2709 0.5582L1.2709 0.6931L-0.4 1.159Z"/></g></mask><rect x="0" y="-1.19" width="3" height="3" fill="currentColor" mask="url(#m)"/></svg></div>
       <div class="lost__rule"></div>
-      <p class="mono">(404) Not found</p>
+      <p class="mono eyebrow">(404) Not found</p>
       <h1 class="lost__code">4<span>0</span>4</h1>
       <p class="lost__text">This page doesn’t exist — or it moved. The work is all on the one page anyway.</p>
-      <p><a class="btn btn--dark" href="/">Back to the site</a></p>
+      <p><a class="btn btn--volt" href="/">Back to the site</a></p>
     </div>
   </main>
 </body>

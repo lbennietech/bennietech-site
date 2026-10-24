@@ -6,8 +6,8 @@
  * - Other modules can wait for it:  await window.__btIntro   (a Promise that resolves when it's done).
  * Remove the module from js/modules/index.js to disable the splash entirely.
  */
-import { reducedMotion } from '../core/utils.js?v=mvl2tiq1';
-import { markPiecesSVG } from '../brand/logotype.js?v=mvl2tiq1';
+import { reducedMotion } from '../core/utils.js?v=mvlra7gn';
+import { markPiecesSVG } from '../brand/logotype.js?v=mvlra7gn';
 
 export default {
   name: 'intro',
@@ -18,7 +18,7 @@ export default {
     if (seen || reducedMotion() || location.search.includes('nointro')) return;
 
     window.__btIntro = new Promise(resolve => {
-      host.innerHTML = `<div class="intro__mark">${markPiecesSVG()}</div>`;
+      host.innerHTML = `<div class="intro__mark">${markPiecesSVG({ ink: '#f5f5f2' })}</div>`;
       host.classList.add('is-on');
       document.documentElement.classList.add('is-intro');
       const HOLD = 1500;

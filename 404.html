@@ -5,38 +5,60 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Page not found — BennieTech</title>
   <meta name="robots" content="noindex">
-  <meta name="theme-color" content="#08080a">
+  <meta name="theme-color" content="#09090a">
   <meta name="color-scheme" content="dark">
   <link rel="icon" href="/assets/logo/bennietech-mark.svg" type="image/svg+xml">
   <link rel="icon" href="/assets/icons/favicon-32.png" sizes="32x32" type="image/png">
-  <link rel="stylesheet" href="/css/fonts.css">
-  <link rel="stylesheet" href="/css/tokens.css">
-  <link rel="stylesheet" href="/css/base.css">
-  <link rel="stylesheet" href="/css/components.css">
-  <link rel="stylesheet" href="/css/sections.css">
+  <link rel="stylesheet" href="/css/fonts.css?v=mvm2gv08">
+  <link rel="stylesheet" href="/css/tokens.css?v=mvm2gv08">
+  <link rel="stylesheet" href="/css/base.css?v=mvm2gv08">
+  <link rel="stylesheet" href="/css/components.css?v=mvm2gv08">
+  <link rel="stylesheet" href="/css/sections.css?v=mvm2gv08">
   <style>
-    .lost { min-height: 100svh; display: grid; place-items: end start; padding: clamp(2rem, 6vw, 5rem) var(--gutter); }
-    .lost__inner { width: min(100%, 54rem); display: grid; gap: 1.6rem; }
-    .lost__code {
-      font-size: clamp(6rem, 24vw, 18rem); font-weight: 500; letter-spacing: -.07em; line-height: .78;
-      color: var(--text);
-    }
-    .lost__code span { color: var(--volt); }
-    .lost__text { font-size: var(--fs-lede); color: var(--text-2); max-width: 32ch; letter-spacing: -.015em; text-wrap: pretty; }
-    .lost__mark { height: 34px; width: fit-content; color: var(--text); }
+    .lost { min-height: 100svh; display: grid; align-items: end; padding-block: clamp(2rem, 6vw, 5rem); }
+    .lost__inner { display: grid; gap: 1.6rem; justify-items: start; }
+    .lost__mark { height: 34px; width: fit-content; color: var(--fg); }
     .lost__mark svg { display: block; }
-    .lost__rule { height: 1px; background: var(--line); }
+    .lost__rule { justify-self: stretch; height: 1px; background: var(--line-3); }
+    .lost .container { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); column-gap: var(--col-gap); align-items: end; }
+    .lost__inner { grid-column: 1 / 7; }
+    .lost__code { font-size: clamp(6rem, 22vw, 17rem); font-weight: 500; letter-spacing: -.01em; line-height: .8; color: var(--fg); font-variant-numeric: tabular-nums; }
+    .lost__fig { grid-column: 8 / 13; display: grid; gap: 12px; }
+    .lost__fig svg { width: 100%; height: auto; overflow: visible; }
+    .lost__fig path { fill: none; stroke-linecap: square; }
+    .lf-guide path { stroke: var(--line); stroke-width: .004; }
+    .lf-piece { fill: var(--fg) !important; }
+    .lf-missing { stroke: var(--fg-3); stroke-width: .006; stroke-dasharray: .03 .03; }
+    .lf-dim { stroke: var(--fg-3); stroke-width: .004; }
+    .lf-label { fill: var(--fg-2); font: 400 .07px/1 var(--font-mono); }
+    .lost__fig figcaption { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .4rem 1rem; color: var(--fg-3); border-top: 1px solid var(--line); padding-top: 12px; }
+    @media (max-width: 900px) { .lost__inner, .lost__fig { grid-column: 1 / -1; } .lost__fig { order: -1; max-width: 340px; margin-bottom: 2rem; } }
+    .lost__text { max-width: 32ch; text-wrap: balance; }
+    .lost .chapter__idx { grid-column: auto; }
   </style>
 </head>
 <body>
   <main class="lost">
+    <div class="container">
     <div class="lost__inner">
-      <div class="lost__mark"><svg viewBox="-0.030 -0.720 1.260 1.750" width="25" height="34" role="img" aria-label="BennieTech" xmlns="http://www.w3.org/2000/svg"><mask id="m" maskUnits="userSpaceOnUse" x="-1" y="-2" width="4" height="4"><g transform="translate(0 -0.69)"><g fill="#fff"><path d="M0 0H0.57A0.43 0.43 0 0 1 0.57 0.86H0Z"/><path d="M0 0.71H0.71A0.49 0.49 0 0 1 0.71 1.69H0Z"/></g><path fill="#000" d="M-0.4 1.024L1.2709 0.5582L1.2709 0.6931L-0.4 1.159Z"/></g></mask><rect x="0" y="-1.19" width="3" height="3" fill="currentColor" mask="url(#m)"/></svg></div>
       <div class="lost__rule"></div>
-      <p class="mono eyebrow">(404) Not found</p>
-      <h1 class="lost__code">4<span>0</span>4</h1>
-      <p class="lost__text">This page doesn’t exist — or it moved. The work is all on the one page anyway.</p>
-      <p><a class="btn btn--volt" href="/">Back to the site</a></p>
+      <p class="chapter__idx mono"><b>BennieTech</b>Page not found</p>
+      <h1 class="lost__code">404</h1>
+      <p class="lede lost__text">This page doesn’t exist, or it moved. The work is all on the one page anyway.</p>
+      <p><a class="btn btn--lime" href="/">Back to the site<span class="btn__icon" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M2 8h11M8.5 3.5 13 8l-4.5 4.5"/></svg><svg viewBox="0 0 16 16"><path d="M2 8h11M8.5 3.5 13 8l-4.5 4.5"/></svg></span></a></p>
+    </div>
+      <figure class="lost__fig" aria-hidden="true">
+        <svg viewBox="-0.62 -0.36 2.3 2.42" xmlns="http://www.w3.org/2000/svg">
+          <g class="lf-guide"><path d="M-0.6 0H1.66M-0.6 0.86H1.66M-0.6 0.71H1.66M-0.6 1.69H1.66M0 -0.34V2.04M1 -0.34V2.04M1.2 -0.34V2.04"/></g>
+          <clipPath id="lf-up"><path d="M-0.4 -1H1.2709V0.5582L-0.4 1.024Z"/></clipPath>
+          <clipPath id="lf-lo"><path d="M-0.4 1.159L1.2709 0.6931V3H-0.4Z"/></clipPath>
+          <path class="lf-piece" clip-path="url(#lf-up)" d="M0 0H0.57A0.43 0.43 0 0 1 0.57 0.86H0Z"/>
+          <path class="lf-missing" clip-path="url(#lf-lo)" d="M0 0.71H0.71A0.49 0.49 0 0 1 0.71 1.69H0Z"/>
+          <path class="lf-dim" d="M-0.36 1.15V1.69M-0.395 1.15H-0.325M-0.395 1.69H-0.325"/>
+          <text class="lf-label" x="-0.42" y="1.44" text-anchor="end">?</text>
+        </svg>
+        <figcaption class="mono"><span>Fig. 404 · Block B, lower piece</span><span>Not found</span></figcaption>
+      </figure>
     </div>
   </main>
 </body>

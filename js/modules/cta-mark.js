@@ -14,11 +14,11 @@
  * - Transparent background with a soft contact shadow, so it floats over the lime aurora.
  *   Falls back to the flat logo mark without WebGL.
  */
-import { createRenderer, GLSL } from '../gl/gl.js?v=mvlusce4';
-import { blockGeom, BLOCK, logoSVG } from '../brand/logotype.js?v=mvlusce4';
-import { addTask } from '../core/ticker.js?v=mvlusce4';
-import { whenVisible, onResize, reducedMotion, lerp, clamp } from '../core/utils.js?v=mvlusce4';
-import { pointer, listenPointer } from '../core/pointer.js?v=mvlusce4';
+import { createRenderer, GLSL } from '../gl/gl.js?v=mvm2gv08';
+import { blockGeom, BLOCK, logoSVG } from '../brand/logotype.js?v=mvm2gv08';
+import { addTask } from '../core/ticker.js?v=mvm2gv08';
+import { whenVisible, onResize, reducedMotion, lerp, clamp } from '../core/utils.js?v=mvm2gv08';
+import { pointer, listenPointer } from '../core/pointer.js?v=mvm2gv08';
 
 const LAYERS = 5;
 
@@ -93,18 +93,18 @@ vec3 shade(vec3 p, float id, vec3 rd){
   float occ = ao(p, n);
   vec3 rs = r, ns = n; rs.xz *= rot(-uSpin); ns.xz *= rot(-uSpin);   // the studio turns with the camera: a turntable
   vec3 env = studio(rs);
-  env = mix(env, env * vec3(.85, 1.1, .3) + vec3(.05, .07, 0.), smoothstep(.15, -.45, r.y));   // the lime panel, seen in the lower half
   bool metal = mod(id, 2.) > .5;
   // chrome: mirror; lacquer: near-black base under a clear coat (Fresnel from 4%)
   vec3 F0 = metal ? vec3(.95, .955, .965) : vec3(.05);
   vec3 F = F0 + (1. - F0) * pow(1. - cosT, 5.);
   vec3 base = metal ? vec3(0.) : vec3(.016, .016, .019) * (.4 + .6 * clamp(dot(ns, normalize(vec3(-.4, .8, .5))), 0., 1.));
   vec3 col = (base + env * F) * mix(.3, 1., occ);
+  if (!metal) col += vec3(.62, .66, .74) * pow(1. - cosT, 3.) * .34 * occ;   // cool fresnel rim: the lacquer silhouette holds against the dark panel
   // walls of the cut glow from within while the stack is closed
   vec4 o = place(id);
   vec2 q = (p.xy - o.xy) * rot(o.w);
   float wall = smoothstep(.016, .0, abs(abs(sLine(logo(q))) - uSlot.w));
-  col += vec3(1., 1., .9) * wall * (.6 + .6 * pow(1. - cosT, 2.)) * lit() * occ;
+  col += vec3(.6, 1., .06) * wall * (.6 + .6 * pow(1. - cosT, 2.)) * lit() * occ;   // the cut lights lime: the one signal
   return col;
 }
 
@@ -148,8 +148,8 @@ void main(){
     float d = map(pf + vec3(0., .02, 0.)).x;
     alpha += exp(-d * 2.6) * .26 * smoothstep(2.4, .8, length(pf.xz)) * edge * lit() * (1. - cover);
   }
-  float glow = max(exp(-max(gmin, 0.) * 30.) * .35 + exp(-max(gmin, 0.) * 120.) * .8 - .012, 0.) * edge * lit() * (1. - uFan * .8);
-  vec3 gl = vec3(1., 1., .86) * glow * (.9 + .12 * sin(uTime * 1.3));
+  float glow = max(exp(-max(gmin, 0.) * 90.) * .26 + exp(-max(gmin, 0.) * 260.) * .7 - .02, 0.) * edge * lit() * (1. - uFan * .8);   // crisp seam, tight halo
+  vec3 gl = vec3(.6, 1., .05) * glow * (.9 + .12 * sin(uTime * 1.3));
   vec3 outc = toSRGB(aces(col + gl)) * cover + toSRGB(aces(gl)) * (1. - cover);
   alpha = clamp(alpha + dot(gl, vec3(.3)) * (1. - cover), 0., 1.);
   gl_FragColor = vec4(outc, alpha);
@@ -174,6 +174,8 @@ export default {
     // 2x the CSS size (supersampling), or the screen's density up to 3x
     const scale = clamp(window.devicePixelRatio || 1, 2, 3);
     const panel = canvas.closest('.cta') || canvas.parentElement;
+    // small touch screens: hold the three-quarter view (a turning stack reads as bars when edge-on at this size)
+    const holdStill = window.matchMedia('(hover: none) and (max-width: 900px)').matches;
     const sm = { x: 0, y: 0, fan: 0 };
     let hover = false, builtAt = null, stop = null;
     let spin = 0, spinT = null;                          // turntable angle, and when it was last advanced
@@ -192,10 +194,10 @@ export default {
       sm.y = lerp(sm.y, pointer.active ? pointer.y : 0, k * .8);
       // turntable: starts once the stack is built and lit, easing up to one turn every SPIN seconds
       const after = builtAt == null ? 0 : clamp((t - builtAt - 2.2) / 2.5, 0, 1);
-      spin = (spin + (spinT == null ? 0 : clamp(t - spinT, 0, .1)) * after * after * (3 - 2 * after) * TAU / SPIN) % TAU;
+      if (!holdStill) spin = (spin + (spinT == null ? 0 : clamp(t - spinT, 0, .1)) * after * after * (3 - 2 * after) * TAU / SPIN) % TAU;
       spinT = t;
-      let yaw = -.62 + spin + sm.x * .55 + sm.fan * .25;
-      let pitch = -.16 + Math.sin(t * .21) * .05 + sm.y * .18;
+      let yaw = -.62 + spin + sm.x * .12 + sm.fan * .25;   // the turntable is the motion; the pointer only leans it
+      let pitch = -.16 + sm.y * .08;
       let fan = sm.fan, b = build;
       const o = window.__btCta;                            // debug override: window.__btCta = { yaw, pitch, build, fan }
       if (o) { yaw = o.yaw ?? yaw; pitch = o.pitch ?? pitch; b = o.build ?? b; fan = o.fan ?? fan; }

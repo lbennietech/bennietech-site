@@ -22,12 +22,15 @@ export const siteConfig = {
   },
 
   /** Primary navigation (also used by the mobile menu). `href` must match a section id in index.html. */
+  // `n` is the chapter number printed beside the link: it must match the chapter's own index in index.html.
   nav: [
-    { label: 'Capabilities', href: '#capabilities' },
-    { label: 'Approach',     href: '#approach' },
-    { label: 'Solutions',    href: '#solutions' },
-    { label: 'Future',       href: '#future' },
-    { label: 'Contact',      href: '#contact' },
+    { n: '01', label: 'Capabilities', href: '#capabilities' },
+    { n: '02', label: 'Approach',     href: '#approach' },
+    { n: '03', label: 'Lab',          href: '#lab' },
+    { n: '04', label: 'Engagement',   href: '#engagement' },
+    { n: '05', label: 'Solutions',    href: '#solutions' },
+    { n: '06', label: 'Horizon',      href: '#future' },
+    { n: '07', label: 'Contact',      href: '#contact' },
   ],
   navCta: { label: 'Start a project', href: '#contact' },
 };

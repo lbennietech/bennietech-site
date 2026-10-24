@@ -11,14 +11,14 @@
  *   ("built block by block") and lean towards the pointer.
  * - Resolution adapts to the GPU (never below 1x CSS pixels; then the frame rate drops instead). Falls back to the flat logo without WebGL.
  */
-import { createRenderer, GLSL } from '../gl/gl.js?v=mvlusce4';
-import { blockGeom, BLOCK, logoSVG } from '../brand/logotype.js?v=mvlusce4';
-import { addTask } from '../core/ticker.js?v=mvlusce4';
-import { whenVisible, onResize, reducedMotion, lerp, clamp } from '../core/utils.js?v=mvlusce4';
-import { pointer, listenPointer } from '../core/pointer.js?v=mvlusce4';
+import { createRenderer, GLSL } from '../gl/gl.js?v=mvm2gv08';
+import { blockGeom, BLOCK, logoSVG } from '../brand/logotype.js?v=mvm2gv08';
+import { addTask } from '../core/ticker.js?v=mvm2gv08';
+import { whenVisible, onResize, reducedMotion, lerp, clamp } from '../core/utils.js?v=mvm2gv08';
+import { pointer, listenPointer } from '../core/pointer.js?v=mvm2gv08';
 
 const FRAG = GLSL.head + GLSL.tone + GLSL.studio + `
-uniform vec2 uRes; uniform float uTime; uniform vec2 uRot; uniform float uSpin; uniform float uSep; uniform float uZoom; uniform vec2 uShift;
+uniform vec2 uRes; uniform float uTime; uniform vec2 uRot; uniform float uSpin; uniform float uSep; uniform float uZoom; uniform vec2 uShift; uniform float uExpo;
 uniform vec3 uTop; uniform vec3 uBot;      // D blocks: width, y0, y1 (logo coords, y down)
 uniform vec4 uSlot;                         // slot line: normal.xy (towards the upper piece), offset, half thickness
 uniform vec2 uCenter;                       // logo centre (logo coords)
@@ -76,10 +76,12 @@ vec3 shade(vec3 p, float id, vec3 rd){
   float cosT = clamp(dot(n, v), 0., 1.);
   float occ = ao(p, n);
   vec3 rs = r; rs.xz *= rot(-uSpin);          // the studio turns with the camera: a turntable, not an orbit
-  vec3 env = studio(rs);
+  vec3 env = studio(rs) * uExpo;
   vec3 F0 = id < 1.5 ? vec3(.96, .962, .97) : mix(vec3(.15, .155, .165), vec3(.15, .155, .165) * film(cosT) * 1.6, .2);
   vec3 F = F0 + (1. - F0) * pow(1. - cosT, 5.);
   vec3 col = env * F * mix(.35, 1., occ);
+  // cool fresnel rim on the smoked block, so the whole B silhouette holds against the dark room
+  if (id > 1.5) col += vec3(.62, .66, .74) * pow(1. - cosT, 3.) * .3 * mix(.5, 1., occ);
   // faces of the cut: anodised lime metal, lit from inside while the pieces are closed
   vec2 q = logo(id < 1.5 ? pieceUp(p) : pieceLo(p));
   float cutFace = smoothstep(.02, .0, abs(abs(sLine(q)) - uSlot.w)) * smoothstep(.6, .9, abs(dot(n, N3)));
@@ -198,12 +200,17 @@ export default {
         const objH = Math.min(h * .68, w * .52);
         return { zoom: objH / (h * .64), shift: .012, shiftX: (w * .655 - w * .5) / h };
       }
-      const copy = canvas.parentElement?.querySelector('.hero__copy > *');
+      if (w > 900 && w / h > 1.15) {                               // landscape tablet / small laptop: same composition, a touch further right
+        const objH = Math.min(h * .62, w * .44);
+        return { zoom: objH / (h * .64), shift: .012, shiftX: (w * .695 - w * .5) / h };
+      }
+      const copy = canvas.parentElement?.querySelector('.hero__inner > *');
       const top = Math.min(90, h * .12);
-      const bottom = copy ? copy.getBoundingClientRect().top - rect.top - 24 : h * .55;
+      const bottom = copy ? copy.getBoundingClientRect().top - rect.top - 40 : h * .55;
       const band = Math.max(120, bottom - top);
       const objH = Math.min(band * .92, w * 1.05);                 // keep it inside narrow screens too
-      return { zoom: objH / (h * .64), shift: .5 - (top + band / 2) / h, shiftX: 0 };
+      const cy = bottom - objH * .5;                                // sit just above the headline, not mid-band
+      return { zoom: objH / (h * .64), shift: .5 - cy / h, shiftX: 0 };
     }
 
     function frame(t, dt) {
@@ -222,13 +229,13 @@ export default {
       // turntable: starts once the pieces have assembled and eases up to one turn every SPIN seconds
       spin = (spin + (spinT == null ? 0 : clamp(t - spinT, 0, .1)) * smooth((age - 1.8) / 2.5) * TAU / SPIN) % TAU;
       spinT = t;
-      let yaw = spin + sm.x * .7 - .28;
-      let pitch = -.2 + Math.sin(t * .23) * .05 + sm.y * .2;
+      let yaw = spin + sm.x * .12 - .42;               // starts in three-quarter view; the pointer only leans it a little
+      let pitch = -.2 + sm.y * .08;                      // no automatic nod: the turntable is the only motion
       const o = window.__btHero;                         // debug override: window.__btHero = { yaw, pitch, sep }
       if (o) { yaw = o.yaw ?? yaw; pitch = o.pitch ?? pitch; sep = o.sep ?? sep; }
       r.draw({
         uRes: [canvas.width, canvas.height], uTime: t, uRot: [yaw, pitch], uSpin: spin, uSep: sep,
-        uZoom: fit.zoom, uShift: [fit.shiftX || 0, fit.shift], ...geo,
+        uZoom: fit.zoom, uShift: [fit.shiftX || 0, fit.shift], uExpo: w < 760 ? 1.2 : 1, ...geo,   // small screens: a brighter studio so the chrome still sings
       });
       adapt(t, age, dt);
     }

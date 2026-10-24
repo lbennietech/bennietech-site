@@ -7,7 +7,7 @@
  * Returns null if WebGL is unavailable or the shader fails to compile (the error is logged with line numbers),
  * so callers can fall back to a static image.
  */
-import { logger } from '../core/debug.js?v=mvlusce4';
+import { logger } from '../core/debug.js?v=mvm2gv08';
 
 const log = logger('gl');
 const VERT = `attribute vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }`;
@@ -103,15 +103,14 @@ vec3 toSRGB(vec3 c){ return pow(c, vec3(1.0/2.2)); }
   studio: `
 vec3 studio(vec3 r){
   float y = r.y;
-  vec3 c = mix(vec3(.30,.31,.33), vec3(.86,.87,.88), smoothstep(-.35, .55, y));            // floor -> walls
+  vec3 c = mix(vec3(.16,.165,.175), vec3(.62,.63,.645), smoothstep(-.3, .5, y));           // floor -> walls (darker room: more contrast in the chrome)
   c = mix(c, vec3(.06,.065,.07), smoothstep(.02, -.12, y) * smoothstep(-.6, -.18, y));       // dark horizon flag
-  c += vec3(3.4) * smoothstep(.62, .80, y) * smoothstep(.95, .55, abs(r.x));                 // big top softbox
-  c += vec3(2.2,2.25,2.35) * smoothstep(.10, .0, abs(r.x + .78)) * smoothstep(-.2, .2, y);    // left strip light
-  c += vec3(1.7) * smoothstep(.07, .0, abs(r.x - .86)) * smoothstep(-.1, .3, y);             // right rim strip
+  c += vec3(3.6) * smoothstep(.66, .71, y) * smoothstep(.82, .74, abs(r.x));                 // big top softbox (crisp edge = polished, not satin)
+  c += vec3(2.6,2.65,2.75) * smoothstep(.055, .035, abs(r.x + .78)) * smoothstep(-.2, .05, y); // left strip light
+  c += vec3(2.) * smoothstep(.04, .022, abs(r.x - .86)) * smoothstep(-.1, .1, y);            // right rim strip
   c = mix(c, vec3(.03), smoothstep(.35, .7, -r.z) * smoothstep(.25, -.05, y) * .85);          // dark cyc behind camera
   c = mix(c, vec3(.02), smoothstep(.16, .05, abs(r.x + .42)) * smoothstep(-.3, .1, y) * .9);   // black flag, left
   c = mix(c, vec3(.02), smoothstep(.20, .08, abs(r.x - .55)) * smoothstep(-.2, .25, y) * smoothstep(.75, .4, y) * .9); // black flag, right
-  c += vec3(.55,.75,.05) * smoothstep(.16, .0, abs(r.x - .35)) * smoothstep(-.32, -.10, y) * smoothstep(.12, -.08, y); // lime bounce card
   return c;
 }
 `,

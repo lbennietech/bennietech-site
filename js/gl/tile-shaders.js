@@ -22,7 +22,7 @@
  * Shared uniforms: uRes (px), uTime, uSeed, uBg/uA/uB/uC (palette, 0..1 rgb), uDensity, uHue (radians), uTex.
  * Each shader defines  vec3 art(vec2 uv, vec2 fc)  where uv is centred, aspect-correct (-.5..+.5 on the short side).
  */
-import { GLSL } from './gl.js?v=mvlusce4';
+import { GLSL } from './gl.js?v=mvm2gv08';
 
 const PRELUDE = `#extension GL_OES_standard_derivatives : enable
 precision highp float;
@@ -297,7 +297,7 @@ vec3 art(vec2 uv, vec2 fc){
   }
   float hc = h2(n + mg + 17.31).x;
   vec3 col = uBg;
-  if (hc > .96) col = mix(col, uC, .9);
+  if (hc > .96) col = mix(col, uC, max(iso(dot(fc, vec2(.7071)) / 3.5, 1.), iso(dot(fc, vec2(-.7071, .7071)) / 3.5, 1.)) * .85);   // the lit cell: a fine cross-hatch, never a solid blot
   else if (hc > .66) col = mix(col, uB, iso(dot(fc, vec2(.7071)) / 7., 1.) * .45);    // hatched cells
   col = mix(col, uA, discAA(length(mr) / S, 1.8 * px) * .8);                          // cell centres
   col = mix(col, uA, (1. - smoothstep(.3, 1.1, md / (S * px))) * .7);                 // walls
@@ -309,10 +309,10 @@ vec3 art(vec2 uv, vec2 fc){
 vec3 art(vec2 uv, vec2 fc){
   float t = uTime * .1 + uSeed;
   vec2 c1 = vec2(sin(t) * .12 - .09, cos(t * .8) * .08), c2 = vec2(cos(t * .7) * .12 + .1, sin(t * .9) * .1);
-  float N = 34. * uDensity;
+  float N = 27. * uDensity;                                                        // quieter: reads at the same volume as its siblings
   float a = iso(length(uv - c1) * N, 1.), b = iso(length(uv - c2) * N, 1.);
-  vec3 col = mix(uBg, uB, max(a, b) * .7);
-  col = mix(col, uA, a * b * .9);                                                  // where the fields agree
+  vec3 col = mix(uBg, uB, max(a, b) * .45);
+  col = mix(col, uA, a * b * .7);                                                  // where the fields agree
   col = mix(col, uC, discAA(length(uv - c1), .012) + discAA(length(uv - c2), .012));
   return col;
 }`,
@@ -407,20 +407,20 @@ vec3 art(vec2 uv, vec2 fc){
   spectrum: `
 vec3 art(vec2 uv, vec2 fc){
   float t = uTime * .5 + uSeed, px = PX();
-  float N = 40. * uDensity, x = (uv.x + .42) / .84 * N;
-  float id = floor(x), lx = (fract(x) - .5) * .84 / N;
+  float hw = .5 * uRes.x / min(uRes.x, uRes.y) - .035;                   // full plate width, a hair inside the frame
+  float N = floor(40. * uDensity * hw / .42), x = (uv.x + hw) / (2. * hw) * N;
+  float id = floor(x), lx = (fract(x) - .5) * 2. * hw / N;
   float h = .05 + .5 * pow(fbm(vec3(id * .13, t * .35, uSeed)), 1.8) * 1.6;
-  float y0 = -.24, inx = step(0., x) * step(x, N);
+  float y0 = -.12, inx = step(0., x) * step(x, N);
   float stem = 1. - smoothstep(.6, 1.5, abs(lx) / px);
   float bar = stem * step(y0, uv.y) * step(uv.y, y0 + h) * inx;
   float cap = discAA(length(vec2(lx, uv.y - y0 - h - .02)), 1.9 * px) * inx;
   float refl = stem * step(uv.y, y0 - .012) * step(y0 - .012 - h * .35, uv.y) * inx * .28;
   float lead = step(abs(id - floor(mod(t * 3., N))), .5);
   vec3 col = uBg;
-  col = mix(col, uB, iso((uv.y - y0) * 8., 1.) * .35 * step(y0, uv.y));
   col = mix(col, uA, max(bar, refl));
   col = mix(col, lead > .5 ? uC : uA, cap);
-  col = mix(col, uA, (1. - smoothstep(.4, 1.2, abs(uv.y - y0 + .006) / px)) * step(abs(uv.x), .44));
+  col = mix(col, uA, (1. - smoothstep(.4, 1.2, abs(uv.y - y0 + .006) / px)) * step(abs(uv.x), hw + .01));
   return col;
 }`,
 
@@ -447,12 +447,12 @@ vec3 art(vec2 uv, vec2 fc){
 vec3 art(vec2 uv, vec2 fc){
   float t = uTime * .5 + uSeed, px = PX();
   vec2 o = vec2(-.3, -.04), d = uv - o;
-  float r = length(d), a = atan(d.y, d.x), N = 150.;
+  float r = length(d), a = atan(d.y, d.x), N = floor(150. * uDensity);
   float k = a / TAU * N, id = floor(k), f = fract(k) - .5;
   float h = hash(vec2(id, 7.) + uSeed), h2 = hash(vec2(id, 3.) + uSeed);
   float head = fract(t * (.12 + h * .2) + h2) * 1.2;
-  float len = .04 + .3 * h * h;
-  float seg = smoothstep(head - len, head, r) * step(r, head) * step(.3, h2);
+  float len = (.04 + .3 * h * h) * uDensity;
+  float seg = smoothstep(head - len, head, r) * step(r, head) * step(.3 / uDensity, h2);
   float w = abs(f) / N * TAU * r / px;
   float ln = (1. - smoothstep(.35, 1.1, w)) * seg * smoothstep(.02, .1, r);
   vec3 col = mix(uBg, h > .97 ? uC : uA * .85, ln);

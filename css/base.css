@@ -1,112 +1,141 @@
 /* =============================================================================
-   base.css — reset, typography, bands, motion states
+   base.css — reset, type, grid, bands & sheets, chapter heads, motion states
    ========================================================================== */
 *, *::before, *::after { box-sizing: border-box; }
-html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; background: var(--page); }
-body {
-  margin: 0;
-  background: var(--page);
-  color: var(--text);
-  font-family: var(--font-sans);
-  font-size: var(--fs-body);
-  line-height: 1.55;
-  letter-spacing: -0.011em;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
-  overflow-x: hidden;
+html {
+  scroll-behavior: smooth; -webkit-text-size-adjust: 100%; text-size-adjust: 100%;
+  background: var(--bg); color-scheme: dark;
 }
-img, canvas, svg { display: block; max-width: 100%; }
+body {
+  margin: 0; min-height: 100vh;
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font-sans); font-size: var(--fs-body); line-height: 1.6; letter-spacing: .006em;
+  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility; overflow-x: clip;
+}
+img, canvas, svg, iframe { display: block; max-width: 100%; }
 a { color: inherit; text-decoration: none; }
-ul { list-style: none; margin: 0; padding: 0; }
-h1, h2, h3, p, figure { margin: 0; }
-button { font: inherit; color: inherit; cursor: pointer; }
-section[id] { scroll-margin-top: 90px; }
-::selection { background: var(--volt); color: var(--volt-ink); }
-:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; border-radius: 2px; }
+ul, ol { list-style: none; margin: 0; padding: 0; }
+h1, h2, h3, h4, p, figure, dl, dd { margin: 0; }
+h1, h2, h3, h4 { font-weight: inherit; }
+button { font: inherit; color: inherit; cursor: pointer; background: none; border: 0; padding: 0; }
+section[id] { scroll-margin-top: 72px; }
+::selection { background: var(--lime); color: var(--lime-ink); }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: 2px; }
 
 .skip-link {
-  position: fixed; left: 14px; top: -70px; z-index: 999;
-  background: var(--volt); color: var(--volt-ink); font-weight: 600;
-  padding: 10px 18px; border-radius: var(--r-sm); transition: top .2s;
+  position: fixed; left: 16px; top: -80px; z-index: 999;
+  background: var(--lime); color: var(--lime-ink); font-weight: 600;
+  padding: 12px 18px; border-radius: var(--r-sm); transition: top .25s var(--ease-out);
 }
-.skip-link:focus { top: 14px; }
+.skip-link:focus { top: 16px; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* ---- Layout primitives ---- */
-.container { width: 100%; max-width: var(--container); margin-inline: auto; padding-inline: var(--gutter); }
+.container { width: 100%; max-width: var(--container); margin-inline: auto; padding-inline: var(--pad); }
+.grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); column-gap: var(--col-gap); }
 
-/* Bands: the dark room, or a paper insert. A paper band re-points the text and
-   hairline tokens, so every component inside it inverts without a second rule set. */
-.band { position: relative; padding-block: clamp(3.5rem, 7.5vw, 7rem); }
-.band--paper {
-  background: var(--paper);
-  color: var(--paper-text);
-  --text: var(--paper-text);
-  --text-2: var(--paper-text-2);
-  --text-3: var(--paper-text-3);
-  --line: var(--paper-line);
-  --line-soft: var(--paper-line-soft);
+/* ---- Bands & sheets ----
+   A band is a chapter of the dark room. A sheet is a light panel that slides over it with rounded
+   shoulders; it re-points the text/line tokens so every component inside inverts without extra rules. */
+.band { position: relative; padding-block: var(--chapter-gap) 0; }   /* top only, so chapter gaps never stack */
+.band--tight { padding-block: clamp(4.5rem, 8vw, 8rem); }
+.sheet {
+  position: relative; z-index: 2;
+  background: var(--sheet); color: var(--sheet-ink);
+  border-radius: var(--r-sheet);
+  --inset: clamp(6px, .9vw, 14px);
+  margin-inline: var(--inset);
+  --fg: var(--sheet-ink);
+  --fg-2: rgba(11, 11, 12, .66);
+  --fg-3: rgba(11, 11, 12, .64);   /* >= 4.5:1 on the sheet for 11px mono */
+  --fg-4: rgba(11, 11, 12, .26);
+  --line: rgba(11, 11, 12, .14);
+  --line-2: rgba(11, 11, 12, .07);
+  --line-3: rgba(11, 11, 12, .26);
+  --focus: #0b0b0c;
 }
-.band--flush { padding-block: 0; }
-.band--tight { padding-block: clamp(3rem, 6vw, 6rem); }
+/* the sheet is inset from the window, so its container gives the inset back: content edges match every other chapter */
+.sheet .container { padding-inline: calc(var(--pad) - var(--inset)); max-width: calc(var(--container) - 2 * var(--inset)); }
+.sheet::selection, .sheet ::selection { background: var(--sheet-ink); color: var(--sheet); }
 
 /* ---- Type ---- */
-.display, .h2 {
-  font-weight: 500; letter-spacing: -0.055em; line-height: .9;
-  text-wrap: balance;
+.display, .h2, .mega {
+  font-weight: 500; text-wrap: balance;
 }
-.display { font-size: var(--fs-display); line-height: .86; letter-spacing: -0.062em; }
-.h2 { font-size: var(--fs-h2); }
-h3 { font-size: var(--fs-h3); font-weight: 500; letter-spacing: -0.03em; line-height: 1.12; }
-
+.display { font-size: var(--fs-display); line-height: .9; letter-spacing: var(--track-display); }
+.h2 { font-size: var(--fs-h2); line-height: .96; letter-spacing: var(--track-h2); }
+.mega { font-size: var(--fs-mega); line-height: .86; letter-spacing: -0.045em; }
+.h3, h3 { font-size: var(--fs-h3); font-weight: 500; letter-spacing: var(--track-h3); line-height: 1.15; }
 .lede {
-  font-size: var(--fs-lede); line-height: 1.45; color: var(--text-2);
-  max-width: 42rem; letter-spacing: -0.015em; text-wrap: pretty;
+  font-size: var(--fs-lede); line-height: 1.45; color: var(--fg-2);
+  letter-spacing: 0; max-width: 36ch; text-wrap: pretty;
 }
-.mono, .eyebrow {
-  font-family: var(--font-mono); font-size: var(--fs-mono);
-  letter-spacing: .1em; text-transform: uppercase; font-variant-numeric: tabular-nums;
+.body-s { font-size: var(--fs-small); line-height: 1.55; color: var(--fg-2); text-wrap: pretty; }
+.mono {
+  font-family: var(--font-mono); font-size: var(--fs-mono); font-weight: 400;
+  letter-spacing: .07em; text-transform: uppercase; font-variant-numeric: tabular-nums;
+  line-height: 1.3;
 }
-.eyebrow { color: var(--text-2); display: flex; align-items: center; gap: .8em; }
-.eyebrow::before {                       /* a hairline before every chapter label */
-  content: ""; width: clamp(28px, 4vw, 64px); height: 1px; background: var(--line);
+.dim { color: var(--fg-3); }
+.lime { color: var(--lime); }
+
+/* ---- Chapter head ----
+   Every section opens the same way: a hairline that draws across the grid, the chapter index in the
+   left margin column, the title on the content columns. */
+.chapter {
+  position: relative; padding-top: clamp(1.1rem, 1.6vw, 1.6rem);
+  margin-bottom: clamp(3rem, 6vw, 6.5rem);
+  row-gap: clamp(1.4rem, 2.4vw, 2.4rem);
+}
+.chapter::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1px; background: var(--line-3);
+  transform-origin: left; transition: transform 1.4s var(--ease-out);
+}
+.js .chapter[data-line]:not(.is-in)::before { transform: scaleX(0); }
+.chapter__idx {
+  grid-column: 1 / 4; display: flex; gap: 1.1em; align-items: baseline; color: var(--fg-3);
+}
+.chapter__idx b { font-weight: 400; color: var(--fg); }
+.chapter__title { grid-column: 4 / 13; max-width: 15ch; }
+.chapter__lede { grid-column: 4 / 10; }
+.chapter--split .chapter__title { grid-column: 4 / 10; }
+.chapter--split .chapter__lede { grid-column: 10 / 13; align-self: end; max-width: 30ch; }
+@media (max-width: 1100px) {
+  .chapter--split .chapter__title { grid-column: 4 / 13; }
+  .chapter--split .chapter__lede { grid-column: 4 / 12; }
+}
+@media (max-width: 900px) {
+  .chapter__idx, .chapter__title, .chapter__lede,
+  .chapter--split .chapter__title, .chapter--split .chapter__lede { grid-column: 1 / -1; }
 }
 
-/* Section header: hairline rule, index, then the title — always left-aligned in this edition. */
-.section__head {
-  display: grid; gap: clamp(1.25rem, 2.4vw, 2rem);
-  padding-top: 1.4rem; border-top: 1px solid var(--line);
-  margin-bottom: clamp(2.5rem, 5vw, 4.5rem);
-}
-.section__head .lede { margin-top: -.2em; }
-
-/* ---- Motion states (activated by js/modules/reveal.js) ---- */
+/* ---- Motion states (driven by js/modules/reveal.js) ---- */
 .js [data-reveal] {
-  opacity: 0; transform: translateY(18px);
-  transition: opacity var(--dur) var(--ease-out) var(--d, 0s), transform var(--dur) var(--ease-out) var(--d, 0s);
+  opacity: 0; transform: translate3d(0, 22px, 0);
+  transition: opacity 1s var(--ease-out) var(--d, 0s), transform 1.1s var(--ease-out) var(--d, 0s);
 }
 .js [data-reveal].is-in { opacity: 1; transform: none; }
 
-.split-word { display: inline-block; overflow: hidden; vertical-align: top; padding: 0 .1em .12em; margin: 0 -.1em -.12em; }
+.split-word { display: inline-block; overflow: clip; overflow-clip-margin: .14em; vertical-align: top; padding-bottom: .1em; margin-bottom: -.1em; }
 .split-word > span {
-  display: inline-block; transform: translateY(110%);
-  transition: transform .85s var(--ease-out) calc(var(--i, 0) * 38ms);
+  display: inline-block; transform: translate3d(0, 108%, 0);
+  transition: transform 1.05s var(--ease-out) calc(var(--d, 0s) + var(--i, 0) * 34ms);
 }
-.is-in .split-word > span, .split-word.is-in > span { transform: none; }
 [data-split].is-in .split-word > span { transform: none; }
 
-.scrub-word { opacity: .16; transition: opacity .25s linear; }
+.scrub-word { opacity: .16; transition: opacity .3s linear; }
 
-/* ---- Paper grain: fixed, faint, above content, below chrome ---- */
+/* ---- Grain: fixed, faint, above content, below chrome ---- */
 body::after {
   content: ""; position: fixed; inset: 0; z-index: var(--z-grain); pointer-events: none;
-  opacity: .05; background-size: 180px 180px;
-  background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='180'%20height='180'%3E%3Cfilter%20id='n'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='.9'%20numOctaves='2'%20stitchTiles='stitch'/%3E%3CfeColorMatrix%20type='saturate'%20values='0'/%3E%3C/filter%3E%3Crect%20width='180'%20height='180'%20filter='url(%23n)'%20opacity='.55'/%3E%3C/svg%3E");
+  opacity: .045; background-size: 200px 200px; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='200'%20height='200'%3E%3Cfilter%20id='n'%3E%3CfeTurbulence%20type='fractalNoise'%20baseFrequency='.85'%20numOctaves='2'%20stitchTiles='stitch'/%3E%3CfeColorMatrix%20type='saturate'%20values='0'/%3E%3C/filter%3E%3Crect%20width='200'%20height='200'%20filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   .js [data-reveal], .split-word > span { transition: none !important; transform: none !important; opacity: 1 !important; }
+  .js .chapter[data-line]::before { transform: none !important; transition: none !important; }
   .scrub-word { opacity: 1 !important; }
-  body::after { display: none; }
 }

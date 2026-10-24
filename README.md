@@ -1,5 +1,10 @@
 # BennieTech — brochure site
 
+> **Edition 03 · "Instrument"** (2026-10). One dark field on a visible 12-column grid, one light sheet (Approach),
+> lime only as signal ("this one"), the margin column as an instrument, and one numbering system: nav, chapter index
+> (01–07), footer and every `Fig. <chapter>.<n>` caption agree. Chapter rhythm is one token, `--chapter-gap`
+> (top padding only, so gaps never stack). Palettes for plates: `graphite`/`smoke` (ink, no lime) on dark, `sheet` on paper.
+
 A single-page brochure site for **BennieTech** (software solution design).
 Plain HTML + CSS + native ES modules. **No build step, no npm, no dependencies.**
 All imagery is generated in code: a real-time 3D hero sculpture (WebGL), 2D generative artwork in every specimen panel and card (WebGL shaders),
@@ -50,7 +55,7 @@ Example: <http://localhost:8080/?debug&nointro>
 | `No module registered for data-module="x"` | Typo, or module not listed in `js/modules/index.js`. |
 | Artwork panels show a flat gradient, hero shows a flat logo | WebGL is unavailable (very old device / disabled GPU). That is the designed fallback. |
 | Slow on a weak machine | Both renderers adapt: the hero lowers its resolution, then its frame rate; artwork panels only render on screen, within a per-frame time budget. |
-| Scrolling artwork won't stop | Use the play/pause square in the capabilities console bar, or the *Pause* button under the solutions marquee (hover and keyboard focus also pause it). |
+| Something moves that shouldn't | Nothing on the page auto-scrolls. The OS "reduce motion" setting gives finished, still states everywhere (no pin, no turntable, no packets). |
 
 ---
 
@@ -91,7 +96,7 @@ css/
   fonts.css                ★ @font-face for the self-hosted woff2 (rules generated from the Google CSS API).
   tokens.css               ★ Design tokens: colours, fonts, radii, spacing, motion. Start here to restyle.
   base.css                 Reset, typography, layout primitives, reveal animation states.
-  components.css           Buttons, nav, menu, specimen panels, inline pills, marquee, sliders, splash.
+  components.css           Buttons, nav (+ paper theme over the sheet), menu, specimen plates, tags, splash.
   sections.css             Layout for each section, in page order.
 js/
   main.js                  Entry point.
@@ -111,7 +116,14 @@ js/
     cta-mark.js            The contact panel's block-B, built from stacked slabs (WebGL ray marcher).
     art.js                 <canvas data-art="…"> -> live shader artwork.
     reveal.js              Scroll reveals, split-word headings, scrubbed paragraph (keeps inline artwork pills).
-    marquee.js, tilt.js, chips.js, embed.js
+    caps.js                Capabilities index: one plate in the margin, shader swapped per discipline.
+    rail.js                Approach progress rail (12 ticks, phase nodes).
+    lab.js, embed.js       Pocket Universe in a framed screen: scene switcher, poster frame, honest LOADING/LIVE.
+    blueprint.js           Interlude: the block-B as a construction drawing, built on scroll; headline on its base guide.
+    schematic.js           Solutions: nine architecture drawings, one topology each.
+    rail-scroll.js         Sideways scroll-snap gallery (readout, progress, prev/next, focus card).
+    horizon.js             Horizon chart <-> trend list.
+    copy-email.js          "Copy email" buttons.
 ```
 
 ---
@@ -127,7 +139,7 @@ Behaviour is attached with a `data-module` attribute:
 ```
 
 `core/registry.js` goes through `js/modules/index.js` **in order**; each module re-queries the DOM for its elements and
-calls `init(el)` inside try/catch. Order matters: `marquee` (clones items) runs before `art`.
+calls `init(el)` inside try/catch. Order matters: `art` runs before `caps` (which drives an art canvas).
 
 ### Adding a module
 1. `js/modules/my-thing.js`: `export default { name: 'my-thing', init(el) { … } }`
@@ -140,7 +152,7 @@ Copy a `<section>` in `index.html`, give it an `id`, add `data-reveal` / `data-s
 
 ### Artwork
 `<canvas data-module="art" data-art="NAME" data-palette="PALETTE" data-seed="N">` inside any sized box
-(`.spec`, `.ipill`, `.card__stage`, `.bento__art`, a full-bleed card…). Optional `data-text="Word"` (for `type`), `data-density="1.2"`, `data-static`.
+(`.spec`, a plate, a thumbnail…). Optional `data-text="Word"` (for `type`), `data-density="1.2"`, `data-static`.
 
 | `data-art` | Look |
 |---|---|

@@ -9,10 +9,10 @@
  *   const tile = addTile({ canvas, kind: 'chrome', uniforms: () => ({...}), texture: canvas2d? });
  *   tile.visible = true/false;  tile.dirty = true (forces a redraw);  removeTile(tile)
  */
-import { program } from './gl.js?v=mvlusce4';
-import { SHADERS } from './tile-shaders.js?v=mvlusce4';
-import { addTask } from '../core/ticker.js?v=mvlusce4';
-import { logger } from '../core/debug.js?v=mvlusce4';
+import { program } from './gl.js?v=mvm2gv08';
+import { SHADERS } from './tile-shaders.js?v=mvm2gv08';
+import { addTask } from '../core/ticker.js?v=mvm2gv08';
+import { logger } from '../core/debug.js?v=mvm2gv08';
 
 const log = logger('tiles');
 const MAX = 1024;                // largest render size (px); bigger tiles are upscaled
@@ -86,6 +86,7 @@ function render(tile, t) {
   tile.ctx.imageSmoothingQuality = 'high';
   tile.ctx.drawImage(glCanvas, 0, MAX - h, w, h, 0, 0, c.width, c.height);
   tile.dirty = false;
+  tile.painted = true;
 }
 
 function tick(t, dt) {
@@ -94,12 +95,19 @@ function tick(t, dt) {
   if (due) acc = 0;
   const start = performance.now();
   const n = tiles.length;
+  // pass 1: what is on screen (round-robin, so a slow frame never starves the same tile twice)
   for (let k = 0; k < n; k++) {
     const tile = tiles[(cursor + k) % n];
-    if (!tile.visible && !tile.dirty) continue;
+    if (!tile.visible) continue;
     if (!tile.dirty && (!due || !tile.animate)) continue;
     render(tile, t);
     if (performance.now() - start > BUDGET) { cursor = (cursor + k + 1) % n; return; }
+  }
+  // pass 2: with time to spare, prime off-screen tiles that still need a first frame
+  for (const tile of tiles) {
+    if (tile.visible || !tile.dirty) continue;
+    render(tile, t);
+    if (performance.now() - start > BUDGET) return;
   }
 }
 

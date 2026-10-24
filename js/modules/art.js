@@ -12,10 +12,10 @@
  * Control from code:  canvas.__art.set({ density: 1.5, hue: 90, speed: 2, palette: 'flare' })
  * Without WebGL the canvas is hidden and its parent shows a CSS gradient in the palette colours.
  */
-import { addTile, renderNow } from '../gl/tiles.js?v=mvlusce4';
-import { PALETTES, rgb } from '../art/palettes.js?v=mvlusce4';
-import { NEEDS_TEXTURE } from '../gl/tile-shaders.js?v=mvlusce4';
-import { whenVisible, onResize, reducedMotion } from '../core/utils.js?v=mvlusce4';
+import { addTile, renderNow } from '../gl/tiles.js?v=mvm2gv08';
+import { PALETTES, rgb } from '../art/palettes.js?v=mvm2gv08';
+import { NEEDS_TEXTURE } from '../gl/tile-shaders.js?v=mvm2gv08';
+import { whenVisible, onResize, reducedMotion } from '../core/utils.js?v=mvm2gv08';
 
 export default {
   name: 'art',
@@ -52,7 +52,10 @@ export default {
       tile.dirty = true;
     }
     size(); onResize(canvas, size);
-    whenVisible(canvas, v => (tile.visible = v), '80px');
+    whenVisible(canvas, v => {                       // already drawing when it scrolls in
+      tile.visible = v;
+      if (v && !tile.painted) renderNow(tile, time);  // never show an empty plate: paint the first frame right away
+    }, '320px');
     if (texture) document.fonts?.ready.then(() => { drawType(texture, canvas.dataset.text || 'BENNIETECH'); tile.texDirty = true; tile.dirty = true; });
 
     canvas.__art = {

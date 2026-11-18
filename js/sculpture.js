@@ -1,3 +1,4 @@
+import { drip, lightCut, wetFace } from './liquid.js';
 import { displaceStrip } from './negative.js';
 
 // The two radii, baseline and diagonal kerf come from the production B mark.
@@ -152,19 +153,25 @@ function draw() {
         [0, '#262a2b'], [.16, '#bbbcb4'], [.29, '#353837'], [.49, '#656761'],
         [.65, '#e7dbca'], [.73, '#937862'], [.83, '#363a39'], [1, '#b0b3aa']
       ]);
-      ctx.fillStyle = side;
+      ctx.fillStyle = age < 0 ? side : '#141518';
       ctx.fill(plate);
-      ctx.strokeStyle = '#272a28';
+      ctx.strokeStyle = age < 0 ? '#272a28' : '#121314';
       ctx.lineWidth = .0034;
       ctx.stroke(plate);
       plane(z + .0075, part);
-      ctx.fillStyle = layer === 16 ? '#bb7549' : '#696b64';
+      ctx.fillStyle = age >= 0 ? '#131416' : layer === 16 ? '#bb7549' : '#696b64';
       ctx.fill(plate);
       ctx.lineWidth = .0024;
-      ctx.strokeStyle = layer === 16 ? '#e8ad78' : '#d5d3c5';
+      ctx.strokeStyle = age >= 0 ? '#38393b' : layer === 16 ? '#e8ad78' : '#d5d3c5';
       ctx.stroke(plate);
       if (layer !== 32) return;
 
+      if (age >= 0) {
+        wetFace(ctx, plate, glint, part);
+        ctx.strokeStyle = '#57595b';
+        ctx.stroke(plate);
+        return;
+      }
       const offset = glint + part * .09;
       ctx.fillStyle = metal(-.19 + offset, .19, 1.32, .65, [
         [0, '#363c3c'], [.19, '#555e5c'], [.34, '#9ba39b'], [.43, '#cdd0c4'],
@@ -176,6 +183,14 @@ function draw() {
       ctx.lineWidth = .005;
       ctx.stroke(plate);
     });
+  }
+  if (age >= 0) {
+    const front = 16 * .017 + .0075;
+    plane(front, 1);
+    lightCut(ctx, plates[1], age, size * pixelRatio);
+    drip(ctx, 1, age);
+    plane(front, 0);
+    drip(ctx, 0, age);
   }
   if (age >= 0 && (age < .52 || (age > 2.5 && age < 2.62))) {
     ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);

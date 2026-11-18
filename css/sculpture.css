@@ -32,3 +32,22 @@ main::after {
   main.negative::after { content: none; }
   main.negative .signature { filter: invert(1); }
 }
+
+.email {
+  position: absolute;
+  left: 50%;
+  top: calc(max(6.4%, env(safe-area-inset-top)) + clamp(8px, .72vw, 12px));
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  color: #393b36;
+  border-radius: 50%;
+  touch-action: manipulation;
+}
+.email svg { width: clamp(20px, 1.5vw, 25px); }
+.email:hover, .email:focus-visible { color: #526312; }
+.email:focus-visible { outline: 1px solid currentColor; outline-offset: 1px; }
+.negative .email { color: #b7bcb2; }
+.negative .email:hover, .negative .email:focus-visible { color: #d4ef94; }

@@ -1,4 +1,5 @@
-import { drip, lightCut, wetFace } from './liquid.js';
+import { createLattice } from './lattice.js';
+import { prepareOil } from './oil-volume.js';
 import { displaceStrip } from './negative.js';
 
 // The two radii, baseline and diagonal kerf come from the production B mark.
@@ -85,17 +86,22 @@ const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 const pointer = { x: 0, y: 0, tx: 0, ty: 0 };
 let w, h, pixelRatio, time = 0, last = 0, frame = 0;
 
-let nextExposure = 9 + Math.random() * 7;
-
+const lattice = createLattice();
+let oilVolume;
+// One quarter of each cycle is warm white, including the .26 s
+// interruption between the first negative frame sequence and the hold.
+const flickerStart = .13;
+const flickerGap = .26;
+let exposureTime = 0, cycleStart = 0;
+let quarter = 4 + Math.random() * 1.5;
 function exposureAge() {
   if (reduced.matches) return -1;
-  const age = time - nextExposure;
-  if (age >= 2.8) {
-    nextExposure = time + 26 + Math.random() * 20;
-    return -1;
+  if (exposureTime - cycleStart >= quarter * 4) {
+    cycleStart = exposureTime - (exposureTime - cycleStart) % (quarter * 4);
+    quarter = 4 + Math.random() * 1.5;
   }
-  // One short negative, a gap, then a sustained second exposure.
-  if (age < 0 || (age >= .13 && age < .39)) return -1;
+  const age = exposureTime - cycleStart - (quarter - flickerGap);
+  if (age < 0 || (age >= flickerStart && age < flickerStart + flickerGap)) return -1;
   return age;
 }
 
@@ -123,6 +129,14 @@ function draw() {
   const lift = Math.sin(time * .56) * .012;
   const centre = h * .45;
 
+  if (age >= 0) lattice.draw(ctx, w, h, time);
+  if (age >= 0 && oilVolume?.(ctx, {
+    w, h, size, pixelRatio, right: [ax, bx, zx], down: [ay, by, zy],
+    age, lift, separation: .008 + .012 * Math.sin(time * .38),
+  })) {
+    if (age < .52 || (age > 3 * quarter + flickerGap - .3 && age < 3 * quarter + flickerGap - .18)) displaceStrip(ctx, canvas, w, h, age);
+    return;
+  }
   if (age < 0) {
     ctx.save();
     ctx.translate(w * .5 + size * .06, centre + size * 1.02);
@@ -153,25 +167,19 @@ function draw() {
         [0, '#262a2b'], [.16, '#bbbcb4'], [.29, '#353837'], [.49, '#656761'],
         [.65, '#e7dbca'], [.73, '#937862'], [.83, '#363a39'], [1, '#b0b3aa']
       ]);
-      ctx.fillStyle = age < 0 ? side : '#141518';
+      ctx.fillStyle = side;
       ctx.fill(plate);
-      ctx.strokeStyle = age < 0 ? '#272a28' : '#121314';
+      ctx.strokeStyle = '#272a28';
       ctx.lineWidth = .0034;
       ctx.stroke(plate);
       plane(z + .0075, part);
-      ctx.fillStyle = age >= 0 ? '#131416' : layer === 16 ? '#bb7549' : '#696b64';
+      ctx.fillStyle = layer === 16 ? '#bb7549' : '#696b64';
       ctx.fill(plate);
       ctx.lineWidth = .0024;
-      ctx.strokeStyle = age >= 0 ? '#38393b' : layer === 16 ? '#e8ad78' : '#d5d3c5';
+      ctx.strokeStyle = layer === 16 ? '#e8ad78' : '#d5d3c5';
       ctx.stroke(plate);
       if (layer !== 32) return;
 
-      if (age >= 0) {
-        wetFace(ctx, plate, glint, part);
-        ctx.strokeStyle = '#57595b';
-        ctx.stroke(plate);
-        return;
-      }
       const offset = glint + part * .09;
       ctx.fillStyle = metal(-.19 + offset, .19, 1.32, .65, [
         [0, '#363c3c'], [.19, '#555e5c'], [.34, '#9ba39b'], [.43, '#cdd0c4'],
@@ -184,25 +192,16 @@ function draw() {
       ctx.stroke(plate);
     });
   }
-  if (age >= 0) {
-    const front = 16 * .017 + .0075;
-    plane(front, 1);
-    lightCut(ctx, plates[1], age, size * pixelRatio);
-    drip(ctx, 1, age);
-    plane(front, 0);
-    drip(ctx, 0, age);
-  }
-  if (age >= 0 && (age < .52 || (age > 2.5 && age < 2.62))) {
-    ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-    displaceStrip(ctx, canvas, w, h, age);
-  }
 }
 
 function tick(now) {
   frame = 0;
-  const dt = last ? Math.min((now - last) / 1000, .06) : 0;
+  const elapsed = last ? (now - last) / 1000 : 0;
+  const dt = Math.min(elapsed, .06);
   last = now;
   if (!reduced.matches) {
+    if (oilVolume === undefined && time > .5) oilVolume = prepareOil();
+    exposureTime += elapsed;
     time += dt;
     const ease = 1 - Math.exp(-dt * 4);
     pointer.x += (pointer.tx - pointer.x) * ease;
@@ -220,6 +219,7 @@ function resize() {
   w = canvas.clientWidth;
   h = canvas.clientHeight;
   pixelRatio = Math.min(devicePixelRatio || 1, 2);
+  lattice.resize(w, h, pixelRatio);
   canvas.width = Math.round(w * pixelRatio);
   canvas.height = Math.round(h * pixelRatio);
   draw();

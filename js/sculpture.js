@@ -88,20 +88,17 @@ let w, h, pixelRatio, time = 0, last = 0, frame = 0;
 
 const lattice = createLattice();
 let oilVolume;
-// One quarter of each cycle is warm white, including the .26 s
-// interruption between the first negative frame sequence and the hold.
-const flickerStart = .13;
-const flickerGap = .26;
-let exposureTime = 0, cycleStart = 0;
-let quarter = 4 + Math.random() * 1.5;
+let nextExposure = 3 + Math.random() * 3;
+
 function exposureAge() {
   if (reduced.matches) return -1;
-  if (exposureTime - cycleStart >= quarter * 4) {
-    cycleStart = exposureTime - (exposureTime - cycleStart) % (quarter * 4);
-    quarter = 4 + Math.random() * 1.5;
+  const age = time - nextExposure;
+  if (age >= 2.8) {
+    nextExposure = time + 7 + Math.random() * 5;
+    return -1;
   }
-  const age = exposureTime - cycleStart - (quarter - flickerGap);
-  if (age < 0 || (age >= flickerStart && age < flickerStart + flickerGap)) return -1;
+  // One short negative, a gap, then a sustained second exposure.
+  if (age < 0 || (age >= .13 && age < .39)) return -1;
   return age;
 }
 
@@ -134,7 +131,7 @@ function draw() {
     w, h, size, pixelRatio, right: [ax, bx, zx], down: [ay, by, zy],
     age, lift, separation: .008 + .012 * Math.sin(time * .38),
   })) {
-    if (age < .52 || (age > 3 * quarter + flickerGap - .3 && age < 3 * quarter + flickerGap - .18)) displaceStrip(ctx, canvas, w, h, age);
+    if (age < .52 || (age > 2.5 && age < 2.62)) displaceStrip(ctx, canvas, w, h, age);
     return;
   }
   if (age < 0) {
@@ -196,12 +193,10 @@ function draw() {
 
 function tick(now) {
   frame = 0;
-  const elapsed = last ? (now - last) / 1000 : 0;
-  const dt = Math.min(elapsed, .06);
+  const dt = last ? Math.min((now - last) / 1000, .06) : 0;
   last = now;
   if (!reduced.matches) {
     if (oilVolume === undefined && time > .5) oilVolume = prepareOil();
-    exposureTime += elapsed;
     time += dt;
     const ease = 1 - Math.exp(-dt * 4);
     pointer.x += (pointer.tx - pointer.x) * ease;

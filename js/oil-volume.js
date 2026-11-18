@@ -125,40 +125,44 @@ void main() {
   vec3 ro=centre+rightAxis*uv.x+downAxis*(uv.y-lift)+view*1.40;
   vec3 rd=-view;
   float t=0., nearestCore=1., coverage=0.;
-  bool hit=false;
-  vec3 col=vec3(0.);
-  float pixel=2.85/resolution.y;
+  bool hit=false, hitCore=false;
+  vec3 col=vec3(0.), hitP=vec3(0.);
+  float pixel=2.85/resolution.y, edge=pixel*1.2;
   // The first place the ray grazes a surface without entering it. That
   // contour covers part of the pixel, so it is blended over what lies behind.
   float prevD=1e3, prevT=0., edgeD=1e3, edgeT=0.;
-  for(int i=0;i<128;i++) {
+  for(int i=0;i<100;i++) {
     vec3 p=ro+rd*t;
     float oil=surface(p), core=emitter(p), d=min(oil,core);
     nearestCore=min(nearestCore,core);
-    if(d<pixel*.06) {
-      hit=true;
-      // The released bead falls out of the pool of studio light before
-      // reaching the signature. Its silhouette and reflection recede together.
-      coverage=1.-smoothstep(2.095,2.275,p.y);
-      col=core<oil ? vec3(1.65,2.7,.16) : shade(p,view);
+    if(d<pixel*.2) {
+      hit=true; hitP=p; hitCore=core<oil;
       break;
     }
-    if(edgeD>pixel && d>prevD && prevD<pixel) { edgeD=prevD; edgeT=prevT; }
+    if(edgeD>edge && d>prevD && prevD<edge) { edgeD=prevD; edgeT=prevT; }
     prevD=d; prevT=t;
-    t+=max(.00025,d*.76);
+    t+=max(.0004,d*.76);
     if(t>2.22) break;
   }
-  if(!hit && edgeD>pixel && prevD<pixel) { edgeD=prevD; edgeT=prevT; }
+  if(!hit && edgeD>edge && prevD<edge) { edgeD=prevD; edgeT=prevT; }
+  // Shading waits until every ray has finished marching, so neighbouring
+  // pixels shade together instead of stalling each other inside the loop.
+  if(hit) {
+    // The released bead falls out of the pool of studio light before
+    // reaching the signature. Its silhouette and reflection recede together.
+    coverage=1.-smoothstep(2.095,2.275,hitP.y);
+    col=hitCore ? vec3(1.65,2.7,.16) : shade(hitP,view);
+  }
   vec3 bloom=lime*(.31*exp(-max(nearestCore,0.)*51.)+.047*exp(-max(nearestCore,0.)*19.));
   vec3 rgb=toSRGB(aces(col+bloom));
   vec4 back=hit ? vec4(rgb*coverage,coverage) : vec4(rgb,0.);
   back.a=max(back.a,max(back.r,max(back.g,back.b)));
-  if(edgeD<pixel) {
+  if(edgeD<edge) {
     vec3 q=ro+rd*edgeT;
     float oil=surface(q), core=emitter(q);
-    vec3 edge=toSRGB(aces((core<oil ? vec3(1.65,2.7,.16) : shade(q,view))+bloom));
-    float g=(1.-smoothstep(0.,pixel,edgeD))*(1.-smoothstep(2.095,2.275,q.y));
-    back=vec4(edge,1.)*g+back*(1.-g);
+    vec3 rim=toSRGB(aces((core<oil ? vec3(1.65,2.7,.16) : shade(q,view))+bloom));
+    float g=(1.-smoothstep(pixel*.2,edge,edgeD))*(1.-smoothstep(2.095,2.275,q.y));
+    back=vec4(rim,1.)*g+back*(1.-g);
   }
   gl_FragColor=back;
 }
@@ -180,10 +184,15 @@ export function createOilVolume(hardwareOnly = false) {
   }
   const renderer = createRenderer(image, fragment, { alpha: true });
   if (!renderer) return null;
-  return function render(ctx, { w, h, size, pixelRatio, right, down, age, lift, separation }) {
+  // Drivers often finish compiling on the first real draw. One pixel now
+  // keeps that cost out of the first glitch.
+  image.width = image.height = 1;
+  renderer.draw({ resolution: [1, 1], rightAxis: [1, 0, 0], downAxis: [0, 1, 0], age: 0, lift: 0, separation: .01 });
+  return function render(ctx, { w, h, size, pixelRatio, detail = 1, right, down, age, lift, separation }) {
     if (renderer.gl.isContextLost()) return false;
     const width = size * 2.20, height = size * 2.85;
-    const scale = Math.min(Math.max(1.4, pixelRatio), 1120 / height);
+    // Edges are resolved analytically in the shader, so no supersampling.
+    const scale = Math.min(pixelRatio, 1500 / height) * detail;
     const rw = Math.max(1, Math.round(width * scale));
     const rh = Math.max(1, Math.round(height * scale));
     if (image.width !== rw || image.height !== rh) {

@@ -1,4 +1,5 @@
-import { createLattice } from './lattice.js';
+import { createField } from './field.js';
+import { createGlass } from './glass.js';
 import { prepareOil } from './oil-volume.js';
 import { displaceStrip } from './negative.js';
 
@@ -35,9 +36,10 @@ function cut(intercept, sign) {
   const path = new Path2D();
   points.forEach(([x, y], i) => i ? path.lineTo(x, y) : path.moveTo(x, y));
   path.closePath();
-  return path;
+  return { path, points };
 }
-const plates = [cut(.9125, -1), cut(1.0475, 1)];
+const halves = [cut(.9125, -1), cut(1.0475, 1)];
+const plates = halves.map(half => half.path);
 
 // The calm state is a block of reeded soda-lime glass. A lime filament in the
 // kerf lights both halves through their cut edges, and vertical flutes slice
@@ -142,15 +144,36 @@ const behind = plates.map((plate, part) => {
   }
   return tile;
 });
+// The polished sides look along the glass, so they carry its green.
+const SIDE_STOPS = [
+  [0, '#2b4233'], [.11, '#6c8b70'], [.18, '#e4f1df'], [.22, '#7c9a7f'],
+  [.4, '#38533f'], [.58, '#9cb998'], [.645, '#f3f9ec'], [.69, '#86a585'],
+  [.84, '#30493a'], [1, '#7f9c80'],
+];
+const ARRIS_STOPS = [[0, '#fbfdf4'], [.46, '#e4ecda'], [.66, '#7f9a80'], [1, '#f6faee']];
+const BACK = -.272, FRONT = .2805;
 
-// The reeds are composed flat, off screen, then laid onto the turned face
-// in one draw. The plate's own silhouette trims the composition.
+// Without WebGL the glass is drawn on the stage canvas instead. Its faces are
+// composed off screen from bitmaps that stay resident between frames.
 const faceCanvases = plates.map(() => document.createElement('canvas'));
-function reededFace(plate, part, sway, density) {
-  const face = faceCanvases[part];
+let faceSway = NaN, faceDensity = 0;
+
+// The B sways slowly, so both faces are reused until the refraction has
+// moved by about a quarter of a screen pixel.
+function refreshFaces(sway, density) {
+  if (density === faceDensity && Math.abs(sway - faceSway) < .0015) return;
+  faceSway = sway;
+  faceDensity = density;
   const fw = Math.ceil(1.21 * density), fh = Math.ceil(1.7 * density);
-  if (face.width !== fw || face.height !== fh) { face.width = fw; face.height = fh; }
-  const g = face.getContext('2d');
+  faceCanvases.forEach((face, part) => {
+    if (face.width !== fw || face.height !== fh) { face.width = fw; face.height = fh; }
+    paintFace(face.getContext('2d'), plates[part], part, sway, density);
+  });
+}
+
+// The 2D fallback: the reeds are composed flat, off screen, and the plate's
+// own silhouette trims the composition.
+function paintFace(g, plate, part, sway, density) {
   g.setTransform(density, 0, 0, density, 0, 0);
   g.globalCompositeOperation = 'source-over';
   const tile = behind[part];
@@ -187,7 +210,6 @@ function reededFace(plate, part, sway, density) {
   g.globalCompositeOperation = 'destination-in';
   g.fillStyle = '#000';
   g.fill(plate);
-  ctx.drawImage(face, 0, 0, fw / density, fh / density);
 }
 
 const canvas = document.querySelector('.exhibit canvas');
@@ -197,19 +219,90 @@ const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 const pointer = { x: 0, y: 0, tx: 0, ty: 0 };
 let w, h, pixelRatio, time = 0, last = 0, frame = 0;
 
-const lattice = createLattice();
+const field = createField(canvas);
+const glass = createGlass(canvas, {
+  outlines: halves.map(half => half.points), tiles: behind, scale: DENSITY, pad: [PAD, PAD_Y], flute: FLUTE,
+  sideStops: SIDE_STOPS, arrisStops: ARRIS_STOPS, back: BACK, front: FRONT,
+  filament: [[.09, KERF - .27875 * .09], [filamentEnd, KERF - .27875 * filamentEnd]],
+});
+if (!glass) behind.forEach((tile, part) => window.createImageBitmap?.(tile).then(bitmap => {
+  behind[part] = bitmap;
+  faceSway = NaN;
+}, () => {}));
+
+// The turn as three rows over the B's own axes: screen x, screen y, and
+// depth, signed so the front face (larger z) is nearer.
+function turn(ax, ay, bx, by, zx, zy) {
+  const depth = [bx * zy - zx * by, zx * ay - ax * zy, ax * by - bx * ay];
+  const sign = depth[2] > 0 ? -1 : 1;
+  return [[ax, bx, zx], [ay, by, zy], depth.map(v => v * sign)];
+}
+
+// Every place the B can reach as it sways, lifts and follows the pointer.
+function reachOf(size, centre) {
+  const box = [Infinity, Infinity, -Infinity, -Infinity];
+  const steps = n => Array.from({ length: n }, (_, i) => i / (n - 1) * 2 - 1);
+  for (const y of steps(5)) for (const p of steps(5)) for (const t of [-1, 1]) for (const l of [-1, 1]) {
+    const yaw = -.46 + y * .235, pitch = -.16 + p * .123, tilt = -.115 + t * .018;
+    const c = Math.cos(tilt), s = Math.sin(tilt);
+    const ax = c * Math.cos(yaw) - s * Math.sin(yaw) * Math.sin(pitch);
+    const ay = s * Math.cos(yaw) + c * Math.sin(yaw) * Math.sin(pitch);
+    const bx = -s * Math.cos(pitch), by = c * Math.cos(pitch);
+    const zx = c * Math.sin(yaw) + s * Math.cos(yaw) * Math.sin(pitch);
+    const zy = s * Math.sin(yaw) - c * Math.cos(yaw) * Math.sin(pitch);
+    for (const half of halves) for (const [u, v] of half.points) for (const z of [BACK, FRONT]) {
+      const dv = v - .845 + l * .012 + (v > .9 ? .02 : -.02);
+      const x = centre[0] + size * (ax * (u - .56) + bx * dv + zx * z);
+      const yy = centre[1] + size * (ay * (u - .56) + by * dv + zy * z);
+      box[0] = Math.min(box[0], x); box[1] = Math.min(box[1], yy);
+      box[2] = Math.max(box[2], x); box[3] = Math.max(box[3], yy);
+    }
+  }
+  // The shadow and caustic lie on the ground beneath it.
+  box[0] = Math.min(box[0], centre[0] + size * (.06 - .88));
+  box[2] = Math.max(box[2], centre[0] + size * (.06 + .88));
+  box[3] = Math.max(box[3], centre[1] + size * (1.02 + .102));
+  return box;
+}
+let glitchShowing = false, stageDrawn = true;
 let oilVolume;
-let nextExposure = 3 + Math.random() * 3;
+// Each exposure is planned afresh so no two play alike: a stutter of up to
+// three brief flashes, a hold of uneven length, rings and drips in their own
+// phase, and an irregular wait before the next. Now and then a short
+// aftershock follows closely behind.
+function planExposure(start, aftershock = false) {
+  const flashes = [];
+  let t = 0;
+  const roll = Math.random();
+  const count = aftershock ? 1 + (Math.random() < .5) : roll < .2 ? 0 : roll < .62 ? 1 : roll < .88 ? 2 : 3;
+  for (let i = 0; i < count; i++) {
+    const length = .045 + Math.random() * .13;
+    flashes.push([t, t + length]);
+    t += length + .07 + Math.random() * .3;
+  }
+  const hold = aftershock ? .35 + Math.random() * .5
+    : Math.random() < .12 ? 3.4 + Math.random() * 1.2 : 1.5 + Math.random() * 1.9;
+  const second = t > 0 ? t : .25 + Math.random() * .3;
+  return {
+    start, flashes, aftershock, holdStart: t, end: t + hold,
+    rings: [0, second, second + .9 + Math.random() * .8],
+    phase: Math.random() * 4, seed: Math.random(),
+  };
+}
+let exposure = planExposure(3 + Math.random() * 3);
 
 function exposureAge() {
   if (reduced.matches) return -1;
-  const age = time - nextExposure;
-  if (age >= 2.8) {
-    nextExposure = time + 7 + Math.random() * 5;
+  const age = time - exposure.start;
+  if (age >= exposure.end) {
+    // Waits average about thirteen seconds but range from six to twenty-six.
+    const shock = !exposure.aftershock && Math.random() < .14;
+    const wait = shock ? 1.2 + Math.random() * 2.2 : 6 + Math.min(20, -Math.log(1 - Math.random()) * 7);
+    exposure = planExposure(time + wait, shock);
     return -1;
   }
-  // One short negative, a gap, then a sustained second exposure.
-  if (age < 0 || (age >= .13 && age < .39)) return -1;
+  if (age < 0) return -1;
+  if (age < exposure.holdStart) return exposure.flashes.some(([a, b]) => age >= a && age < b) ? age : -1;
   return age;
 }
 
@@ -220,9 +313,26 @@ function metal(x, y, dx, dy, stops) {
 }
 
 function draw() {
-  ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-  ctx.clearRect(0, 0, w, h);
   const age = exposureAge();
+  // On the first glitch frame the canvas still holds the calm scene. The
+  // dot-matrix field keeps it, to dissolve from and re-form into.
+  if (age >= 0 && !glitchShowing && field) {
+    if (glass) {
+      const [x, y, bw, bh] = glass.box;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.drawImage(glass.canvas, x * pixelRatio, y * pixelRatio, bw * pixelRatio, bh * pixelRatio);
+      stageDrawn = true;
+    }
+    field.capture(canvas);
+  }
+  glitchShowing = age >= 0;
+  ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+  // While the GPU layer carries the calm scene, the stage canvas stays empty
+  // and untouched, so the browser has nothing to re-upload each frame.
+  if (stageDrawn) {
+    ctx.clearRect(0, 0, w, h);
+    stageDrawn = false;
+  }
   stage.classList.toggle('negative', age >= 0);
   const size = Math.min(h * .31, w * .445);
   const yaw = -.46 + Math.sin(time * .30) * .055 + pointer.x * .18;
@@ -237,15 +347,40 @@ function draw() {
   const lift = Math.sin(time * .56) * .012;
   const centre = h * .45;
 
-  if (age >= 0) lattice.draw(ctx, w, h, time);
+  glitchShown = false;
+  if (age >= 0 && field) {
+    // The cut's light runs along the kerf as the B is turned on screen.
+    const along = [ax - .27875 * bx, ay - .27875 * by];
+    const length = Math.hypot(...along);
+    field.render({
+      time, age, size, hold: exposure.holdStart, end: exposure.end, rings: exposure.rings,
+      origin: [w / 2 + size * bx * (lift - .0211), centre + size * by * (lift - .0211)],
+      dir: [along[0] / length, along[1] / length],
+      pointer: [(pointer.x + 1) * w / 2, (pointer.y + 1) * h / 2],
+    });
+  }
   if (age >= 0 && oilVolume?.(ctx, {
-    w, h, size, pixelRatio, right: [ax, bx, zx], down: [ay, by, zy],
-    age, lift, separation: .008 + .012 * Math.sin(time * .38),
+    w, h, size, pixelRatio, detail: oilDetail, right: [ax, bx, zx], down: [ay, by, zy],
+    age: age + exposure.phase, lift, separation: .008 + .012 * Math.sin(time * .38),
   })) {
-    if (age < .52 || (age > 2.5 && age < 2.62)) displaceStrip(ctx, canvas, w, h, age);
+    glitchShown = stageDrawn = true;
+    const settling = age - exposure.holdStart;
+    if (age < .09 || (settling >= 0 && settling < .13)) displaceStrip(ctx, canvas, w, h, true, exposure.seed);
+    else if (age > exposure.end - .3 && age < exposure.end - .18) displaceStrip(ctx, canvas, w, h, false, exposure.seed);
     return;
   }
   const sway = yaw + .46;
+  const glint = .10 * Math.sin(time * .35) + pointer.x * .14;
+  const spread = .008 + .012 * Math.sin(time * .38);
+  // The GPU layer hides during a glitch, so a glitch without its liquid B
+  // falls back to drawing the glass here.
+  if (age < 0 && glass?.render({
+    rows: turn(ax, ay, bx, by, zx, zy), centre: [w / 2, centre], size, lift,
+    shift: [-spread, spread], glint, sway,
+    ground: [w * .5 + size * .06, centre + size * 1.02, size * .88, size * .102], focus: .08 - sway * 1.3,
+  })) return;
+
+  stageDrawn = true;
   if (age < 0) {
     ctx.save();
     ctx.translate(w * .5 + size * .06, centre + size * 1.02);
@@ -267,7 +402,6 @@ function draw() {
     ctx.restore();
   }
 
-  const glint = .10 * Math.sin(time * .35) + pointer.x * .14;
   function plane(z, part) {
     const shift = (part * 2 - 1) * (.008 + .012 * Math.sin(time * .38));
     const x = -.56 * ax + (-.845 + lift + shift) * bx + z * zx;
@@ -276,20 +410,17 @@ function draw() {
       bx * size * pixelRatio, by * size * pixelRatio,
       (w / 2 + x * size) * pixelRatio, (centre + y * size) * pixelRatio);
   }
-  // The polished sides look along the glass, so they carry its green.
-  const side = () => metal(-.12 + glint, .05, 1.52, .48, [
-    [0, '#2b4233'], [.11, '#6c8b70'], [.18, '#e4f1df'], [.22, '#7c9a7f'],
-    [.4, '#38533f'], [.58, '#9cb998'], [.645, '#f3f9ec'], [.69, '#86a585'],
-    [.84, '#30493a'], [1, '#7f9c80']
-  ]);
+  const side = metal(-.12 + glint, .05, 1.52, .48, SIDE_STOPS);
+  refreshFaces(sway, Math.min(size * pixelRatio, 760));
   // Only the rim of each layer can show past the face in front of it, so the
   // block's sides are built from overlapping outline strokes, not fills.
   ctx.lineJoin = 'round';
+  const arris = metal(0, 0, 1, 1, ARRIS_STOPS);
   for (let layer = 0; layer < 33; layer++) {
     const z = (layer - 16) * .017;
     plates.forEach((plate, part) => {
       plane(z + .004, part);
-      ctx.strokeStyle = side();
+      ctx.strokeStyle = side;
       ctx.lineWidth = .024;
       ctx.stroke(plate);
       if (layer === 0) {
@@ -299,9 +430,9 @@ function draw() {
       }
       if (layer !== 32) return;
       plane(z + .0085, part);
-      reededFace(plate, part, sway, Math.min(size * pixelRatio, 760));
+      ctx.drawImage(faceCanvases[part], 0, 0, faceCanvases[part].width / faceDensity, faceCanvases[part].height / faceDensity);
       ctx.lineWidth = .006;
-      ctx.strokeStyle = metal(0, 0, 1, 1, [[0, '#fbfdf4'], [.46, '#e4ecda'], [.66, '#7f9a80'], [1, '#f6faee']]);
+      ctx.strokeStyle = arris;
       ctx.stroke(plate);
     });
     // The filament is a thin lit bar through the middle of the block.
@@ -322,10 +453,31 @@ function draw() {
   }
 }
 
+// The liquid is the costliest layer, so only its internal resolution adapts.
+// Slow glitch frames step it down, a long run of quick ones steps it back up,
+// and the rest of the page always renders at full sharpness. Steps are coarse
+// so the liquid's buffer is rarely reallocated.
+let oilDetail = (devicePixelRatio || 1) > 1.5 ? .8 : 1;
+let oilPace = 1 / 60, quickRun = 0, glitchShown = false;
+function paceOil(elapsed) {
+  oilPace += (Math.min(elapsed, .1) - oilPace) * .1;
+  if (oilPace > 1 / 42 && oilDetail > .4) {
+    oilDetail = Math.round(oilDetail * 10 - 1) / 10;
+    oilPace = 1 / 60;
+    quickRun = 0;
+  } else if (elapsed < 1 / 52 && ++quickRun > 75 && oilDetail < 1) {
+    oilDetail = Math.round(oilDetail * 10 + 1) / 10;
+    quickRun = 0;
+  }
+}
+
 function tick(now) {
   frame = 0;
-  const dt = last ? Math.min((now - last) / 1000, .06) : 0;
+  const elapsed = last ? (now - last) / 1000 : 0;
+  const dt = Math.min(elapsed, .06);
   last = now;
+  // Each interval reflects the cost of the frame drawn before it.
+  if (elapsed && glitchShown) paceOil(elapsed);
   if (!reduced.matches) {
     if (oilVolume === undefined && time > .5) oilVolume = prepareOil();
     time += dt;
@@ -341,13 +493,18 @@ function refresh() {
   last = 0;
   if (!document.hidden) frame = requestAnimationFrame(tick);
 }
-function resize() {
+function fitCanvas() {
   w = canvas.clientWidth;
   h = canvas.clientHeight;
   pixelRatio = Math.min(devicePixelRatio || 1, 2);
-  lattice.resize(w, h, pixelRatio);
+  field?.resize(w, h, pixelRatio);
+  const size = Math.min(h * .31, w * .445);
+  glass?.resize(w, h, pixelRatio, size, reachOf(size, [w / 2, h * .45]));
   canvas.width = Math.round(w * pixelRatio);
   canvas.height = Math.round(h * pixelRatio);
+}
+function resize() {
+  fitCanvas();
   draw();
   document.querySelector('.silhouette').hidden = true;
   refresh();

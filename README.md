@@ -8,7 +8,7 @@ Run `node server.js` and open http://localhost:8080. The site uses static HTML, 
 
 ## Artwork
 
-The geometry, projection, lighting and pointer response live in `js/sculpture.js`. The smoked-plum backdrop uses two overlapping thread patterns in `js/silk.js`. The threads are drawn on resize, then shifted against one another to produce a slow moiré. The stage and signature are styled in `css/sculpture.css`. The original vector artwork is in `assets/logo/`. Reduced-motion visitors see a still composition. A static B is visible before rendering and when JavaScript is unavailable.
+The geometry, projection, lighting and pointer response live in `js/sculpture.js`. The warm-white backdrop uses two overlapping thread patterns in `js/silk.js`. The threads are drawn on resize, then shifted against one another to produce a slow moiré. The stage and signature are styled in `css/sculpture.css`. The original vector artwork is in `assets/logo/`. Reduced-motion visitors see a still composition. A static B is visible before rendering and when JavaScript is unavailable.
 
 ## Publish
 

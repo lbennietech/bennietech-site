@@ -54,8 +54,8 @@ function engrave(canvas, w, h, second) {
     });
     const lightSweep = ctx.createLinearGradient(0, 0, w * .055, h);
     const colors = second
-      ? ['#c5999160', '#d9b2a23a', '#9c7e950e', '#d6afb346', '#bf997b28', '#bd919a55']
-      : ['#b097ac2c', '#ceabaa62', '#917c8e15', '#c9a19552', '#b79ca02b', '#d2ada747'];
+      ? ['#826b594f', '#83644d37', '#99877918', '#8b675148', '#836d5f30', '#89684f48']
+      : ['#52534f36', '#58575256', '#6969621c', '#5b575148', '#68645b39', '#625c5347'];
     light.forEach((stop, i) => lightSweep.addColorStop(stop, colors[i]));
     ctx.strokeStyle = lightSweep;
     for (let strand = 0; strand <= strands; strand++) {
@@ -103,9 +103,9 @@ export function createSilk(container) {
         const start = Math.max(0, Math.floor(centre - 13));
         const end = Math.min(thread.length - 1, Math.ceil(centre + 13));
         const light = ctx.createLinearGradient(...thread[start], ...thread[end]);
-        light.addColorStop(0, 'rgba(226,190,166,0)');
-        light.addColorStop(.58, 'rgba(226,190,166,.34)');
-        light.addColorStop(1, 'rgba(226,190,166,0)');
+        light.addColorStop(0, 'rgba(255,254,244,0)');
+        light.addColorStop(.58, 'rgba(255,254,244,.84)');
+        light.addColorStop(1, 'rgba(255,254,244,0)');
         ctx.strokeStyle = light;
         ctx.globalAlpha = Math.min(1, phase * 18, (1 - phase) * 18);
         ctx.lineWidth = .8;

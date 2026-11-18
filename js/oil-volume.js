@@ -4,7 +4,7 @@ import { createRenderer, GLSL } from './gl/gl.js';
 
 const fragment = GLSL.head + GLSL.tone + `
 uniform vec2 resolution;
-uniform vec3 rightAxis, downAxis;
+uniform vec3 rightAxis, downAxis, tear;
 uniform float age, lift, separation;
 const vec3 centre = vec3(.56,.845,0.);
 const vec3 lime = vec3(.54,.94,.035);
@@ -105,12 +105,15 @@ vec3 shade(vec3 p,vec3 view) {
   vec3 room=vec3(.12,.125,.14)*(1.25-.72*reflected.y);
   // The large diffusion frame reads as a gradient in the liquid, bracketed
   // by two narrow reflection cards on the necks and reflected bulbs.
-  room+=vec3(.87,.91,.94)*panel(reflected,vec3(-.92,.10,.69),vec2(.31,.75),.33);
+  room+=vec3(.76,.81,.80)*panel(reflected,vec3(-.92,.10,.69),vec2(.31,.75),.33);
+  // The narrow edge of the diffusion frame folds into a hairline on the
+  // liquid face and breaks into individual glints on the pendant beads.
+  room+=vec3(1.21,1.38,1.32)*panel(reflected,vec3(-.55,-.27,.82),vec2(.028,.71),.036);
   room+=vec3(.62,.60,.56)*panel(reflected,vec3(.1,.95,.46),vec2(.85,.16),.13);
   room+=vec3(3.7,3.86,4.)*panel(reflected,vec3(-.75,-.65,.55),vec2(.23,.83),.085);
   room+=vec3(1.55,1.48,1.35)*panel(reflected,vec3(.6,-.85,-.52),vec2(.72,.11),.052);
   room+=vec3(2.3)*panel(reflected,vec3(.92,.18,.4),vec2(.055,.88),.035);
-  float fresnel=.046+.954*pow(1.-max(dot(n,view),0.),5.);
+  float fresnel=.046+(.954-.19*smoothstep(1.64,1.85,p.y))*pow(1.-max(dot(n,view),0.),5.);
   vec3 col=vec3(.0033,.0035,.0042)+room*fresnel;
   float gap=emitter(p);
   float lit=exp(-max(gap,0.)*15.);
@@ -121,6 +124,7 @@ vec3 shade(vec3 p,vec3 view) {
 void main() {
   vec2 uv=(gl_FragCoord.xy/resolution-.5)*vec2(2.20,-2.85);
   uv.y+=.35;
+  if(uv.y>=tear.x && uv.y<tear.y) uv.x-=tear.z;
   vec3 view=normalize(cross(rightAxis,downAxis));
   vec3 ro=centre+rightAxis*uv.x+downAxis*(uv.y-lift)+view*1.40;
   vec3 rd=-view;
@@ -168,7 +172,7 @@ void main() {
 }
 `;
 
-export function createOilVolume(hardwareOnly = false) {
+export function createOilVolume(hardwareOnly = false, stage) {
   const image = document.createElement('canvas');
   if (hardwareOnly) {
     const gl = image.getContext('webgl', {
@@ -184,11 +188,17 @@ export function createOilVolume(hardwareOnly = false) {
   }
   const renderer = createRenderer(image, fragment, { alpha: true });
   if (!renderer) return null;
+  if (stage) {
+    image.className = 'oil';
+    image.setAttribute('aria-hidden', 'true');
+    stage.after(image);
+  }
   // Drivers often finish compiling on the first real draw. One pixel now
   // keeps that cost out of the first glitch.
   image.width = image.height = 1;
   renderer.draw({ resolution: [1, 1], rightAxis: [1, 0, 0], downAxis: [0, 1, 0], age: 0, lift: 0, separation: .01 });
-  return function render(ctx, { w, h, size, pixelRatio, detail = 1, right, down, age, lift, separation }) {
+  let lastSize = 0, lastCentre = 0;
+  return function render(ctx, { w, h, size, centre = h * .45, pixelRatio, detail = 1, right, down, age, lift, separation, strip }) {
     if (renderer.gl.isContextLost()) return false;
     const width = size * 2.20, height = size * 2.85;
     // Edges are resolved analytically in the shader, so no supersampling.
@@ -199,8 +209,17 @@ export function createOilVolume(hardwareOnly = false) {
       image.width = rw;
       image.height = rh;
     }
-    renderer.draw({ resolution: [rw, rh], rightAxis: right, downAxis: down, age, lift, separation });
-    ctx.drawImage(image, (w - width) / 2, h * .45 + size * .35 - height / 2, width, height);
+    const top = centre + size * .35 - height / 2;
+    if (stage && (size !== lastSize || centre !== lastCentre)) {
+      Object.assign(image.style, { top: top + 'px', width: width + 'px', height: height + 'px' });
+      lastSize = size;
+      lastCentre = centre;
+    }
+    const tear = strip ? [(strip.y - centre) / size, (strip.y + strip.height - centre) / size, strip.shift / size] : [0, 0, 0];
+    renderer.draw({ resolution: [rw, rh], rightAxis: right, downAxis: down, age, lift, separation, tear });
+    // Offscreen callers can still take a frame. In the exhibit the GPU
+    // presents its own layer directly, including the displaced scan strip.
+    if (!stage) ctx.drawImage(image, (w - width) / 2, top, width, height);
     return true;
   };
 }
@@ -213,25 +232,34 @@ function bakedTake() {
     image.src = new URL('../assets/liquid/exposure-' + i + '.webp', import.meta.url);
     return image;
   });
-  return (ctx, { w, h, size, lift, age }) => {
+  return (ctx, { w, h, size, centre = h * .45, lift, age, strip }) => {
     const frame = Math.floor((age % 4) * 16);
     const sheet = sheets[Math.floor(frame / 16)];
     if (!sheet.complete || !sheet.naturalWidth) return false;
     const width = size * 2.20, height = size * 2.85;
     const sw = sheet.naturalWidth / 4, sh = sheet.naturalHeight / 4;
-    ctx.drawImage(sheet, frame % 4 * sw, Math.floor(frame % 16 / 4) * sh, sw, sh,
-      (w - width) / 2, h * .45 + size * (.35 + lift) - height / 2, width, height);
+    const sx = frame % 4 * sw, sy = Math.floor(frame % 16 / 4) * sh;
+    const left = (w - width) / 2, top = centre + size * (.35 + lift) - height / 2;
+    if (!strip) {
+      ctx.drawImage(sheet, sx, sy, sw, sh, left, top, width, height);
+      return true;
+    }
+    const start = Math.min(1, Math.max(0, (strip.y - top) / height));
+    const end = Math.min(1, Math.max(0, (strip.y + strip.height - top) / height));
+    for (const [from, to, shift] of [[0, start, 0], [start, end, strip.shift], [end, 1, 0]]) {
+      if (to > from) ctx.drawImage(sheet, sx, sy + from * sh, sw, (to - from) * sh,
+        left + shift, top + from * height, width, (to - from) * height);
+    }
     return true;
   };
 }
 
-export function prepareOil() {
-  const live = createOilVolume(true);
-  if (!live) return bakedTake();
-  let fallback;
+export function prepareOil(stage) {
+  const live = createOilVolume(true, stage);
+  let fallback = live ? null : bakedTake();
   return (ctx, scene) => {
-    if (live(ctx, scene)) return true;
+    if (live?.(ctx, scene)) return stage ? 'layer' : 'stage';
     fallback ??= bakedTake();
-    return fallback(ctx, scene);
+    return fallback(ctx, scene) ? 'stage' : null;
   };
 }

@@ -12,15 +12,18 @@
 </head>
 <body>
   <main aria-label="BennieTech">
-    <div class="exhibit" role="img" aria-label="A split B of reeded green glass, lit by a lime filament in its cut, suspended in warm light.">
-      <img class="silhouette" src="/assets/logo/bennietech-mark.svg" alt="">
+    <div class="exhibit" role="img" aria-label="A suspended B of reeded green glass. A lime filament lights its diagonal cut. When animated, the glass briefly turns to black liquid.">
+      <picture>
+        <source media="(max-aspect-ratio: 4/5)" srcset="/assets/glass/rest-portrait.webp">
+        <img class="silhouette" src="/assets/glass/rest.webp" width="1536" height="1368" fetchpriority="high" alt="">
+      </picture>
       <canvas aria-hidden="true"></canvas>
     </div>
-    <a class="email" href="mailto:lukebennie@gmail.com" aria-label="Email Luke Bennie at lukebennie@gmail.com" title="lukebennie@gmail.com">
+    <a class="email" href="mailto:lukebennie@gmail.com" aria-label="Email Luke Bennie at lukebennie@gmail.com">
       <svg viewBox="0 0 34 26" aria-hidden="true" focusable="false">
         <!-- An envelope with one scan strip torn sideways, fringed in olive. -->
         <defs>
-          <g id="mail-art" fill="none" stroke-width="2.6" stroke-linecap="butt" stroke-linejoin="miter">
+          <g id="mail-art" fill="none" stroke-width="2.35" stroke-linecap="butt" stroke-linejoin="miter">
             <rect x="3" y="3.5" width="28" height="19"/>
             <path d="M3 3.5 17 14.2 31 3.5"/>
           </g>
@@ -35,9 +38,22 @@
           <use href="#mail-art" stroke="currentColor" clip-path="url(#mail-strip)" transform="translate(2.4 0)"/>
         </g>
       </svg>
+      <span class="email-address" aria-hidden="true">lukebennie@gmail.com</span>
     </a>
-    <img class="signature" src="/assets/logo/bennietech-wordmark.svg" alt="BennieTech">
+    <div class="signature">
+      <img src="/assets/logo/bennietech-wordmark.svg" width="1004" height="175" alt="BennieTech">
+      <img class="signature-night" src="/assets/logo/bennietech-wordmark-dark.svg" width="1004" height="175" alt="">
+    </div>
   </main>
-  <script type="module" src="/js/sculpture.js"></script>
+  <script type="module">
+    const motion = matchMedia('(prefers-reduced-motion: reduce)');
+    function start() {
+      if (motion.matches) return;
+      motion.removeEventListener('change', start);
+      import('/js/sculpture.js');
+    }
+    motion.addEventListener('change', start);
+    start();
+  </script>
 </body>
 </html>

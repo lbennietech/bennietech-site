@@ -10,6 +10,7 @@ import { createRenderer } from './gl/gl.js';
 
 const fragment = `precision highp float;
 uniform vec2 res, origin, dir, pointer;
+uniform vec4 ghostBox;
 uniform float cell, time, age, hold, end, size, ghostReady;
 uniform vec3 rings;
 uniform sampler2D ghost;
@@ -48,7 +49,7 @@ float scene(vec2 q, out float tint) {
   float sheet = (.85 * exp(-across / (size * .045)) + .22 * exp(-across / (size * .32))) * (.3 + .7 * reach);
   // Packets of light run outward along the sheet.
   float k = fract(abs(along) / (size * .5) - time * .85);
-  sheet += .6 * exp(-across / (size * .035)) * smoothstep(0., .04, k) * smoothstep(.22, .04, k) * (.25 + .75 * reach);
+  sheet += .6 * exp(-across / (size * .035)) * smoothstep(0., .04, k) * (1. - smoothstep(.04, .22, k)) * (.25 + .75 * reach);
   float glow = .32 * exp(-length(rel) / (size * .85));
 
   float ring = 0., d = length(rel), from = size * .8, out_ = length(res) * .62;
@@ -59,8 +60,9 @@ float scene(vec2 q, out float tint) {
     if (t < 0.) continue;
     float r = from + t * out_ * .75;
     float fade = strength * pow(max(0., 1. - (r - from) / (out_ - from)), 1.3);
-    float band = size * .07 + (r - from) * .05;
-    ring += fade * exp(-pow((d - r) / band, 2.));
+    float band = size * .045 + (r - from) * .032;
+    float front = (d - r) / band;
+    ring += fade * (.79 * exp(-front * front) + .21 * exp(-.65 * (front + 3.6) * (front + 3.6)));
   }
 
   vec2 u = q / res.y;
@@ -70,19 +72,16 @@ float scene(vec2 q, out float tint) {
 
   // Falling away to the edges.
   vec2 v = (q / res - .5) * vec2(1.25, 1.1);
-  float vignette = smoothstep(.95, .25, length(v));
+  float vignette = 1. - smoothstep(.25, .95, length(v));
 
-  tint = clamp(sheet * 1.3 + ring * 1.4 + glow * .7, 0., 1.);
+  tint = clamp(sheet * 1.4 + ring * .48 + glow * .7, 0., 1.);
   return clamp(sheet + glow + ring * .85 + smoke + scan, 0., 1.) * quiet(q) * vignette;
 }
 
-// The calm scene as it was when the exposure began: the glass over warm paper.
-float paper(vec2 uv, out vec3 colour) {
-  float d = length((uv - vec2(.35, .27)) * vec2(1., res.y / res.x));
-  colour = mix(vec3(.98, .97, .945), vec3(.82, .81, .78), smoothstep(0., 1.1, d));
-  vec4 glass = texture2D(ghost, vec2(uv.x, 1. - uv.y));
-  colour = mix(colour, glass.rgb, glass.a);
-  return dot(colour, vec3(.299, .587, .114));
+vec4 heldGlass(vec2 screen) {
+  vec2 uv = (screen / res - ghostBox.xy) / ghostBox.zw;
+  if (any(lessThan(uv, vec2(0.))) || any(greaterThan(uv, vec2(1.)))) return vec4(0.);
+  return texture2D(ghost, vec2(uv.x, 1. - uv.y));
 }
 
 void main() {
@@ -121,7 +120,7 @@ void main() {
 
   float tint;
   float level = scene(sample_, tint);
-  if (mosh > .992) level = .55 - level * .5;
+  if (mosh > .992) level = .33 - level * .30;
   // Borrowed or inverted blocks still keep clear of the marks.
   level *= quiet(centre);
 
@@ -137,15 +136,18 @@ void main() {
   if (fromGhost) {
     // The held frame rises as it breaks up, and settles back as it re-forms,
     // so the glass B drifts out from behind the liquid and returns.
-    float rise = age < hold ? 0. : (age < end - .32 ? (age - hold) * .42 : (end - age) * .95);
-    vec2 uv = sample_ / res + vec2(age < hold ? .006 : 0., rise);
-    vec3 calm;
-    level = clamp((paper(uv, calm) - .3) / .62, 0., 1.) * .88 * quiet(sample_);
-    colour = calm * (.8 + .2 * level);
+    float rise = min(smoothstep(hold - .08, hold + .56, age), 1. - smoothstep(end - .35, end, age));
+    vec4 glass = heldGlass(sample_ + size * vec2(-.13, .46) * rise);
+    // Print the optically dense edges in silver. Untouched paper carries
+    // only a low carrier signal, leaving black around the liquid.
+    float ink = 1. - dot(glass.rgb, vec3(.27, .64, .09));
+    float carrier = .035 + .12 * level;
+    level = mix(carrier, .34 + .64 * ink, glass.a) * quiet(centre);
+    colour = mix(vec3(.26, .30, .26), vec3(.72, .79, .70), glass.a);
   } else {
     float grey = smoothstep(.05, .9, level);
-    colour = mix(vec3(.29, .31, .27), vec3(.84, .87, .8), grey);
-    colour = mix(colour, vec3(.66, .86, .2) * (.65 + .55 * grey), tint * .85);
+    colour = mix(vec3(.25, .28, .25), vec3(.77, .83, .75), grey);
+    colour = mix(colour, vec3(.65, .84, .22) * (.64 + .49 * grey), tint * .86);
   }
   if (block > 1.) level = floor(level * 4. + .5) / 4.;
 
@@ -165,6 +167,7 @@ export function createField(stage) {
   const info = gl.getExtension('WEBGL_debug_renderer_info');
   const software = !!info && /swiftshader|llvmpipe|software/i.test(gl.getParameter(info.UNMASKED_RENDERER_WEBGL));
   let ghost = null, scale = 1;
+  let ghostBox = [0, 0, 1, 1];
 
   return {
     resize(w, h, ratio) {
@@ -173,19 +176,20 @@ export function createField(stage) {
       canvas.width = Math.max(1, Math.round(w * scale));
       canvas.height = Math.max(1, Math.round(h * scale));
     },
-    // Hold the calm frame. The stage canvas still shows it when this runs.
-    capture(source) {
+    // Upload just the glass layer when available, before it is hidden.
+    capture(source, [x, y, width, height], w, h) {
+      ghostBox = [x / w, y / h, width / w, height / h];
       try { ghost = renderer.texture(source, ghost ?? undefined); } catch { ghost = null; }
     },
     render({ time, age, hold, end, rings, origin, dir, size, pointer }) {
       if (gl.isContextLost()) return;
       const uniforms = {
         res: [canvas.width, canvas.height],
-        cell: Math.max(4, Math.round(5.5 * scale)),
+        cell: Math.max(3, Math.round(Math.min(5.5, Math.max(3, size * .018)) * scale)),
         time, age, hold, end, rings, size: size * scale, dir,
         origin: [origin[0] * scale, origin[1] * scale],
         pointer: [pointer[0] * scale, pointer[1] * scale],
-        ghostReady: ghost ? 1 : 0,
+        ghostReady: ghost ? 1 : 0, ghostBox,
       };
       if (ghost) uniforms.ghost = ghost;
       renderer.draw(uniforms);

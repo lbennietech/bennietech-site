@@ -38,9 +38,10 @@ void main() {
 }`;
 
 const fragment = `precision highp float;
-uniform float kind, part, sway, glint, flute, front, back, pixel, focus;
-uniform vec2 tile, pad;
-uniform sampler2D behind, sideRamp, arrisRamp;
+uniform float kind, part, sway, glint, flute, front, back, pixel, recovery;
+uniform vec3 row3;
+uniform vec2 tile, pad, filamentRange;
+uniform sampler2D behind, sideRamp, arrisRamp, groundMap;
 varying vec3 plate;
 varying float side;
 
@@ -54,30 +55,71 @@ float ramp(float x, float a, float b) { return clamp((x - a) / (b - a), 0., 1.);
 vec3 arris(vec2 p) { return texture2D(arrisRamp, vec2(clamp((p.x + p.y) * .5, 0., 1.), .5)).rgb; }
 
 vec3 reeds(vec2 p) {
-  // Each reed compresses a wider strip of the scene behind it.
+  // A cylindrical reed magnifies its centre and folds the far wall over
+  // its shoulders. Moving the eye moves the reflection inside each flute.
   float k = floor(p.x / flute), u = fract(p.x / flute);
   float centre = k * flute + flute * .5 + sway * .62 + .011 * sin(k * 2.31 + part);
-  vec2 at = (vec2(centre + (u - .5) * flute * 2.4, p.y) + pad) / tile;
-  vec3 colour = texture2D(behind, vec2(at.x, 1. - at.y)).rgb;
-  // Grooves at the reed's edges and a highlight that crosses it with the sway.
-  float crest = clamp(.5 + sway * 2.1 + (k - 13.5) * .009, .16, .84);
-  float groove = .24 * (1. - ramp(u, 0., .1)) + .17 * ramp(u, .9, 1.);
-  float shine = .66 * (u < crest ? ramp(u, crest - .1, crest) : 1. - ramp(u, crest, crest + .06));
-  colour = mix(colour, vec3(34., 46., 34.) / 255., groove);
-  colour = mix(colour, vec3(1., 1., 248. / 255.), shine);
-  // A broad window reflection rides over the reeds.
-  vec2 a = vec2(-.3 + sway, .1), b = vec2(1.3 + sway, .9);
-  float t = dot(p - a, b - a) / dot(b - a, b - a);
-  float sheen = t < .36 ? .24 * ramp(t, .2, .36) : (t < .44 ? mix(.24, .05, ramp(t, .36, .44)) : .05 * (1. - ramp(t, .44, .52)));
-  return mix(colour, vec3(1., 1., 252. / 255.), sheen);
+  float lens = u * 2. - 1.;
+  float bend = lens * (.52 + .48 * lens * lens);
+  vec2 at = (vec2(centre + bend * flute * 1.75, p.y + .014 * bend) + pad) / tile;
+  vec2 uv = vec2(at.x, 1. - at.y);
+  vec3 colour = texture2D(behind, uv).rgb;
+  // Dispersion is confined to the most strongly bent rays.
+  float fringe = .0026 * bend * bend * bend;
+  colour.r = texture2D(behind, uv + vec2(fringe, 0.)).r;
+  colour.b = texture2D(behind, uv - vec2(fringe, 0.)).b;
+  float crest = clamp(.51 + sway * 1.72 + (k - 13.) * .008 + .043 * (p.y - .8), .18, .82);
+  float groove = .34 * (1. - smoothstep(0., .24, u)) + .25 * smoothstep(.80, 1., u);
+  colour = mix(colour, vec3(.12, .24, .19), groove);
+  float aa = min(.12, pixel / flute);
+  float shine = smoothstep(crest - .17 - aa, crest, u) * (1. - smoothstep(crest, crest + .052 + aa, u));
+  float window = dot(p, vec2(.73, .38)) - sway * .53;
+  float softbox = smoothstep(.14, .34, window) * (1. - smoothstep(.45, .66, window));
+  return mix(colour, vec3(1., .998, .945), shine * (.39 + .38 * softbox) + .15 * softbox);
+}
+
+vec2 sideNormal(vec2 p) {
+  float cut = part < .5 ? .9125 : 1.0475;
+  if (abs(p.y + .27875 * p.x - cut) < .001) return normalize(vec2(.27875, 1.)) * (part < .5 ? 1. : -1.);
+  if (p.x < .0001) return vec2(-1., 0.);
+  vec2 upper = vec2(max(p.x - .57, 0.), p.y - .43);
+  vec2 lower = vec2(max(p.x - .71, 0.), p.y - 1.20);
+  return normalize(length(upper) - .43 < length(lower) - .49 ? upper : lower);
 }
 
 void main() {
   vec2 p = plate.xy;
   if (kind < .5) {
-    // The sides look along the glass, so they carry its green.
+    // Looking along the polished wall reveals the bottle-green optical
+    // path, a reflected studio card and a second, fainter internal image.
     vec2 a = vec2(-.12 + glint, .05), d = vec2(1.52, .48);
     vec3 colour = texture2D(sideRamp, vec2(clamp(dot(p - a, d) / dot(d, d), 0., 1.), .5)).rgb;
+    vec2 n = sideNormal(p);
+    float depth = ramp(plate.z, back, front);
+    // Follow a refracted ray from this wall to the rear surface. The reed
+    // reflections bend around the round end and straighten along the cut.
+    vec3 ray = refract(normalize(row3), vec3(n, 0.), 1. / 1.52);
+    float path = (back - plate.z) / min(ray.z, -.01);
+    vec2 exitPoint = p + ray.xy * path;
+    vec2 uv = (exitPoint + pad) / tile;
+    vec3 through = texture2D(behind, vec2(uv.x, 1. - uv.y)).rgb;
+    through *= exp(-vec3(1.36, .66, 1.06) * (.18 + .76 * path));
+    float reed = .5 + .5 * cos(6.283185 * exitPoint.x / flute);
+    float window = smoothstep(-.93, -.35, n.y) * (1. - smoothstep(.46, .91, n.y));
+    through *= 1. - .13 * reed * reed * reed * window * smoothstep(.04, .28, path);
+    colour = mix(colour, through, .43);
+    float fold = depth + .24 * n.y - .12 * n.x - glint * .9;
+    float flag = smoothstep(.18, .49, fold) * (1. - smoothstep(.53, .76, fold));
+    float card = smoothstep(.52, .64, fold) * (1. - smoothstep(.66, .87, fold));
+    float echo = 1. - smoothstep(.006, .037, abs(fold - .29));
+    float grazing = 1. - abs(dot(n, row3.xy));
+    colour = mix(colour, vec3(.072, .20, .16), .13 + .36 * flag);
+    colour = mix(colour, vec3(.89, .95, .85), card * (.24 + .29 * grazing) + .16 * echo);
+    float shoulder = n.y + .43 + .19 * (depth - .5) + glint;
+    colour = mix(colour, vec3(.95, .98, .89), .54 * exp(-shoulder * shoulder * 68.) * max(n.x, 0.));
+    float spill = exp(-16. * abs(p.y + .27875 * p.x - .98));
+    float internal = exp(-33. * abs(exitPoint.y + .27875 * exitPoint.x - .98));
+    colour += vec3(.15, .18, .025) * (spill + internal * .65) * (.4 + .6 * depth);
     colour = mix(colour, arris(p), 1. - ramp(front - plate.z, .002, .007));
     colour = mix(colour, vec3(232., 240., 220.) / 255., .7 * (1. - ramp(plate.z - back, .003, .009)));
     gl_FragColor = vec4(colour, 1.);
@@ -85,24 +127,28 @@ void main() {
     // The front face, its polished edge picked out in light.
     float line = (p.y + .27875 * p.x) * .9633;
     float inside = -max(contour(p), part < .5 ? line - .9125 * .9633 : 1.0475 * .9633 - line);
-    float edge = 1. - smoothstep(.003 - pixel, .003 + pixel, inside);
-    gl_FragColor = vec4(mix(reeds(p), arris(p), edge), 1.);
+    float edge = 1. - smoothstep(.004 - pixel, .004 + pixel, inside);
+    float bevel = 1. - smoothstep(.006, .022, inside);
+    vec3 face = mix(reeds(p), vec3(.24, .38, .30), .32 * bevel);
+    // As the print resolves back into glass, the cut's light travels a
+    // short distance into the reeds and dies there.
+    float travel = abs(line - .98 * .9633) - (.05 + .46 * recovery);
+    float light = (1. - recovery) * exp(-travel * travel * 420.);
+    face = mix(face, vec3(.92, .98, .71), .39 * light);
+    gl_FragColor = vec4(mix(face, arris(p), edge), 1.);
   } else if (kind < 2.5) {
-    gl_FragColor = vec4(180., 220., 60., 255.) / 255.;
+    float z = ramp(plate.z, -.1445, .1615);
+    gl_FragColor = vec4(mix(vec3(.60, .77, .16), vec3(.88, .97, .56), z * z), 1.);
   } else if (kind > 3.5) {
-    // A soft shadow, and light focused through the block tinted by the filament.
-    float r = length(p);
-    float shade = r < .5 ? mix(.15, .07, r / .5) : .07 * (1. - ramp(r, .5, 1.));
-    vec3 dark = mix(vec3(44., 52., 40.), vec3(52., 58., 46.), ramp(r, 0., 1.)) / 255.;
-    float c = length(p - vec2(focus, -.12)) / .42;
-    float light = c < .35 ? mix(.7, .28, c / .35) : .28 * (1. - ramp(c, .35, 1.));
-    vec3 tint = mix(vec3(236., 250., 176.), vec3(214., 238., 140.), ramp(c, 0., .35)) / 255.;
-    gl_FragColor = vec4(tint * light + dark * shade * (1. - light), light + shade * (1. - light));
+    vec4 ink = texture2D(groundMap, vec2(p.x, -p.y) * .5 + .5);
+    gl_FragColor = vec4(ink.rgb * ink.a, ink.a);
   } else {
     // The filament's glow, with a near-white core.
     float d = abs(side);
-    float glow = (.07 + .16 * (1. - smoothstep(.4, .6, d))) * (1. - smoothstep(.85, 1., d));
-    float core = 1. - smoothstep(.08, .14, d);
+    float cap = smoothstep(filamentRange.x - .028, filamentRange.x + .008, p.x)
+      * (1. - smoothstep(filamentRange.y - .008, filamentRange.y + .028, p.x));
+    float glow = .26 * exp(-d * d * 4.6) * cap;
+    float core = (1. - smoothstep(.06, .18, d)) * cap * cap;
     float alpha = max(glow, core);
     vec3 colour = mix(vec3(176., 221., 52.) / 255., vec3(246., 255., 214.) / 255., core);
     gl_FragColor = vec4(colour * alpha, alpha);
@@ -159,6 +205,7 @@ function filamentBars([[x0, y0], [x1, y1]], near, far) {
   const quad = (a, b, c, d) => box.push(a, b, c, a, c, d);
   for (const s of [-.006, .006]) quad(corner(x0, y0, s, far), corner(x1, y1, s, far), corner(x1, y1, s, near), corner(x0, y0, s, near));
   for (const z of [far, near]) quad(corner(x0, y0, -.006, z), corner(x1, y1, -.006, z), corner(x1, y1, .006, z), corner(x0, y0, .006, z));
+  for (const [x, y] of [[x0, y0], [x1, y1]]) quad(corner(x, y, -.006, far), corner(x, y, .006, far), corner(x, y, .006, near), corner(x, y, -.006, near));
   const data = [];
   box.forEach(v => data.push(...v, 0));
   const ux = (x1 - x0) / length * .03, uy = (y1 - y0) / length * .03;
@@ -169,7 +216,7 @@ function filamentBars([[x0, y0], [x1, y1]], near, far) {
   return { data: data.concat(card), barCount: box.length, glowCount: 6 };
 }
 
-export function createGlass(stage, { outlines, tiles, scale, pad, flute, sideStops, arrisStops, filament, back, front }) {
+export function createGlass(stage, { outlines, tiles, scale, pad, flute, sideStops, arrisStops, filament, back, front, groundMap }) {
   const canvas = document.createElement('canvas');
   canvas.className = 'glass';
   canvas.setAttribute('aria-hidden', 'true');
@@ -200,14 +247,17 @@ export function createGlass(stage, { outlines, tiles, scale, pad, flute, sideSto
   const u = name => uniform[name] ??= gl.getUniformLocation(prog, name);
   const behind = tiles.map(tile => texture(gl, tile));
   const sideRamp = rampTexture(gl, sideStops), arrisRamp = rampTexture(gl, arrisStops);
+  const groundTexture = texture(gl, groundMap);
   gl.uniform2f(u('tile'), tiles[0].width / scale, tiles[0].height / scale);
   gl.uniform2f(u('pad'), pad[0], pad[1]);
   gl.uniform1f(u('flute'), flute);
   gl.uniform1f(u('front'), front);
   gl.uniform1f(u('back'), back);
-  [['behind', 0], ['sideRamp', 1], ['arrisRamp', 2]].forEach(([name, unit]) => gl.uniform1i(u(name), unit));
+  gl.uniform2f(u('filamentRange'), filament[0][0], filament[1][0]);
+  [['behind', 0], ['sideRamp', 1], ['arrisRamp', 2], ['groundMap', 3]].forEach(([name, unit]) => gl.uniform1i(u(name), unit));
   gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, sideRamp);
   gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, arrisRamp);
+  gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, groundTexture);
   gl.enable(gl.DEPTH_TEST);
   gl.depthFunc(gl.LEQUAL);
   gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
@@ -218,7 +268,7 @@ export function createGlass(stage, { outlines, tiles, scale, pad, flute, sideSto
     get box() { return box; },
     // The layer covers every place the B can reach as it sways and follows
     // the pointer, measured once per resize.
-    resize(w, h, pixelRatio, size, reach) {
+    resize(pixelRatio, reach) {
       ratio = pixelRatio;
       const [left, top, right, bottom] = reach;
       box = [Math.floor(left) - 4, Math.floor(top) - 4, Math.ceil(right - left) + 8, Math.ceil(bottom - top) + 8];
@@ -228,7 +278,7 @@ export function createGlass(stage, { outlines, tiles, scale, pad, flute, sideSto
       canvas.width = Math.max(1, Math.round(box[2] * ratio));
       canvas.height = Math.max(1, Math.round(box[3] * ratio));
     },
-    render({ rows, centre, size, lift, shift, glint, sway, ground, focus }) {
+    render({ rows, centre, size, lift, shift, glint, sway, ground, recovery }) {
       if (gl.isContextLost()) return false;
       gl.viewport(0, 0, canvas.width, canvas.height);
       // The glow pass leaves depth writes off, which would also mask the clear.
@@ -244,6 +294,7 @@ export function createGlass(stage, { outlines, tiles, scale, pad, flute, sideSto
       gl.uniform1f(u('lift'), lift);
       gl.uniform1f(u('glint'), glint);
       gl.uniform1f(u('sway'), sway);
+      gl.uniform1f(u('recovery'), recovery);
       gl.uniform1f(u('pixel'), 1 / (size * ratio));
 
       // The ground goes down first, blended and outside the depth test.
@@ -252,7 +303,6 @@ export function createGlass(stage, { outlines, tiles, scale, pad, flute, sideSto
       gl.enable(gl.BLEND);
       gl.uniform1f(u('ground'), 1);
       gl.uniform4f(u('shadow'), ...ground);
-      gl.uniform1f(u('focus'), focus);
       gl.uniform1f(u('kind'), 4);
       gl.drawArrays(gl.TRIANGLES, groundFirst, 6);
       gl.uniform1f(u('ground'), 0);

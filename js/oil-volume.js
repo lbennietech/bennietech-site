@@ -124,15 +124,18 @@ void main() {
   vec3 view=normalize(cross(rightAxis,downAxis));
   vec3 ro=centre+rightAxis*uv.x+downAxis*(uv.y-lift)+view*1.40;
   vec3 rd=-view;
-  float t=0., nearestCore=1.,coverage=0.;
+  float t=0., nearestCore=1., coverage=0.;
   bool hit=false;
   vec3 col=vec3(0.);
   float pixel=2.85/resolution.y;
-  for(int i=0;i<96;i++) {
+  // The first place the ray grazes a surface without entering it. That
+  // contour covers part of the pixel, so it is blended over what lies behind.
+  float prevD=1e3, prevT=0., edgeD=1e3, edgeT=0.;
+  for(int i=0;i<128;i++) {
     vec3 p=ro+rd*t;
     float oil=surface(p), core=emitter(p), d=min(oil,core);
     nearestCore=min(nearestCore,core);
-    if(d<pixel*.45) {
+    if(d<pixel*.06) {
       hit=true;
       // The released bead falls out of the pool of studio light before
       // reaching the signature. Its silhouette and reflection recede together.
@@ -140,13 +143,24 @@ void main() {
       col=core<oil ? vec3(1.65,2.7,.16) : shade(p,view);
       break;
     }
-    t+=max(.00045,d*.76);
+    if(edgeD>pixel && d>prevD && prevD<pixel) { edgeD=prevD; edgeT=prevT; }
+    prevD=d; prevT=t;
+    t+=max(.00025,d*.76);
     if(t>2.22) break;
   }
+  if(!hit && edgeD>pixel && prevD<pixel) { edgeD=prevD; edgeT=prevT; }
   vec3 bloom=lime*(.31*exp(-max(nearestCore,0.)*51.)+.047*exp(-max(nearestCore,0.)*19.));
-  col+=bloom;
-  vec3 rgb=toSRGB(aces(col))*(hit ? coverage : 1.);
-  gl_FragColor=vec4(rgb,max(coverage,max(rgb.r,max(rgb.g,rgb.b))));
+  vec3 rgb=toSRGB(aces(col+bloom));
+  vec4 back=hit ? vec4(rgb*coverage,coverage) : vec4(rgb,0.);
+  back.a=max(back.a,max(back.r,max(back.g,back.b)));
+  if(edgeD<pixel) {
+    vec3 q=ro+rd*edgeT;
+    float oil=surface(q), core=emitter(q);
+    vec3 edge=toSRGB(aces((core<oil ? vec3(1.65,2.7,.16) : shade(q,view))+bloom));
+    float g=(1.-smoothstep(0.,pixel,edgeD))*(1.-smoothstep(2.095,2.275,q.y));
+    back=vec4(edge,1.)*g+back*(1.-g);
+  }
+  gl_FragColor=back;
 }
 `;
 

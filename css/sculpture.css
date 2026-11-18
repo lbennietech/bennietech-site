@@ -46,8 +46,20 @@ main::after {
   border-radius: 50%;
   touch-action: manipulation;
 }
-.email svg { width: clamp(20px, 1.5vw, 25px); }
-.email:hover, .email:focus-visible { color: #526312; }
+.email svg { width: clamp(27px, 2vw, 33px); overflow: visible; }
+.email { --fringe: #6d8a1c; }
+.mail-fringe { stroke: var(--fringe); }
+.email:hover, .email:focus-visible { color: #1f201d; }
 .email:focus-visible { outline: 1px solid currentColor; outline-offset: 1px; }
-.negative .email { color: #b7bcb2; }
-.negative .email:hover, .negative .email:focus-visible { color: #d4ef94; }
+.negative .email { color: #b7bcb2; --fringe: #8fb02a; }
+.negative .email:hover, .negative .email:focus-visible { color: #eef0ea; --fringe: #c6ec5a; }
+@media (prefers-reduced-motion: no-preference) {
+  .email:hover .mail-tear, .email:focus-visible .mail-tear { animation: tear .42s steps(1) infinite; }
+}
+@keyframes tear {
+  0% { transform: translateX(0); }
+  22% { transform: translateX(-3.2px); }
+  41% { transform: translateX(1.6px); }
+  63% { transform: translateX(-1px); }
+  80% { transform: translateX(2.6px); }
+}

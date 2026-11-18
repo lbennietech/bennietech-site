@@ -1,5 +1,4 @@
-import { displaceStrips } from './negative.js';
-import { createStrata } from './strata.js';
+import { drawMembrane, displaceStrip } from './negative.js';
 
 // The two radii, baseline and diagonal kerf come from the production B mark.
 // Cut the original silhouette first so every metal lamination shares its profile.
@@ -79,7 +78,6 @@ const faces = plates.map((plate, i) => {
 });
 
 const canvas = document.querySelector('.exhibit canvas');
-const strata = createStrata(document.querySelector('.strata'));
 const ctx = canvas.getContext('2d');
 const stage = canvas.closest('main');
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
@@ -111,7 +109,7 @@ function draw() {
   ctx.clearRect(0, 0, w, h);
   const age = exposureAge();
   stage.classList.toggle('negative', age >= 0);
-  strata.draw(ctx, w, h, time, pointer, age);
+  if (age >= 0) drawMembrane(ctx, w, h, age);
   const size = Math.min(h * .31, w * .445);
   const yaw = -.46 + Math.sin(time * .30) * .055 + pointer.x * .18;
   const pitch = -.16 + Math.cos(time * .23) * .033 - pointer.y * .09;
@@ -178,9 +176,9 @@ function draw() {
       ctx.stroke(plate);
     });
   }
-  if (age >= 0) {
+  if (age >= 0 && (age < .52 || (age > 2.5 && age < 2.62))) {
     ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-    displaceStrips(ctx, canvas, w, h, age);
+    displaceStrip(ctx, canvas, w, h, age);
   }
 }
 
@@ -206,7 +204,6 @@ function resize() {
   w = canvas.clientWidth;
   h = canvas.clientHeight;
   pixelRatio = Math.min(devicePixelRatio || 1, 2);
-  strata.resize(w, h);
   canvas.width = Math.round(w * pixelRatio);
   canvas.height = Math.round(h * pixelRatio);
   draw();

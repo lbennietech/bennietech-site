@@ -28,9 +28,5 @@ main::after {
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  main.negative {
-    background: radial-gradient(ellipse at 50% 44%, #efefef, #fafafa 64%, #fff);
-    filter: grayscale(1) invert(1);
-  }
-  main.negative .strata { transform: translateY(-2px) skewY(-.35deg); }
+  main.negative { filter: invert(1); }
 }

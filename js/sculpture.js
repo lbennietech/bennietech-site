@@ -1,5 +1,5 @@
-import { drawMembrane, displaceStrip } from './negative.js';
-import { createSilk } from './silk.js';
+import { displaceStrips } from './negative.js';
+import { createStrata } from './strata.js';
 
 // The two radii, baseline and diagonal kerf come from the production B mark.
 // Cut the original silhouette first so every metal lamination shares its profile.
@@ -79,20 +79,20 @@ const faces = plates.map((plate, i) => {
 });
 
 const canvas = document.querySelector('.exhibit canvas');
-const silk = createSilk(document.querySelector('.silk'));
+const strata = createStrata(document.querySelector('.strata'));
 const ctx = canvas.getContext('2d');
 const stage = canvas.closest('main');
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 const pointer = { x: 0, y: 0, tx: 0, ty: 0 };
 let w, h, pixelRatio, time = 0, last = 0, frame = 0;
 
-let nextExposure = 13 + Math.random() * 9;
+let nextExposure = 9 + Math.random() * 7;
 
 function exposureAge() {
   if (reduced.matches) return -1;
   const age = time - nextExposure;
   if (age >= 2.8) {
-    nextExposure = time + 35 + Math.random() * 30;
+    nextExposure = time + 26 + Math.random() * 20;
     return -1;
   }
   // One short negative, a gap, then a sustained second exposure.
@@ -111,8 +111,7 @@ function draw() {
   ctx.clearRect(0, 0, w, h);
   const age = exposureAge();
   stage.classList.toggle('negative', age >= 0);
-  if (age >= 0) drawMembrane(ctx, w, h, age);
-  else silk.draw(ctx, time, pointer);
+  strata.draw(ctx, w, h, time, pointer, age);
   const size = Math.min(h * .31, w * .445);
   const yaw = -.46 + Math.sin(time * .30) * .055 + pointer.x * .18;
   const pitch = -.16 + Math.cos(time * .23) * .033 - pointer.y * .09;
@@ -179,9 +178,9 @@ function draw() {
       ctx.stroke(plate);
     });
   }
-  if (age >= 0 && (age < .52 || (age > 2.5 && age < 2.62))) {
+  if (age >= 0) {
     ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-    displaceStrip(ctx, canvas, w, h, age);
+    displaceStrips(ctx, canvas, w, h, age);
   }
 }
 
@@ -207,7 +206,7 @@ function resize() {
   w = canvas.clientWidth;
   h = canvas.clientHeight;
   pixelRatio = Math.min(devicePixelRatio || 1, 2);
-  silk.resize(w, h);
+  strata.resize(w, h);
   canvas.width = Math.round(w * pixelRatio);
   canvas.height = Math.round(h * pixelRatio);
   draw();

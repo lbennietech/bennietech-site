@@ -4,7 +4,9 @@ main {
   position: fixed;
   inset: 0;
   isolation: isolate;
-  background: radial-gradient(ellipse at 35% 27%, #faf8f1 0%, #eeebe3 40%, #dedbd3 78%, #d2cec7 115%);
+  background-color: #182d34;
+  background-image: radial-gradient(ellipse at 38% 28%,
+    #36545b 0%, #29454d 34%, #1c333b 67%, #12252c 100%);
 }
 main::after {
   content: "";

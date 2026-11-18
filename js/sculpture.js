@@ -107,9 +107,9 @@ function draw() {
   ctx.translate(w * .5 + size * .06, centre + size * 1.02);
   ctx.scale(size * .88, size * .102);
   const shadow = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
-  shadow.addColorStop(0, 'rgba(38,32,23,.21)');
-  shadow.addColorStop(.47, 'rgba(48,42,32,.095)');
-  shadow.addColorStop(1, 'rgba(52,44,34,0)');
+  shadow.addColorStop(0, 'rgba(3,12,16,.43)');
+  shadow.addColorStop(.47, 'rgba(3,12,16,.18)');
+  shadow.addColorStop(1, 'rgba(3,12,16,0)');
   ctx.fillStyle = shadow;
   ctx.fillRect(-1, -1, 2, 2);
   ctx.restore();

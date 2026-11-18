@@ -1,3 +1,5 @@
+import { createSilk } from './silk.js';
+
 // The two radii, baseline and diagonal kerf come from the production B mark.
 // Cut the original silhouette first so every metal lamination shares its profile.
 const TAU = Math.PI * 2;
@@ -75,7 +77,8 @@ const faces = plates.map((plate, i) => {
   return tile;
 });
 
-const canvas = document.querySelector('canvas');
+const canvas = document.querySelector('.exhibit canvas');
+const silk = createSilk(document.querySelector('.silk'));
 const ctx = canvas.getContext('2d');
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 const pointer = { x: 0, y: 0, tx: 0, ty: 0 };
@@ -90,6 +93,7 @@ function metal(x, y, dx, dy, stops) {
 function draw() {
   ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
   ctx.clearRect(0, 0, w, h);
+  silk.draw(ctx, time, pointer);
   const size = Math.min(h * .31, w * .445);
   const yaw = -.46 + Math.sin(time * .30) * .055 + pointer.x * .18;
   const pitch = -.16 + Math.cos(time * .23) * .033 - pointer.y * .09;
@@ -180,6 +184,7 @@ function resize() {
   w = canvas.clientWidth;
   h = canvas.clientHeight;
   pixelRatio = Math.min(devicePixelRatio || 1, 2);
+  silk.resize(w, h);
   canvas.width = Math.round(w * pixelRatio);
   canvas.height = Math.round(h * pixelRatio);
   draw();

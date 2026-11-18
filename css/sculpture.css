@@ -102,28 +102,34 @@ main::after {
 .email-address {
   position: absolute;
   left: 50%;
-  top: calc(100% - 3px);
-  transform: translateX(-50%);
+  top: calc(100% - 2px);
+  transform: translate(-50%, -2px);
   font: 400 11px/1.5 'JetBrains Mono', monospace;
-  letter-spacing: .025em;
+  letter-spacing: .03em;
+  font-feature-settings: "zero" 1;
+  -webkit-font-smoothing: antialiased;
   white-space: nowrap;
   visibility: hidden;
   opacity: 0;
 }
-.email:focus-visible .email-address { visibility: visible; opacity: 1; }
+.email:focus-visible .email-address { visibility: visible; opacity: 1; transform: translate(-50%, 0); }
 @media (hover: hover) {
-  .email:hover .email-address { visibility: visible; opacity: 1; }
+  .email:hover .email-address { visibility: visible; opacity: 1; transform: translate(-50%, 0); }
 }
-.email:hover, .email:focus-visible { color: #1f201d; }
-.email:focus-visible { outline: 1px solid currentColor; outline-offset: -4px; }
+.email:hover, .email:focus-visible { color: #1f201d; --fringe: #7f993b; }
+.email:focus-visible { outline: 1px solid currentColor; outline-offset: -5px; }
 .negative .email { color: #b7bcb2; --fringe: #8fb02a; }
 .negative .email:hover, .negative .email:focus-visible { color: #eef0ea; --fringe: #c6ec5a; }
 @media (prefers-reduced-motion: no-preference) {
-  .email-address { transition: opacity .18s ease-out; }
+  .email-address { transition: opacity .18s cubic-bezier(.22, 1, .36, 1), transform .18s cubic-bezier(.22, 1, .36, 1); }
   .email:hover .mail-tear, .email:focus-visible .mail-tear { animation: tear .38s steps(1) 1; }
 }
 @media (max-height: 500px) and (orientation: landscape) {
-  .email-address { left: 100%; top: 50%; transform: translateY(-50%); }
+  .email-address { left: calc(100% + 4px); top: 50%; transform: translate(-3px, -50%); }
+  .email:focus-visible .email-address { transform: translate(0, -50%); }
+  @media (hover: hover) {
+    .email:hover .email-address { transform: translate(0, -50%); }
+  }
 }
 @keyframes tear {
   0% { transform: translateX(0); }

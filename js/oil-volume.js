@@ -102,23 +102,25 @@ vec3 shade(vec3 p,vec3 view) {
   n=normalize(n+n.z*vec3(.018*cos(p.x*31.+ripple),.016*ripple,0.));
   vec3 r=reflect(-view,n);
   vec3 reflected=vec3(dot(r,rightAxis),dot(r,downAxis),dot(r,view));
-  vec3 room=vec3(.12,.125,.14)*(1.25-.72*reflected.y);
+  vec3 room=vec3(.095,.10,.115)*(1.22-.74*reflected.y);
   // The large diffusion frame reads as a gradient in the liquid, bracketed
   // by two narrow reflection cards on the necks and reflected bulbs.
-  room+=vec3(.76,.81,.80)*panel(reflected,vec3(-.92,.10,.69),vec2(.31,.75),.33);
+  room+=vec3(.78,.83,.82)*panel(reflected,vec3(-.92,.10,.69),vec2(.31,.75),.31);
   // The narrow edge of the diffusion frame folds into a hairline on the
   // liquid face and breaks into individual glints on the pendant beads.
-  room+=vec3(1.21,1.38,1.32)*panel(reflected,vec3(-.55,-.27,.82),vec2(.028,.71),.036);
-  room+=vec3(.62,.60,.56)*panel(reflected,vec3(.1,.95,.46),vec2(.85,.16),.13);
-  room+=vec3(3.7,3.86,4.)*panel(reflected,vec3(-.75,-.65,.55),vec2(.23,.83),.085);
-  room+=vec3(1.55,1.48,1.35)*panel(reflected,vec3(.6,-.85,-.52),vec2(.72,.11),.052);
-  room+=vec3(2.3)*panel(reflected,vec3(.92,.18,.4),vec2(.055,.88),.035);
-  float fresnel=.046+(.954-.19*smoothstep(1.64,1.85,p.y))*pow(1.-max(dot(n,view),0.),5.);
-  vec3 col=vec3(.0033,.0035,.0042)+room*fresnel;
+  room+=vec3(1.32,1.50,1.44)*panel(reflected,vec3(-.55,-.27,.82),vec2(.026,.72),.033);
+  room+=vec3(.64,.62,.58)*panel(reflected,vec3(.1,.95,.46),vec2(.85,.16),.13);
+  room+=vec3(3.95,4.12,4.28)*panel(reflected,vec3(-.75,-.65,.55),vec2(.22,.83),.082);
+  room+=vec3(1.62,1.54,1.40)*panel(reflected,vec3(.6,-.85,-.52),vec2(.72,.11),.050);
+  room+=vec3(2.55)*panel(reflected,vec3(.92,.18,.4),vec2(.052,.88),.032);
+  float ndv=max(dot(n,view),0.);
+  float fresnel=.042+(.958-.19*smoothstep(1.64,1.85,p.y))*pow(1.-ndv,4.8);
+  vec3 col=vec3(.0024,.0026,.0032)+room*fresnel;
   float gap=emitter(p);
-  float lit=exp(-max(gap,0.)*15.);
-  col+=lime*lit*(.06+.63*max(0.,-sign(p.y+.27875*p.x-.98)*n.y));
-  col+=lime*exp(-max(gap,0.)*25.)*panel(reflected,vec3(.05,.65,.35),vec2(1.1,.18),.20);
+  float lit=exp(-max(gap,0.)*14.5);
+  float cutFacing=max(0.,-sign(p.y+.27875*p.x-.98)*n.y);
+  col+=lime*lit*(.065+.68*cutFacing+.28*pow(1.-ndv,3.)*cutFacing);
+  col+=lime*exp(-max(gap,0.)*24.)*panel(reflected,vec3(.05,.65,.35),vec2(1.1,.18),.19);
   return col;
 }
 void main() {
@@ -155,16 +157,16 @@ void main() {
     // The released bead falls out of the pool of studio light before
     // reaching the signature. Its silhouette and reflection recede together.
     coverage=1.-smoothstep(2.095,2.275,hitP.y);
-    col=hitCore ? vec3(1.65,2.7,.16) : shade(hitP,view);
+    col=hitCore ? vec3(1.85,2.95,.22) : shade(hitP,view);
   }
-  vec3 bloom=lime*(.31*exp(-max(nearestCore,0.)*51.)+.047*exp(-max(nearestCore,0.)*19.));
+  vec3 bloom=lime*(.33*exp(-max(nearestCore,0.)*52.)+.050*exp(-max(nearestCore,0.)*19.));
   vec3 rgb=toSRGB(aces(col+bloom));
   vec4 back=hit ? vec4(rgb*coverage,coverage) : vec4(rgb,0.);
   back.a=max(back.a,max(back.r,max(back.g,back.b)));
   if(edgeD<edge) {
     vec3 q=ro+rd*edgeT;
     float oil=surface(q), core=emitter(q);
-    vec3 rim=toSRGB(aces((core<oil ? vec3(1.65,2.7,.16) : shade(q,view))+bloom));
+    vec3 rim=toSRGB(aces((core<oil ? vec3(1.85,2.95,.22) : shade(q,view))+bloom));
     float g=(1.-smoothstep(pixel*.2,edge,edgeD))*(1.-smoothstep(2.095,2.275,q.y));
     back=vec4(rim,1.)*g+back*(1.-g);
   }

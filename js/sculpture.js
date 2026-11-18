@@ -196,22 +196,25 @@ function paintFace(g, plate, part, sway, density) {
       x, 0, FLUTE + .0008, 1.7);
     const p = Math.min(.84, Math.max(.16, .5 + crest + (k - flutes / 2) * .009));
     const shade = g.createLinearGradient(x, 0, x + FLUTE, 0);
-    shade.addColorStop(0, 'rgba(35,66,54,.36)');
+    shade.addColorStop(0, 'rgba(30,60,48,.39)');
     shade.addColorStop(.15, 'rgba(35,66,54,.07)');
     shade.addColorStop(p - .13, 'rgba(255,255,242,0)');
-    shade.addColorStop(p, 'rgba(255,255,242,.72)');
-    shade.addColorStop(p + .075, 'rgba(255,255,242,.04)');
-    shade.addColorStop(.87, 'rgba(59,83,68,.08)');
-    shade.addColorStop(1, 'rgba(35,66,54,.27)');
+    shade.addColorStop(p, 'rgba(255,255,244,.75)');
+    shade.addColorStop(p + .07, 'rgba(255,255,242,.04)');
+    shade.addColorStop(.86, 'rgba(235,246,226,.14)');
+    shade.addColorStop(1, 'rgba(30,60,48,.30)');
     g.fillStyle = shade;
     g.fillRect(x, 0, FLUTE, 1.7);
   }
-  // A broad window reflection rides over the reeds.
+  // A broad window reflection and transom bar ride over the reeds.
   const sheen = g.createLinearGradient(-.3 + sway, .1, 1.3 + sway, .9);
-  sheen.addColorStop(.2, 'rgba(255,255,252,0)');
-  sheen.addColorStop(.36, 'rgba(255,255,252,.24)');
+  sheen.addColorStop(.19, 'rgba(255,255,252,0)');
+  sheen.addColorStop(.35, 'rgba(255,255,252,.25)');
   sheen.addColorStop(.44, 'rgba(255,255,252,.05)');
   sheen.addColorStop(.52, 'rgba(255,255,252,0)');
+  sheen.addColorStop(.68, 'rgba(255,255,252,0)');
+  sheen.addColorStop(.74, 'rgba(255,255,250,.11)');
+  sheen.addColorStop(.81, 'rgba(255,255,252,0)');
   g.fillStyle = sheen;
   g.fillRect(0, 0, 1.21, 1.7);
   g.globalCompositeOperation = 'destination-in';

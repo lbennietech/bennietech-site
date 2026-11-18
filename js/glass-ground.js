@@ -49,18 +49,18 @@ export function makeGround(plates, flute) {
     ink.clip(plate);
     ink.fillStyle = transmission;
     ink.fillRect(0, 0, 1.21, 1.7);
-    ink.strokeStyle = 'rgba(89,119,90,.26)';
+    ink.strokeStyle = 'rgba(84,115,86,.28)';
     ink.lineWidth = .048;
     ink.stroke(plate);
-    ink.strokeStyle = 'rgba(255,253,217,.86)';
-    ink.lineWidth = .023;
+    ink.strokeStyle = 'rgba(255,253,217,.90)';
+    ink.lineWidth = .024;
     ink.stroke(plate);
     // Each channel focuses to a tapered line. The far ends fan out as the
     // transmitted light travels away from the glass.
     const light = ink.createLinearGradient(0, 0, 0, 1.69);
-    light.addColorStop(0, 'rgba(255,253,218,.18)');
-    light.addColorStop(.37, 'rgba(255,255,225,.89)');
-    light.addColorStop(.68, 'rgba(232,246,172,.58)');
+    light.addColorStop(0, 'rgba(255,253,218,.20)');
+    light.addColorStop(.37, 'rgba(255,255,226,.93)');
+    light.addColorStop(.68, 'rgba(230,245,168,.62)');
     light.addColorStop(1, 'rgba(249,251,210,0)');
     ink.fillStyle = light;
     for (let x = 0; x < 1.21; x += flute) {
@@ -72,26 +72,40 @@ export function makeGround(plates, flute) {
     }
     ink.restore();
   }
+  // The lime filament inside the diagonal cut projects a warm lime caustic bar between the two cast halves.
+  ink.save();
+  ink.beginPath();
+  ink.moveTo(.10, .98 - .27875 * .10);
+  ink.lineTo(1.06, .98 - .27875 * 1.06);
+  ink.lineCap = 'round';
+  ink.strokeStyle = 'rgba(186,225,68,.34)';
+  ink.lineWidth = .095;
+  ink.stroke();
+  ink.strokeStyle = 'rgba(238,252,179,.62)';
+  ink.lineWidth = .032;
+  ink.stroke();
+  ink.restore();
+
   g.save();
   g.transform(.94, .016, -.54, .137, .45, -.159);
-  g.globalAlpha = .72;
+  g.globalAlpha = .74;
   g.filter = 'blur(5.5px)';
   g.drawImage(print, -.02, -.02, print.width / scale, print.height / scale);
   // Only a patch of the paper lies at the focal distance of the reeds.
   // Let the ends of the cast fall back into the wider penumbra.
   const focus = ink.createRadialGradient(.57, .81, .15, .57, .81, 1.02);
   focus.addColorStop(0, '#fff');
-  focus.addColorStop(.5, 'rgba(255,255,255,.76)');
+  focus.addColorStop(.5, 'rgba(255,255,255,.78)');
   focus.addColorStop(1, 'rgba(255,255,255,0)');
   ink.globalCompositeOperation = 'destination-in';
   ink.fillStyle = focus;
   ink.fillRect(-.02, -.02, print.width / scale, print.height / scale);
-  g.globalAlpha = .75;
+  g.globalAlpha = .78;
   g.filter = 'blur(1px)';
   g.drawImage(print, -.02, -.02, print.width / scale, print.height / scale);
   g.restore();
   pool(.39, .013, .47, .037, -.085, [
-    [0, 'rgba(251,251,205,.60)'], [.48, 'rgba(229,241,167,.29)'], [1, 'rgba(220,232,157,0)'],
+    [0, 'rgba(251,252,204,.64)'], [.48, 'rgba(227,241,162,.31)'], [1, 'rgba(220,232,157,0)'],
   ]);
   return ground;
 }

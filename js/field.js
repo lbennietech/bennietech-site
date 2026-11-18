@@ -138,21 +138,24 @@ void main() {
     // so the glass B drifts out from behind the liquid and returns.
     float rise = min(smoothstep(hold - .08, hold + .56, age), 1. - smoothstep(end - .35, end, age));
     vec4 glass = heldGlass(sample_ + size * vec2(-.13, .46) * rise);
-    // Print the optically dense edges in silver. Untouched paper carries
-    // only a low carrier signal, leaving black around the liquid.
+    // Print the optically dense edges in silver and preserve the lime kerf core.
     float ink = 1. - dot(glass.rgb, vec3(.27, .64, .09));
+    float limeSignal = clamp((glass.g - max(glass.r * .82, glass.b * 1.45)) * 2.8, 0., 1.);
     float carrier = .035 + .12 * level;
-    level = mix(carrier, .34 + .64 * ink, glass.a) * quiet(centre);
-    colour = mix(vec3(.26, .30, .26), vec3(.72, .79, .70), glass.a);
+    level = mix(carrier, .34 + .64 * max(ink, limeSignal * .85), glass.a) * quiet(centre);
+    vec3 silver = mix(vec3(.26, .30, .26), vec3(.74, .81, .72), glass.a);
+    colour = mix(silver, vec3(.72, .92, .25), limeSignal * .75);
   } else {
     float grey = smoothstep(.05, .9, level);
-    colour = mix(vec3(.25, .28, .25), vec3(.77, .83, .75), grey);
-    colour = mix(colour, vec3(.65, .84, .22) * (.64 + .49 * grey), tint * .86);
+    colour = mix(vec3(.25, .28, .25), vec3(.78, .84, .76), grey);
+    colour = mix(colour, vec3(.66, .86, .22) * (.65 + .50 * grey), tint * .88);
   }
   if (block > 1.) level = floor(level * 4. + .5) / 4.;
 
-  // Unlit cells still show faintly, like the panel of a switched-off display.
-  gl_FragColor = vec4(level > threshold ? colour : vec3(.045, .048, .042), 1.);
+  // Subtle phosphor curvature across each lit square cell, and a dark unlit matrix.
+  vec2 dotUV = (local - inset + .5) / max(lit, 1.) * 2. - 1.;
+  float phosphor = 1.07 - .14 * dot(dotUV, dotUV);
+  gl_FragColor = vec4(level > threshold ? colour * phosphor : vec3(.042, .045, .039), 1.);
 }
 `;
 

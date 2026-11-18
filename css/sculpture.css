@@ -31,3 +31,8 @@ main::after {
   position: absolute; left: 50%; bottom: max(6.4%, env(safe-area-inset-bottom));
   transform: translateX(-50%); width: clamp(96px, 8.3vw, 136px);
 }
+
+@media (prefers-reduced-motion: no-preference) {
+  main.negative { filter: invert(1); }
+  main.negative .silk { visibility: hidden; }
+}

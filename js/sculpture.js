@@ -39,45 +39,156 @@ function cut(intercept, sign) {
 }
 const plates = [cut(.9125, -1), cut(1.0475, 1)];
 
-// An eccentric rose engine scored into each face. The two tool centres register
-// differently across the cut, like sections taken from a larger engraved plate.
-function engraving(cx, cy, phase) {
-  const lines = new Path2D();
-  for (let ring = 1; ring < 191; ring++) {
-    const radius = ring * .012;
-    for (let i = 0; i <= 166; i++) {
-      const a = TAU * i / 166;
-      const r = radius * (1 + .09 * Math.sin(3 * a + radius * 3 + phase)
-        + .021 * Math.sin(9 * a - radius * 5));
-      const x = cx + Math.cos(a) * r * 1.32;
-      const y = cy + Math.sin(a) * r * .68;
-      if (i === 0) lines.moveTo(x, y);
-      else lines.lineTo(x, y);
-    }
-    lines.closePath();
-  }
-  return lines;
-}
+// The calm state is a block of reeded soda-lime glass. A lime filament in the
+// kerf lights both halves through their cut edges, and vertical flutes slice
+// that light, and everything behind the face, into stepped slivers.
+const FLUTE = .046;
+const DENSITY = 360;
+const PAD = .5, PAD_Y = .06;
+const KERF = .98;
+const normal = [.27875, 1].map(v => v / Math.hypot(.27875, 1));
+const lime = alpha => `rgba(176,221,52,${alpha})`;
 
-// Rasterise the fixed engraving once. Its metallic reflection is drawn live.
-const faces = plates.map((plate, i) => {
+// The filament runs along the kerf centre, inset from the B's contour.
+const rightEdge = y => Math.max(edge(upper, y), edge(lower, y));
+let filamentEnd = .05;
+while (filamentEnd < 1.3 && filamentEnd < rightEdge(KERF - .27875 * filamentEnd) - .1) filamentEnd += .001;
+const filament = new Path2D();
+filament.moveTo(.09, KERF - .27875 * .09);
+filament.lineTo(filamentEnd, KERF - .27875 * filamentEnd);
+
+// What the reeds see: pale glass over paper, a green rim of trapped light,
+// the ghost of the back contour, and the glow entering from the kerf.
+const behind = plates.map((plate, part) => {
   const tile = document.createElement('canvas');
-  const density = 780;
-  tile.width = Math.ceil(1.21 * density);
-  tile.height = Math.ceil(1.7 * density);
-  const ctx = tile.getContext('2d');
-  ctx.scale(density, density);
-  ctx.clip(plate);
-  const lines = engraving(i ? .99 : .19, i ? 1.48 : .22, i * 1.7);
-  ctx.strokeStyle = 'rgba(0, 8, 10, .48)';
-  ctx.lineWidth = .003;
-  ctx.stroke(lines);
-  ctx.translate(0, -.0024);
-  ctx.strokeStyle = 'rgba(255, 250, 220, .43)';
-  ctx.lineWidth = .0015;
-  ctx.stroke(lines);
+  tile.width = Math.ceil((1.21 + PAD * 2) * DENSITY);
+  tile.height = Math.ceil((1.7 + PAD_Y * 2) * DENSITY);
+  const g = tile.getContext('2d');
+  g.scale(DENSITY, DENSITY);
+  g.translate(PAD, PAD_Y);
+  const wide = [-PAD, -PAD_Y, 1.21 + PAD * 2, 1.7 + PAD_Y * 2];
+
+  const base = g.createLinearGradient(-.2, -.1, 1.3, 1.8);
+  base.addColorStop(0, '#f3f4ec');
+  base.addColorStop(.55, '#e2e6da');
+  base.addColorStop(1, '#d3d9cc');
+  g.fillStyle = base;
+  g.fillRect(...wide);
+
+  // Soft diagonal reflections. The flutes break them into steps.
+  const streaks = g.createLinearGradient(-.3, 1.9, 1.5, -.2);
+  [[0, 0], [.16, .42], [.25, 0], [.43, -.12], [.55, 0], [.7, .34], [.78, 0], [.9, -.08], [1, 0]]
+    .forEach(([at, a]) => streaks.addColorStop(at, a >= 0 ? `rgba(255,255,250,${a})` : `rgba(58,72,54,${-a})`));
+  g.fillStyle = streaks;
+  g.fillRect(...wide);
+
+  // Light carried along inside the glass from the kerf.
+  const towards = part ? 1 : -1;
+  const cut = part ? 1.0475 : .9125;
+  const x0 = .5, y0 = cut - .27875 * x0;
+  const glow = g.createLinearGradient(x0, y0, x0 + towards * normal[0] * .5, y0 + towards * normal[1] * .5);
+  glow.addColorStop(0, lime(.72));
+  glow.addColorStop(.05, lime(.4));
+  glow.addColorStop(.2, lime(.14));
+  glow.addColorStop(.55, lime(.03));
+  glow.addColorStop(1, lime(0));
+  g.fillStyle = glow;
+  g.fillRect(...wide);
+
+  // Reflections of the filament repeat deeper inside the block.
+  g.save();
+  g.clip(plate);
+  [[.075, .62], [.19, .4], [.33, .24], [.5, .12]].forEach(([depth, alpha]) => {
+    const reach = towards * (.065 + depth);
+    g.save();
+    g.translate(normal[0] * reach, normal[1] * reach);
+    g.lineWidth = .008;
+    g.strokeStyle = lime(alpha);
+    g.stroke(filament);
+    g.lineWidth = .026;
+    g.strokeStyle = lime(alpha * .25);
+    g.stroke(filament);
+    g.restore();
+  });
+  g.restore();
+
+  // Trapped light darkens and greens the glass toward its edges.
+  g.save();
+  g.clip(plate);
+  for (let k = 0; k < 8; k++) {
+    g.lineWidth = .03 + k * .03;
+    g.strokeStyle = 'rgba(58,84,60,.065)';
+    g.stroke(plate);
+  }
+  g.restore();
+
+  // The back contour, seen through the block.
+  g.save();
+  g.translate(-.06, .032);
+  g.lineWidth = .009;
+  g.strokeStyle = 'rgba(50,68,50,.34)';
+  g.stroke(plate);
+  g.translate(.008, -.005);
+  g.lineWidth = .005;
+  g.strokeStyle = 'rgba(255,255,246,.6)';
+  g.stroke(plate);
+  g.restore();
+
+  // The filament itself, reachable only through the flutes beside the kerf.
+  for (const [width, alpha] of [[.07, .14], [.034, .3], [.014, 1]]) {
+    g.lineWidth = width;
+    g.strokeStyle = width < .02 ? '#c9ef5c' : lime(alpha);
+    g.stroke(filament);
+  }
   return tile;
 });
+
+// The reeds are composed flat, off screen, then laid onto the turned face
+// in one draw. The plate's own silhouette trims the composition.
+const faceCanvases = plates.map(() => document.createElement('canvas'));
+function reededFace(plate, part, sway, density) {
+  const face = faceCanvases[part];
+  const fw = Math.ceil(1.21 * density), fh = Math.ceil(1.7 * density);
+  if (face.width !== fw || face.height !== fh) { face.width = fw; face.height = fh; }
+  const g = face.getContext('2d');
+  g.setTransform(density, 0, 0, density, 0, 0);
+  g.globalCompositeOperation = 'source-over';
+  const tile = behind[part];
+  const flutes = Math.ceil(1.21 / FLUTE);
+  const refract = sway * .62;
+  const crest = sway * 2.1;
+  for (let k = 0; k < flutes; k++) {
+    const x = k * FLUTE;
+    // Each reed compresses a wider strip of the scene behind it.
+    const seen = FLUTE * 2.4;
+    const centre = x + FLUTE / 2 + refract + .011 * Math.sin(k * 2.31 + part);
+    g.drawImage(tile, (centre - seen / 2 + PAD) * DENSITY, PAD_Y * DENSITY, seen * DENSITY, 1.7 * DENSITY,
+      x, 0, FLUTE + .0008, 1.7);
+    const p = Math.min(.84, Math.max(.16, .5 + crest + (k - flutes / 2) * .009));
+    const shade = g.createLinearGradient(x, 0, x + FLUTE, 0);
+    shade.addColorStop(0, 'rgba(34,46,34,.24)');
+    shade.addColorStop(.1, 'rgba(34,46,34,0)');
+    shade.addColorStop(p - .1, 'rgba(255,255,248,0)');
+    shade.addColorStop(p, 'rgba(255,255,248,.66)');
+    shade.addColorStop(p + .06, 'rgba(255,255,248,0)');
+    shade.addColorStop(.9, 'rgba(34,46,34,0)');
+    shade.addColorStop(1, 'rgba(34,46,34,.17)');
+    g.fillStyle = shade;
+    g.fillRect(x, 0, FLUTE, 1.7);
+  }
+  // A broad window reflection rides over the reeds.
+  const sheen = g.createLinearGradient(-.3 + sway, .1, 1.3 + sway, .9);
+  sheen.addColorStop(.2, 'rgba(255,255,252,0)');
+  sheen.addColorStop(.36, 'rgba(255,255,252,.24)');
+  sheen.addColorStop(.44, 'rgba(255,255,252,.05)');
+  sheen.addColorStop(.52, 'rgba(255,255,252,0)');
+  g.fillStyle = sheen;
+  g.fillRect(0, 0, 1.21, 1.7);
+  g.globalCompositeOperation = 'destination-in';
+  g.fillStyle = '#000';
+  g.fill(plate);
+  ctx.drawImage(face, 0, 0, fw / density, fh / density);
+}
 
 const canvas = document.querySelector('.exhibit canvas');
 const ctx = canvas.getContext('2d');
@@ -134,60 +245,80 @@ function draw() {
     if (age < .52 || (age > 2.5 && age < 2.62)) displaceStrip(ctx, canvas, w, h, age);
     return;
   }
+  const sway = yaw + .46;
   if (age < 0) {
     ctx.save();
     ctx.translate(w * .5 + size * .06, centre + size * 1.02);
     ctx.scale(size * .88, size * .102);
     const shadow = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
-    shadow.addColorStop(0, 'rgba(38,32,23,.21)');
-    shadow.addColorStop(.47, 'rgba(48,42,32,.095)');
-    shadow.addColorStop(1, 'rgba(52,44,34,0)');
+    shadow.addColorStop(0, 'rgba(44,52,40,.15)');
+    shadow.addColorStop(.5, 'rgba(48,56,44,.07)');
+    shadow.addColorStop(1, 'rgba(52,58,46,0)');
     ctx.fillStyle = shadow;
+    ctx.fillRect(-1, -1, 2, 2);
+    // Light focused through the block, tinted by the filament.
+    const focus = .08 - sway * 1.3;
+    const caustic = ctx.createRadialGradient(focus, -.12, 0, focus, -.12, .42);
+    caustic.addColorStop(0, 'rgba(236,250,176,.7)');
+    caustic.addColorStop(.35, 'rgba(214,238,140,.28)');
+    caustic.addColorStop(1, 'rgba(214,238,140,0)');
+    ctx.fillStyle = caustic;
     ctx.fillRect(-1, -1, 2, 2);
     ctx.restore();
   }
 
   const glint = .10 * Math.sin(time * .35) + pointer.x * .14;
   function plane(z, part) {
-    const shift = (part ? 1 : -1) * (.008 + .012 * Math.sin(time * .38));
+    const shift = (part * 2 - 1) * (.008 + .012 * Math.sin(time * .38));
     const x = -.56 * ax + (-.845 + lift + shift) * bx + z * zx;
     const y = -.56 * ay + (-.845 + lift + shift) * by + z * zy;
     ctx.setTransform(ax * size * pixelRatio, ay * size * pixelRatio,
       bx * size * pixelRatio, by * size * pixelRatio,
       (w / 2 + x * size) * pixelRatio, (centre + y * size) * pixelRatio);
   }
+  // The polished sides look along the glass, so they carry its green.
+  const side = () => metal(-.12 + glint, .05, 1.52, .48, [
+    [0, '#2b4233'], [.11, '#6c8b70'], [.18, '#e4f1df'], [.22, '#7c9a7f'],
+    [.4, '#38533f'], [.58, '#9cb998'], [.645, '#f3f9ec'], [.69, '#86a585'],
+    [.84, '#30493a'], [1, '#7f9c80']
+  ]);
+  // Only the rim of each layer can show past the face in front of it, so the
+  // block's sides are built from overlapping outline strokes, not fills.
+  ctx.lineJoin = 'round';
   for (let layer = 0; layer < 33; layer++) {
     const z = (layer - 16) * .017;
     plates.forEach((plate, part) => {
-      plane(z, part);
-      const side = metal(-.12 + glint, .05, 1.52, .48, [
-        [0, '#262a2b'], [.16, '#bbbcb4'], [.29, '#353837'], [.49, '#656761'],
-        [.65, '#e7dbca'], [.73, '#937862'], [.83, '#363a39'], [1, '#b0b3aa']
-      ]);
-      ctx.fillStyle = side;
-      ctx.fill(plate);
-      ctx.strokeStyle = '#272a28';
-      ctx.lineWidth = .0034;
+      plane(z + .004, part);
+      ctx.strokeStyle = side();
+      ctx.lineWidth = .024;
       ctx.stroke(plate);
-      plane(z + .0075, part);
-      ctx.fillStyle = layer === 16 ? '#bb7549' : '#696b64';
-      ctx.fill(plate);
-      ctx.lineWidth = .0024;
-      ctx.strokeStyle = layer === 16 ? '#e8ad78' : '#d5d3c5';
-      ctx.stroke(plate);
+      if (layer === 0) {
+        ctx.lineWidth = .004;
+        ctx.strokeStyle = 'rgba(232,240,220,.7)';
+        ctx.stroke(plate);
+      }
       if (layer !== 32) return;
-
-      const offset = glint + part * .09;
-      ctx.fillStyle = metal(-.19 + offset, .19, 1.32, .65, [
-        [0, '#363c3c'], [.19, '#555e5c'], [.34, '#9ba39b'], [.43, '#cdd0c4'],
-        [.56, '#838b85'], [.72, '#424b4b'], [.83, '#505957'], [1, '#abb0a4']
-      ]);
-      ctx.fill(plate);
-      ctx.drawImage(faces[part], 0, 0, faces[part].width / 780, faces[part].height / 780);
-      ctx.strokeStyle = metal(0, 0, 1, 1, [[0, '#f5f0da'], [.46, '#dcded0'], [.66, '#5d655f'], [1, '#f3e9d6']]);
-      ctx.lineWidth = .005;
+      plane(z + .0085, part);
+      reededFace(plate, part, sway, Math.min(size * pixelRatio, 760));
+      ctx.lineWidth = .006;
+      ctx.strokeStyle = metal(0, 0, 1, 1, [[0, '#fbfdf4'], [.46, '#e4ecda'], [.66, '#7f9a80'], [1, '#f6faee']]);
       ctx.stroke(plate);
     });
+    // The filament is a thin lit bar through the middle of the block.
+    if (layer >= 7 && layer <= 25) {
+      plane(z + .0085, .5);
+      ctx.lineCap = 'round';
+      ctx.lineWidth = .012;
+      ctx.strokeStyle = '#b4dc3c';
+      ctx.stroke(filament);
+      if (layer === 25) {
+        for (const [width, tint] of [[.06, lime(.07)], [.03, lime(.16)], [.006, '#f6ffd6']]) {
+          ctx.lineWidth = width;
+          ctx.strokeStyle = tint;
+          ctx.stroke(filament);
+        }
+      }
+    }
   }
 }
 

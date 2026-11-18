@@ -28,5 +28,7 @@ main::after {
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  main.negative { filter: invert(1); }
+  main.negative { background: #000; }
+  main.negative::after { content: none; }
+  main.negative .exhibit, main.negative .signature { filter: invert(1); }
 }

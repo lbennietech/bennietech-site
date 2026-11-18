@@ -8,7 +8,7 @@ Run `node server.js` and open http://localhost:8080. The site uses static HTML, 
 
 ## Artwork
 
-The geometry, projection, lighting and pointer response live in `js/sculpture.js`. The normal scene uses a warm-white paper texture. During a negative exposure, `js/negative.js` draws moving filaments in the margins and briefly displaces a horizontal strip of the mark. The stage and signature are styled in `css/sculpture.css`. The original vector artwork is in `assets/logo/`. Reduced-motion visitors see a still composition. A static B is visible before rendering and when JavaScript is unavailable.
+The geometry, projection, lighting and pointer response live in `js/sculpture.js`. The normal scene uses a warm-white paper texture. During a negative exposure, `js/negative.js` briefly displaces a horizontal strip of the inverted mark against solid black. The stage and signature are styled in `css/sculpture.css`. The original vector artwork is in `assets/logo/`. Reduced-motion visitors see a still composition. A static B is visible before rendering and when JavaScript is unavailable.
 
 ## Publish
 

@@ -1,4 +1,4 @@
-import { drawMembrane, displaceStrip } from './negative.js';
+import { displaceStrip } from './negative.js';
 
 // The two radii, baseline and diagonal kerf come from the production B mark.
 // Cut the original silhouette first so every metal lamination shares its profile.
@@ -109,7 +109,6 @@ function draw() {
   ctx.clearRect(0, 0, w, h);
   const age = exposureAge();
   stage.classList.toggle('negative', age >= 0);
-  if (age >= 0) drawMembrane(ctx, w, h, age);
   const size = Math.min(h * .31, w * .445);
   const yaw = -.46 + Math.sin(time * .30) * .055 + pointer.x * .18;
   const pitch = -.16 + Math.cos(time * .23) * .033 - pointer.y * .09;
@@ -123,16 +122,18 @@ function draw() {
   const lift = Math.sin(time * .56) * .012;
   const centre = h * .45;
 
-  ctx.save();
-  ctx.translate(w * .5 + size * .06, centre + size * 1.02);
-  ctx.scale(size * .88, size * .102);
-  const shadow = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
-  shadow.addColorStop(0, 'rgba(38,32,23,.21)');
-  shadow.addColorStop(.47, 'rgba(48,42,32,.095)');
-  shadow.addColorStop(1, 'rgba(52,44,34,0)');
-  ctx.fillStyle = shadow;
-  ctx.fillRect(-1, -1, 2, 2);
-  ctx.restore();
+  if (age < 0) {
+    ctx.save();
+    ctx.translate(w * .5 + size * .06, centre + size * 1.02);
+    ctx.scale(size * .88, size * .102);
+    const shadow = ctx.createRadialGradient(0, 0, 0, 0, 0, 1);
+    shadow.addColorStop(0, 'rgba(38,32,23,.21)');
+    shadow.addColorStop(.47, 'rgba(48,42,32,.095)');
+    shadow.addColorStop(1, 'rgba(52,44,34,0)');
+    ctx.fillStyle = shadow;
+    ctx.fillRect(-1, -1, 2, 2);
+    ctx.restore();
+  }
 
   const glint = .10 * Math.sin(time * .35) + pointer.x * .14;
   function plane(z, part) {

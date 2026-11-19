@@ -3,9 +3,9 @@
 import { createRenderer, GLSL } from './gl/gl.js';
 
 const fragment = GLSL.head + GLSL.tone + `
-uniform vec2 resolution;
+uniform vec2 resolution, focus;
 uniform vec3 rightAxis, downAxis, tear;
-uniform float age, lift, separation;
+uniform float age, lift, separation, pulse;
 const vec3 centre = vec3(.56,.845,0.);
 const vec3 lime = vec3(.54,.94,.035);
 
@@ -36,7 +36,7 @@ float drop(vec3 p,vec3 root,float radius,float reach,float speed,float release) 
   float t=mod(age,4.);
   float phase=t*1.5707963+root.x*7.+speed;
   float growth=mix(.76+.22*sin(phase),.60+.40*(smoothstep(0.,1.94,t)-smoothstep(2.22,3.85,t)),release);
-  float extension=reach*growth;
+  float extension=reach*growth*(1.+.08*pulse);
   float pinch=release*(smoothstep(1.37,2.01,t)-smoothstep(2.19,3.68,t));
   float latitude=clamp(q.y/extension,0.,1.);
   q.xz-=downAxis.xz*q.y/downAxis.y
@@ -98,8 +98,13 @@ vec3 shade(vec3 p,vec3 view) {
   vec3 n=normal(p);
   // Shallow surface ripples bend the softboxes across the face. They live
   // in object space, so the highlights turn with the surface under the mouse.
+  // When touched or pulsed, concentric capillary waves travel through the film.
   float ripple=sin(p.y*10.4-p.x*3.4-.34*sin(age*1.5707963)+sin(p.x*9.));
-  n=normalize(n+n.z*vec3(.018*cos(p.x*31.+ripple),.016*ripple,0.));
+  vec2 df=p.xy-focus;
+  float rDist=length(df);
+  float capillary=sin(rDist*42.-age*11.)*exp(-rDist*3.2)*pulse;
+  vec2 cDir=df/max(rDist,.001);
+  n=normalize(n+n.z*vec3(.018*cos(p.x*31.+ripple)+.038*cDir.x*capillary,.016*ripple+.038*cDir.y*capillary,0.));
   vec3 r=reflect(-view,n);
   vec3 reflected=vec3(dot(r,rightAxis),dot(r,downAxis),dot(r,view));
   vec3 room=vec3(.095,.10,.115)*(1.22-.74*reflected.y);
@@ -117,10 +122,10 @@ vec3 shade(vec3 p,vec3 view) {
   float fresnel=.042+(.958-.19*smoothstep(1.64,1.85,p.y))*pow(1.-ndv,4.8);
   vec3 col=vec3(.0024,.0026,.0032)+room*fresnel;
   float gap=emitter(p);
-  float lit=exp(-max(gap,0.)*14.5);
+  float lit=exp(-max(gap,0.)*(14.5-3.2*pulse));
   float cutFacing=max(0.,-sign(p.y+.27875*p.x-.98)*n.y);
-  col+=lime*lit*(.065+.68*cutFacing+.28*pow(1.-ndv,3.)*cutFacing);
-  col+=lime*exp(-max(gap,0.)*24.)*panel(reflected,vec3(.05,.65,.35),vec2(1.1,.18),.19);
+  col+=lime*lit*(1.+.45*pulse)*(.065+.68*cutFacing+.28*pow(1.-ndv,3.)*cutFacing);
+  col+=lime*exp(-max(gap,0.)*24.)*(1.+.5*pulse)*panel(reflected,vec3(.05,.65,.35),vec2(1.1,.18),.19);
   return col;
 }
 void main() {
@@ -157,16 +162,16 @@ void main() {
     // The released bead falls out of the pool of studio light before
     // reaching the signature. Its silhouette and reflection recede together.
     coverage=1.-smoothstep(2.095,2.275,hitP.y);
-    col=hitCore ? vec3(1.85,2.95,.22) : shade(hitP,view);
+    col=hitCore ? vec3(1.85,2.95,.22)*(1.+.25*pulse) : shade(hitP,view);
   }
-  vec3 bloom=lime*(.33*exp(-max(nearestCore,0.)*52.)+.050*exp(-max(nearestCore,0.)*19.));
+  vec3 bloom=lime*(1.+.38*pulse)*(.33*exp(-max(nearestCore,0.)*52.)+.050*exp(-max(nearestCore,0.)*19.));
   vec3 rgb=toSRGB(aces(col+bloom));
   vec4 back=hit ? vec4(rgb*coverage,coverage) : vec4(rgb,0.);
   back.a=max(back.a,max(back.r,max(back.g,back.b)));
   if(edgeD<edge) {
     vec3 q=ro+rd*edgeT;
     float oil=surface(q), core=emitter(q);
-    vec3 rim=toSRGB(aces((core<oil ? vec3(1.85,2.95,.22) : shade(q,view))+bloom));
+    vec3 rim=toSRGB(aces((core<oil ? vec3(1.85,2.95,.22)*(1.+.25*pulse) : shade(q,view))+bloom));
     float g=(1.-smoothstep(pixel*.2,edge,edgeD))*(1.-smoothstep(2.095,2.275,q.y));
     back=vec4(rim,1.)*g+back*(1.-g);
   }
@@ -198,9 +203,9 @@ export function createOilVolume(hardwareOnly = false, stage) {
   // Drivers often finish compiling on the first real draw. One pixel now
   // keeps that cost out of the first glitch.
   image.width = image.height = 1;
-  renderer.draw({ resolution: [1, 1], rightAxis: [1, 0, 0], downAxis: [0, 1, 0], age: 0, lift: 0, separation: .01 });
+  renderer.draw({ resolution: [1, 1], rightAxis: [1, 0, 0], downAxis: [0, 1, 0], age: 0, lift: 0, separation: .01, pulse: 0, focus: [.56, .845] });
   let lastSize = 0, lastCentre = 0;
-  return function render(ctx, { w, h, size, centre = h * .45, pixelRatio, detail = 1, right, down, age, lift, separation, strip }) {
+  return function render(ctx, { w, h, size, centre = h * .45, pixelRatio, detail = 1, right, down, age, lift, separation, strip, pulse = 0, focus = [.56, .845] }) {
     if (renderer.gl.isContextLost()) return false;
     const width = size * 2.20, height = size * 2.85;
     // Edges are resolved analytically in the shader, so no supersampling.
@@ -218,7 +223,7 @@ export function createOilVolume(hardwareOnly = false, stage) {
       lastCentre = centre;
     }
     const tear = strip ? [(strip.y - centre) / size, (strip.y + strip.height - centre) / size, strip.shift / size] : [0, 0, 0];
-    renderer.draw({ resolution: [rw, rh], rightAxis: right, downAxis: down, age, lift, separation, tear });
+    renderer.draw({ resolution: [rw, rh], rightAxis: right, downAxis: down, age, lift, separation, tear, pulse, focus });
     // Offscreen callers can still take a frame. In the exhibit the GPU
     // presents its own layer directly, including the displaced scan strip.
     if (!stage) ctx.drawImage(image, (w - width) / 2, top, width, height);

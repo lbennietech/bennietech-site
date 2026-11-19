@@ -3,6 +3,7 @@ import { createGlass } from './glass.js';
 import { makeGround } from './glass-ground.js';
 import { prepareOil } from './oil-volume.js';
 import { exposureStrip } from './negative.js';
+import { insideCut } from './inside-cut.js';
 
 // The two radii, baseline and diagonal kerf come from the production B mark.
 // Both glass halves and their projected light share this exact silhouette.
@@ -226,8 +227,8 @@ const canvas = document.querySelector('.exhibit canvas');
 const ctx = canvas.getContext('2d');
 const stage = canvas.closest('main');
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
-const pointer = { x: 0, y: 0, tx: 0, ty: 0, vx: 0, vy: 0 };
-let w, h, size, centre, pixelRatio, time = 0, last = 0, frame = 0;
+const pointer = { x: 0, y: 0, tx: 0, ty: 0, vx: 0, vy: 0, press: 0, tPress: 0, vPress: 0, pulse: 0 };
+let w, h, size, centre, pixelRatio, time = 0, last = 0, frame = 0, lastTap = -1;
 
 const field = createField(canvas);
 const glass = createGlass(canvas, {
@@ -248,6 +249,13 @@ function turn(ax, ay, bx, by, zx, zy) {
   return [[ax, bx, zx], [ay, by, zy], depth.map(v => v * sign)];
 }
 
+function cameraRows(yaw, pitch, tilt) {
+  const c = Math.cos(tilt), s = Math.sin(tilt);
+  const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+  return turn(c * cy - s * sy * sp, s * cy + c * sy * sp, -s * cp, c * cp,
+    c * sy + s * cy * sp, s * sy - c * cy * sp);
+}
+
 // Every place the B can reach as it sways, lifts and follows the pointer.
 function groundCard(sway, lift) {
   const stretch = Math.min(1, w / (size * 3.4)) * (1 + sway * .37);
@@ -258,7 +266,7 @@ function groundCard(sway, lift) {
 function reachOf() {
   const box = [Infinity, Infinity, -Infinity, -Infinity];
   const steps = n => Array.from({ length: n }, (_, i) => i / (n - 1) * 2 - 1);
-  for (const y of steps(5)) for (const p of steps(5)) for (const t of [-1, 1]) for (const offset of [-.032, .032]) {
+  for (const y of steps(5)) for (const p of steps(5)) for (const t of [-1, 1]) for (const offset of [-.038, .038]) {
     const yaw = -.46 + y * .235, pitch = -.16 + p * .123, tilt = -.115 + t * .018;
     const c = Math.cos(tilt), s = Math.sin(tilt);
     const ax = c * Math.cos(yaw) - s * Math.sin(yaw) * Math.sin(pitch);
@@ -348,6 +356,7 @@ function reflectedWalls(glint) {
   return wallRamps;
 }
 
+let exteriorPose;
 function draw() {
   const age = exposureAge();
   // The held print can come straight from the last presented glass frame.
@@ -368,13 +377,12 @@ function draw() {
   const yaw = -.46 + Math.sin(time * .30) * .055 + pointer.x * .18;
   const pitch = -.16 + Math.cos(time * .23) * .033 - pointer.y * .09;
   const tilt = -.115 + Math.sin(time * .22) * .018;
-  const c = Math.cos(tilt), s = Math.sin(tilt);
-  const ax = c * Math.cos(yaw) - s * Math.sin(yaw) * Math.sin(pitch);
-  const ay = s * Math.cos(yaw) + c * Math.sin(yaw) * Math.sin(pitch);
-  const bx = -s * Math.cos(pitch), by = c * Math.cos(pitch);
-  const zx = c * Math.sin(yaw) + s * Math.cos(yaw) * Math.sin(pitch);
-  const zy = s * Math.sin(yaw) - c * Math.cos(yaw) * Math.sin(pitch);
+  const rows = cameraRows(yaw, pitch, tilt);
+  const [[ax, bx, zx], [ay, by, zy]] = rows;
   const lift = Math.sin(time * .56) * .012;
+  const speed = Math.min(1, Math.hypot(pointer.vx, pointer.vy) * .18);
+  const pulse = Math.min(1, Math.max(pointer.press * .65, pointer.pulse) + speed * .28);
+  const focus = [.56 + pointer.x * .48, .845 + pointer.y * .62];
 
   glitchShown = false;
   if (age >= 0 && field) {
@@ -386,13 +394,15 @@ function draw() {
       origin: [w / 2 + size * bx * (lift - .0211), centre + size * by * (lift - .0211)],
       dir: [along[0] / length, along[1] / length],
       pointer: [(pointer.x + 1) * w / 2, (pointer.y + 1) * h / 2],
+      pulse,
     });
   }
-  const spread = .008 + .012 * Math.sin(time * .38);
+  const spread = .008 + .012 * Math.sin(time * .38) + pointer.press * .0055;
   if (age >= 0) {
     const drawn = oilVolume?.(ctx, {
       w, h, size, centre, pixelRatio, detail: oilDetail, right: [ax, bx, zx], down: [ay, by, zy],
       age: age + exposure.phase, lift, separation: spread, strip: exposureStrip(age, exposure, w, h),
+      pulse, focus,
     });
     if (drawn) {
       glitchShown = drawn === 'layer';
@@ -405,13 +415,17 @@ function draw() {
   const ground = groundCard(sway, lift);
   // The GPU layer hides during a glitch, so a glitch without its liquid B
   // falls back to drawing the glass here.
-  if (age < 0 && glass?.render({
-    rows: turn(ax, ay, bx, by, zx, zy), centre: [w / 2, centre], size, lift,
-    shift: [-spread, spread], glint, sway,
-    ground, recovery: reduced.matches ? 1 : Math.min(1, (time - lastExposureEnd) / .74),
-  })) {
-    glassDrawn = true;
-    return;
+  if (age < 0) {
+    const recovery = reduced.matches ? 1 : Math.min(1, (time - lastExposureEnd) / .74);
+    exteriorPose = { yaw, pitch, tilt, lift, spread, glint, sway, pulse, focus, recovery };
+    const u = filamentEnd - .56, v = KERF - .27875 * filamentEnd - .845 + lift;
+    insideCut.placeTip(w / 2 + size * (ax * u + bx * v - zx * .1445),
+      centre + size * (ay * u + by * v - zy * .1445), Math.atan2(ay - .27875 * by, ax - .27875 * bx));
+    if (glass?.render({ rows, centre: [w / 2, centre], size, lift,
+      shift: [-spread, spread], glint, sway, pulse, focus, ground, recovery })) {
+      glassDrawn = true;
+      return;
+    }
   }
 
   stageDrawn = true;
@@ -499,6 +513,11 @@ function followPointer(dt) {
   pointer.y = pointer.ty + (dy + my * dt) * decay;
   pointer.vx = (pointer.vx - rate * mx * dt) * decay;
   pointer.vy = (pointer.vy - rate * my * dt) * decay;
+  const dp = pointer.press - pointer.tPress;
+  const mp = pointer.vPress + 12 * dp, pDecay = Math.exp(-12 * dt);
+  pointer.press = pointer.tPress + (dp + mp * dt) * pDecay;
+  pointer.vPress = (pointer.vPress - 12 * mp * dt) * pDecay;
+  pointer.pulse *= Math.exp(-3.2 * dt);
 }
 function tick(now) {
   frame = 0;
@@ -518,7 +537,7 @@ function tick(now) {
 function refresh() {
   cancelAnimationFrame(frame);
   last = 0;
-  if (!document.hidden) frame = requestAnimationFrame(tick);
+  if (!document.hidden && !insideCut.active) frame = requestAnimationFrame(tick);
 }
 function fitCanvas() {
   w = canvas.clientWidth;
@@ -527,13 +546,16 @@ function fitCanvas() {
   field?.resize(w, h, pixelRatio);
   size = Math.min(h * .31, w * .49);
   centre = h * .46;
-  glass?.resize(pixelRatio, reachOf());
+  glass?.resize(pixelRatio, insideCut.active ? [0, 0, w, h] : reachOf());
   canvas.width = Math.round(w * pixelRatio);
   canvas.height = Math.round(h * pixelRatio);
 }
 function resize() {
   fitCanvas();
-  draw();
+  // Motion can be enabled for the first time from within a photographic
+  // detail. Establish the exterior pose before handing the mesh to its camera.
+  if (!insideCut.active || !exteriorPose) draw();
+  if (insideCut.active) insideCut.redraw();
   document.querySelector('.silhouette').hidden = true;
   refresh();
 }
@@ -543,11 +565,58 @@ function pointAt(event) {
   pointer.ty = Math.max(-1, Math.min(1, event.clientY / h * 2 - 1));
 }
 canvas.addEventListener('pointermove', pointAt);
-canvas.addEventListener('pointerdown', pointAt);
-function release() { pointer.tx = pointer.ty = 0; }
+canvas.addEventListener('pointerdown', event => {
+  if (!event.isPrimary) return;
+  pointAt(event);
+  pointer.tPress = 1;
+  pointer.pulse = 1;
+  if (!reduced.matches && time - lastTap < .35 && exposureAge() < 0) {
+    if (oilVolume === undefined) oilVolume = prepareOil(canvas);
+    exposure = planExposure(time);
+  }
+  lastTap = time;
+});
+function release() { pointer.tx = pointer.ty = pointer.tPress = 0; }
 canvas.addEventListener('pointerleave', release);
 canvas.addEventListener('pointercancel', release);
-canvas.addEventListener('pointerup', event => { if (event.pointerType !== 'mouse') release(); });
+canvas.addEventListener('pointerup', event => {
+  pointer.tPress = 0;
+  if (event.pointerType !== 'mouse') release();
+});
 document.addEventListener('visibilitychange', refresh);
 reduced.addEventListener('change', refresh);
 new ResizeObserver(resize).observe(canvas);
+
+// Freeze the exposure clock while the visitor is examining the material.
+// Only the viewport is allocated, even when the full mesh spans many screens.
+insideCut.connect({
+  available: () => !!glass && !glass.canvas.getContext('webgl').isContextLost(),
+  setActive(active) {
+    cancelAnimationFrame(frame);
+    frame = last = 0;
+    release();
+    lastTap = -Infinity;
+    if (!w || !h) return;
+    glass?.resize(pixelRatio, active ? [0, 0, w, h] : reachOf());
+    if (active) stage.classList.remove('negative');
+    else { draw(); refresh(); }
+  },
+  paint(cam) {
+    if (!glass || !exteriorPose || !w || !h) return false;
+    const pose = exteriorPose;
+    const blend = (a, b) => a + (b - a) * cam.align;
+    const rows = cameraRows(blend(pose.yaw, -.55), blend(pose.pitch, -.065), blend(pose.tilt, -.15));
+    const sizeInside = cam.scale * 375;
+    const cx = cam.x + 367.5 * cam.scale, cy = cam.y + 375 * cam.scale;
+    const magnification = sizeInside / size;
+    const [gx, gy, rx, ry] = groundCard(pose.sway, pose.lift);
+    const spread = blend(pose.spread, .055);
+    return glass.render({
+      rows, centre:[cx, cy], size:sizeInside, lift:blend(pose.lift, 0), shift:[-spread, spread],
+      glint:blend(pose.glint, .024 + .048 * cam.gaze), sway:blend(pose.sway, -.072 + .017 * cam.gaze),
+      pulse:blend(pose.pulse, .15), focus:pose.focus, recovery:blend(pose.recovery, 1),
+      ground:[cx + (gx - w / 2) * magnification, cy + (gy - centre) * magnification, rx * magnification, ry * magnification],
+    });
+  },
+});
+glass?.canvas.addEventListener('webglcontextlost', insideCut.redraw);

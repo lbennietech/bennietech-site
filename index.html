@@ -12,12 +12,18 @@
 </head>
 <body>
   <main aria-label="BennieTech">
+    <div class="cut-light" aria-hidden="true" hidden></div>
     <div class="exhibit" role="img" aria-label="A suspended B of reeded green glass. A lime filament lights its diagonal cut. When animated, the glass briefly turns to black liquid.">
       <picture>
         <source media="(max-aspect-ratio: 4/5)" srcset="/assets/glass/rest-portrait.webp">
         <img class="silhouette" src="/assets/glass/rest.webp" width="1536" height="1368" fetchpriority="high" alt="">
       </picture>
       <canvas aria-hidden="true"></canvas>
+    </div>
+    <div id="inside-cut" class="cut-view" role="img" aria-label="Inside the cut. Reeded glass walls frame a blade of lime light reflected in a suspended black oil drop." hidden>
+      <div class="cut-world">
+        <canvas class="cut-meniscus" width="448" height="672" aria-hidden="true"></canvas>
+      </div>
     </div>
     <a class="email" href="mailto:lukebennie@gmail.com" aria-label="Email Luke Bennie at lukebennie@gmail.com">
       <svg viewBox="0 0 34 26" aria-hidden="true" focusable="false">
@@ -44,8 +50,22 @@
       <img src="/assets/logo/bennietech-wordmark.svg" width="1004" height="175" alt="BennieTech">
       <img class="signature-night" src="/assets/logo/bennietech-wordmark-dark.svg" width="1004" height="175" alt="">
     </div>
+    <div class="cut-guide" hidden>
+      <span class="cut-ray" aria-hidden="true"></span>
+      <button class="cut-grip" type="button" aria-label="Enter the cut" aria-expanded="false" aria-controls="inside-cut" aria-describedby="cut-instructions"><span aria-hidden="true"></span></button>
+    </div>
+    <span id="cut-instructions" hidden>Drag along the filament to explore, or activate for the full journey. Use the arrow keys to move between details and Escape to return.</span>
+    <nav class="cut-tools" aria-label="Inside the cut" hidden>
+      <button class="cut-return" type="button" aria-label="Return to the whole sculpture" data-hint="Return"><i aria-hidden="true"></i></button>
+      <div class="cut-stops" role="group" aria-label="Material details">
+        <button type="button" aria-label="Inspect the glass reeds" data-hint="Reeds" aria-pressed="false"><i aria-hidden="true"></i></button>
+        <button type="button" aria-label="Inspect the lime filament" data-hint="Filament" aria-pressed="false"><i aria-hidden="true"></i></button>
+        <button type="button" aria-label="Inspect the oil drop" data-hint="Drop" aria-pressed="false"><i aria-hidden="true"></i></button>
+      </div>
+    </nav>
   </main>
   <script type="module">
+    import '/js/inside-cut.js';
     const motion = matchMedia('(prefers-reduced-motion: reduce)');
     function start() {
       if (motion.matches) return;

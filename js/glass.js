@@ -38,9 +38,9 @@ void main() {
 }`;
 
 const fragment = `precision highp float;
-uniform float kind, part, sway, glint, flute, front, back, pixel, recovery;
+uniform float kind, part, sway, glint, flute, front, back, pixel, recovery, pulse;
 uniform vec3 row3;
-uniform vec2 tile, pad, filamentRange;
+uniform vec2 tile, pad, filamentRange, focus;
 uniform sampler2D behind, sideRamp, arrisRamp, groundMap;
 varying vec3 plate;
 varying float side;
@@ -58,23 +58,30 @@ vec3 reeds(vec2 p, float inside, float cutDist) {
   // A cylindrical reed magnifies its centre and folds the far wall over
   // its shoulders. Moving the eye moves the reflection inside each flute.
   float k = floor(p.x / flute), u = fract(p.x / flute);
-  float centre = k * flute + flute * .5 + sway * .62 + .011 * sin(k * 2.31 + part);
+  float dFocus = length(p - focus);
+  float localWarp = exp(-dFocus * dFocus * 7.5) * pulse;
+  float centre = k * flute + flute * .5 + sway * .62 + .011 * sin(k * 2.31 + part) + (p.x - focus.x) * localWarp * .085;
   float lens = u * 2. - 1.;
   float bend = lens * (.52 + .48 * lens * lens);
-  vec2 at = (vec2(centre + bend * flute * 1.75, p.y + .014 * bend) + pad) / tile;
+  vec2 at = (vec2(centre + bend * flute * (1.75 + .42 * localWarp), p.y + .014 * bend) + pad) / tile;
   vec2 uv = vec2(at.x, 1. - at.y);
   vec3 colour = texture2D(behind, uv).rgb;
-  // Dispersion splits the green channel slightly from red and blue on steep rays.
-  float fringe = .0031 * bend * bend * bend;
+  // Dispersion splits the green channel slightly from red and blue on steep rays,
+  // and widens under direct tactile stress.
+  float fringe = (.0031 + .0068 * pulse + .0045 * localWarp) * bend * bend * bend;
   colour.r = texture2D(behind, uv + vec2(fringe, .0006 * bend)).r;
   colour.b = texture2D(behind, uv - vec2(fringe, .0006 * bend)).b;
   // Deep bottle-green optical density in the valley between adjacent reeds.
   float groove = .38 * (1. - smoothstep(0., .22, u)) + .28 * smoothstep(.80, 1., u);
   float cusp = exp(-min(u, 1. - u) * 34.);
   colour = mix(colour, vec3(.10, .22, .17), groove);
-  // Subtle internal lime light trapped along the reed cusps near the kerf.
-  float kerfGlow = exp(-cutDist * 5.2) * (.35 + .65 * cusp);
-  colour += vec3(.42, .62, .08) * kerfGlow * .22;
+  // Subtle internal lime light trapped along the reed cusps near the kerf,
+  // surging outward through the flutes when the filament is excited.
+  float kerfGlow = exp(-cutDist * (5.2 - 1.9 * pulse)) * (.35 + .65 * cusp);
+  colour += vec3(.42, .62, .08) * kerfGlow * (.22 + .34 * pulse);
+  // Birefringent stress wave travelling from the kerf and pointer contact point.
+  float wave = exp(-abs(cutDist - pulse * .58) * 18.) * pulse * (.45 + .55 * cusp);
+  colour += vec3(.46, .68, .10) * wave * .26;
   float crest = clamp(.51 + sway * 1.72 + (k - 13.) * .008 + .043 * (p.y - .8), .16, .84);
   float aa = min(.11, pixel / flute);
   float shine = smoothstep(crest - .16 - aa, crest, u) * (1. - smoothstep(crest, crest + .048 + aa, u));
@@ -86,7 +93,7 @@ vec3 reeds(vec2 p, float inside, float cutDist) {
   float transom = smoothstep(.69, .75, window) * (1. - smoothstep(.79, .86, window));
   float studio = softbox + .45 * transom;
   colour = mix(colour, vec3(1., .998, .945), shine * (.38 + .42 * studio) + .14 * studio);
-  colour = mix(colour, vec3(.93, .97, .89), hairline * (.11 + .16 * (1. - softbox)));
+  colour = mix(colour, vec3(.93, .97, .89), hairline * (.11 + .16 * (1. - softbox) + .14 * pulse));
   return colour;
 }
 
@@ -139,7 +146,7 @@ void main() {
     float internal = exp(-31. * abs(exitPoint.y + .27875 * exitPoint.x - .98));
     // Direct kerf wall catches the lime filament across its polished thickness.
     float kerfWall = max(0., (part < .5 ? 1. : -1.) * n.y) * smoothstep(.15, .95, abs(n.y));
-    colour += vec3(.17, .21, .028) * (spill * (1. + .55 * kerfWall) + internal * .72) * (.38 + .62 * depth);
+    colour += vec3(.17, .21, .028) * (1. + .95 * pulse) * (spill * (1. + .55 * kerfWall) + internal * .72) * (.38 + .62 * depth);
     colour = mix(colour, arris(p), 1. - ramp(front - plate.z, .002, .0075));
     colour = mix(colour, vec3(236., 244., 224.) / 255., .74 * (1. - ramp(plate.z - back, .0025, .009)));
     gl_FragColor = vec4(colour, 1.);
@@ -153,10 +160,10 @@ void main() {
     float bevel = 1. - smoothstep(.005, .024, inside);
     float innerLip = smoothstep(.004, .008, inside) * (1. - smoothstep(.008, .015, inside));
     vec3 face = mix(reeds(p, inside, cutDist), vec3(.20, .35, .27), .35 * bevel);
-    face = mix(face, vec3(.94, .98, .88), .22 * innerLip);
+    face = mix(face, vec3(.94, .98, .88), (.22 + .15 * pulse) * innerLip);
     // Warm lime rim along the inner bevel adjacent to the diagonal kerf.
-    float kerfRim = (1. - smoothstep(.003, .018, -cutEdge)) * smoothstep(.08, .22, p.x);
-    face += vec3(.22, .30, .04) * kerfRim;
+    float kerfRim = (1. - smoothstep(.003, .018 + .008 * pulse, -cutEdge)) * smoothstep(.08, .22, p.x);
+    face += vec3(.22, .30, .04) * (1. + .85 * pulse) * kerfRim;
     // As the print resolves back into glass, the cut's light travels a
     // short distance into the reeds and dies there.
     float travel = cutDist - (.05 + .46 * recovery);
@@ -165,7 +172,7 @@ void main() {
     gl_FragColor = vec4(mix(face, arris(p), edge), 1.);
   } else if (kind < 2.5) {
     float z = ramp(plate.z, -.1445, .1615);
-    vec3 bar = mix(vec3(.62, .80, .16), vec3(.93, .99, .68), z * z);
+    vec3 bar = mix(vec3(.62, .80, .16), vec3(.95, 1., .74), clamp(z * z + .35 * pulse, 0., 1.));
     gl_FragColor = vec4(bar, 1.);
   } else if (kind > 3.5) {
     vec4 ink = texture2D(groundMap, vec2(p.x, -p.y) * .5 + .5);
@@ -175,10 +182,10 @@ void main() {
     float d = abs(side);
     float cap = smoothstep(filamentRange.x - .028, filamentRange.x + .008, p.x)
       * (1. - smoothstep(filamentRange.y - .008, filamentRange.y + .028, p.x));
-    float glow = .29 * exp(-d * d * 4.4) * cap;
-    float halo = .12 * exp(-d * d * 18.) * cap;
-    float core = (1. - smoothstep(.055, .175, d)) * cap * cap;
-    float alpha = max(glow + halo, core);
+    float glow = (.29 + .16 * pulse) * exp(-d * d * (4.4 - 1.2 * pulse)) * cap;
+    float halo = (.12 + .09 * pulse) * exp(-d * d * 18.) * cap;
+    float core = (1. - smoothstep(.055, .175 + .045 * pulse, d)) * cap * cap;
+    float alpha = min(1., max(glow + halo, core));
     vec3 colour = mix(vec3(178., 224., 50.) / 255., vec3(249., 255., 224.) / 255., core);
     gl_FragColor = vec4(colour * alpha, alpha);
   }
@@ -307,7 +314,7 @@ export function createGlass(stage, { outlines, tiles, scale, pad, flute, sideSto
       canvas.width = Math.max(1, Math.round(box[2] * ratio));
       canvas.height = Math.max(1, Math.round(box[3] * ratio));
     },
-    render({ rows, centre, size, lift, shift, glint, sway, ground, recovery }) {
+    render({ rows, centre, size, lift, shift, glint, sway, ground, recovery, pulse = 0, focus = [.56, .845] }) {
       if (gl.isContextLost()) return false;
       gl.viewport(0, 0, canvas.width, canvas.height);
       // The glow pass leaves depth writes off, which would also mask the clear.
@@ -324,6 +331,8 @@ export function createGlass(stage, { outlines, tiles, scale, pad, flute, sideSto
       gl.uniform1f(u('glint'), glint);
       gl.uniform1f(u('sway'), sway);
       gl.uniform1f(u('recovery'), recovery);
+      gl.uniform1f(u('pulse'), pulse);
+      gl.uniform2f(u('focus'), ...focus);
       gl.uniform1f(u('pixel'), 1 / (size * ratio));
 
       // The ground goes down first, blended and outside the depth test.

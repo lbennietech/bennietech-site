@@ -11,7 +11,7 @@ import { createRenderer } from './gl/gl.js';
 const fragment = `precision highp float;
 uniform vec2 res, origin, dir, pointer;
 uniform vec4 ghostBox;
-uniform float cell, time, age, hold, end, size, ghostReady;
+uniform float cell, time, age, hold, end, size, ghostReady, pulse;
 uniform vec3 rings;
 uniform sampler2D ghost;
 
@@ -50,6 +50,9 @@ float scene(vec2 q, out float tint) {
   // Packets of light run outward along the sheet.
   float k = fract(abs(along) / (size * .5) - time * .85);
   sheet += .6 * exp(-across / (size * .035)) * smoothstep(0., .04, k) * (1. - smoothstep(.04, .22, k)) * (.25 + .75 * reach);
+  // Fine harmonic interference fringes bordering the cut sheet.
+  float fringe = .14 * cos(across / (size * .018) - time * 3.4) * exp(-across / (size * .14)) * reach;
+  sheet = max(0., sheet + fringe);
   float glow = .32 * exp(-length(rel) / (size * .85));
 
   float ring = 0., d = length(rel), from = size * .8, out_ = length(res) * .62;
@@ -65,6 +68,14 @@ float scene(vec2 q, out float tint) {
     ring += fade * (.79 * exp(-front * front) + .21 * exp(-.65 * (front + 3.6) * (front + 3.6)));
   }
 
+  // Interactive shockwave ring radiating from the pointer on direct touch/click.
+  if (pulse > .01) {
+    float pd = length(q - pointer);
+    float pr = (1. - pulse) * size * 2.2;
+    float pFront = (pd - pr) / (size * .07);
+    ring += pulse * .85 * exp(-pFront * pFront);
+  }
+
   vec2 u = q / res.y;
   float warp = fbm(u * 1.6 + vec2(time * .02, -time * .015));
   float smoke = smoothstep(.46, .82, fbm(u * 3.3 + warp * 1.7 + vec2(-time * .035, time * .02))) * .36;
@@ -74,7 +85,7 @@ float scene(vec2 q, out float tint) {
   vec2 v = (q / res - .5) * vec2(1.25, 1.1);
   float vignette = 1. - smoothstep(.25, .95, length(v));
 
-  tint = clamp(sheet * 1.4 + ring * .48 + glow * .7, 0., 1.);
+  tint = clamp(sheet * 1.4 + ring * (.48 + .25 * pulse) + glow * .7, 0., 1.);
   return clamp(sheet + glow + ring * .85 + smoke + scan, 0., 1.) * quiet(q) * vignette;
 }
 
@@ -102,6 +113,7 @@ void main() {
   vec2 centre = (cc + .5) * cell;
   float focus = max(exp(-length(centre - origin) / (size * 1.9)),
     exp(-abs(dot(centre - origin, vec2(-dir.y, dir.x))) / (size * .22)) * .8);
+  focus = max(focus, exp(-length(centre - pointer) / (size * .65)) * (.55 + .45 * pulse));
   vec2 sb = floor(cc / 16.);
   float key = floor(time * 2.4 + hash(sb) * 3.);
   float pickSize = hash(sb + key * .137);
@@ -116,7 +128,7 @@ void main() {
 
   // The pointer is a loupe over the picture; the grid itself stays put.
   vec2 lens = sample_ - pointer;
-  sample_ = pointer + lens * (1. - .3 * exp(-dot(lens, lens) / (size * size * .7)));
+  sample_ = pointer + lens * (1. - (.3 + .22 * pulse) * exp(-dot(lens, lens) / (size * size * .7)));
 
   float tint;
   float level = scene(sample_, tint);
@@ -184,7 +196,7 @@ export function createField(stage) {
       ghostBox = [x / w, y / h, width / w, height / h];
       try { ghost = renderer.texture(source, ghost ?? undefined); } catch { ghost = null; }
     },
-    render({ time, age, hold, end, rings, origin, dir, size, pointer }) {
+    render({ time, age, hold, end, rings, origin, dir, size, pointer, pulse = 0 }) {
       if (gl.isContextLost()) return;
       const uniforms = {
         res: [canvas.width, canvas.height],
@@ -192,7 +204,7 @@ export function createField(stage) {
         time, age, hold, end, rings, size: size * scale, dir,
         origin: [origin[0] * scale, origin[1] * scale],
         pointer: [pointer[0] * scale, pointer[1] * scale],
-        ghostReady: ghost ? 1 : 0, ghostBox,
+        ghostReady: ghost ? 1 : 0, ghostBox, pulse,
       };
       if (ghost) uniforms.ghost = ghost;
       renderer.draw(uniforms);

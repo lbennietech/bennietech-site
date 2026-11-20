@@ -27,7 +27,7 @@ float noise(vec2 x) {
 }
 float fbm(vec2 p) {
   float a = .5, s = 0.;
-  for (int i = 0; i < 4; i++) { s += a * noise(p); p = p * 2.07 + vec2(1.7, 9.2); a *= .5; }
+  for (int i = 0; i < 3; i++) { s += a * noise(p); p = p * 2.07 + vec2(1.7, 9.2); a *= .5; }
   return s;
 }
 // 4x4 Bayer matrix built from the 2x2 one: 0 2 / 3 1.
@@ -45,7 +45,7 @@ float quiet(vec2 q) {
 
 // Light in the scene: the sheet thrown along the cut, its glow, the rings,
 // drifting smoke and the display's refresh line.
-float scene(vec2 q, out float tint) {
+float scene(vec2 q, bool needSmoke, out float tint) {
   vec2 rel = q - origin;
   float along = dot(rel, dir);
   float across = abs(dot(rel, vec2(-dir.y, dir.x)));
@@ -89,9 +89,12 @@ float scene(vec2 q, out float tint) {
     comet = wake * .52 * exp(-sd / (size * .095)) * (.35 + .65 * h);
   }
 
-  vec2 u = q / res.y;
-  float warp = fbm(u * 1.6 + vec2(time * .02, -time * .015));
-  float smoke = smoothstep(.46, .82, fbm(u * 3.3 + warp * 1.7 + vec2(-time * .035, time * .02))) * .36;
+  float smoke = 0.;
+  if (needSmoke) {
+    vec2 u = q / res.y;
+    float warp = fbm(u * 1.6 + vec2(time * .02, -time * .015));
+    smoke = smoothstep(.46, .82, fbm(u * 3.3 + warp * 1.7 + vec2(-time * .035, time * .02))) * .36;
+  }
   float scan = .14 * exp(-abs(q.y - fract(time * .32) * res.y * 1.25) / (cell * 2.5));
 
   // Falling away to the edges.
@@ -178,12 +181,6 @@ void main() {
   vec2 lens = sample_ - pointer;
   sample_ = pointer + lens * (1. - (.3 + .22 * pulse) * exp(-dot(lens, lens) / (size * size * .7)));
 
-  float tint;
-  float level = scene(sample_, tint);
-  if (mosh > .992) level = .33 - level * .30;
-  // Borrowed or inverted blocks still keep clear of the marks.
-  level *= quiet(centre);
-
   // The ghost of the calm scene dissolves, and later returns, block by block.
   vec2 gb = floor(ci / 8.);
   float delay = hash(gb * 1.7 + 3.1);
@@ -191,6 +188,12 @@ void main() {
   held = max(held, smoothstep(end - .32 + delay * .22, end - .26 + delay * .22, age)) * ghostReady;
   float threshold = (bayer(ci) + .5) / 16.;
   bool fromGhost = held > threshold;
+
+  float tint;
+  float level = scene(sample_, !fromGhost, tint);
+  if (mosh > .992) level = .33 - level * .30;
+  // Borrowed or inverted blocks still keep clear of the marks.
+  level *= quiet(centre);
 
   vec3 colour;
   if (fromGhost) {

@@ -3,7 +3,8 @@
 // green shadow of the glass, in which the curved walls focus light into
 // bright crescents, the reeds into fine lines and the kerf into a lime seam.
 // A sliver of spectrum splits off the lower bowl. Both renderers use the same
-// plate, painted once in glass units.
+// plate, painted once in glass units; the WebGL ground pass augments this base
+// with live additive optical caustics and shifting prismatic arcs.
 const BOWLS = [{ x: .57, y: .43, r: .43, from: -1.5708, to: .70 }, { x: .71, y: 1.2, r: .49, from: -.62, to: 1.5708 }];
 const KERF = .98, SLOPE = .27875;
 
@@ -50,7 +51,7 @@ export function makeHalo(plates, [[x0, y0], [x1, y1]]) {
   g.beginPath();
   g.moveTo(x0, y0);
   g.lineTo(x1, y1);
-  g.strokeStyle = 'rgba(206,248,92,.55)';
+  g.strokeStyle = 'rgba(206,248,92,.58)';
   g.lineWidth = .16;
   g.stroke();
   const out = halo.getContext('2d');
@@ -82,12 +83,12 @@ export function makeGround(plates, flute) {
     g.restore();
   }
   // The block hangs above the paper, so its shadow is all penumbra: a broad
-  // occlusion that deepens only slightly beneath the footprint.
+  // occlusion that deepens slightly beneath the footprint.
   pool(.1, .006, .98, .15, -.03, [
-    [0, 'rgba(58,66,54,.13)'], [.5, 'rgba(70,76,62,.06)'], [1, 'rgba(84,86,70,0)'],
+    [0, 'rgba(56,66,54,.14)'], [.5, 'rgba(68,76,62,.065)'], [1, 'rgba(84,86,70,0)'],
   ]);
   pool(.02, .012, .7, .062, -.02, [
-    [0, 'rgba(38,50,40,.19)'], [.45, 'rgba(48,60,48,.10)'], [1, 'rgba(60,68,54,0)'],
+    [0, 'rgba(34,48,38,.20)'], [.45, 'rgba(46,58,46,.11)'], [1, 'rgba(60,68,54,0)'],
   ]);
 
   // The cast, drawn flat in glass units, then laid along the paper.
@@ -103,19 +104,19 @@ export function makeGround(plates, flute) {
   for (const [part, plate] of plates.entries()) {
     ink.save();
     ink.clip(plate);
-    // Thick green glass passes less light than open paper.
+    // Thick float glass passes cool emerald-teal shadow tint onto warm paper.
     const body = ink.createLinearGradient(0, 0, .5, 1.7);
-    body.addColorStop(0, 'rgba(58,92,72,.13)');
-    body.addColorStop(.55, 'rgba(66,104,78,.19)');
-    body.addColorStop(1, 'rgba(52,84,64,.15)');
+    body.addColorStop(0, 'rgba(38,88,80,.15)');
+    body.addColorStop(.55, 'rgba(44,102,92,.22)');
+    body.addColorStop(1, 'rgba(34,80,74,.17)');
     ink.fillStyle = body;
     ink.fillRect(0, 0, 1.21, 1.7);
 
     // Each reed focuses its strip into a fine line, strongest midway.
     const line = ink.createLinearGradient(0, 0, 0, 1.69);
     line.addColorStop(0, 'rgba(255,254,236,0)');
-    line.addColorStop(.3, 'rgba(255,254,236,.62)');
-    line.addColorStop(.62, 'rgba(250,253,226,.72)');
+    line.addColorStop(.3, 'rgba(255,254,236,.64)');
+    line.addColorStop(.62, 'rgba(250,253,226,.76)');
     line.addColorStop(1, 'rgba(250,253,226,.06)');
     ink.fillStyle = line;
     for (let x = 0; x < 1.21; x += flute) {
@@ -130,8 +131,8 @@ export function makeGround(plates, flute) {
     // the shadow's edge, fringed with the glass's own green.
     const bowl = BOWLS[part];
     for (const [inset, width, tint] of [
-      [.075, .14, 'rgba(255,255,240,.26)'], [.058, .06, 'rgba(255,255,244,.62)'],
-      [.052, .024, 'rgba(255,255,252,1)'], [.11, .035, 'rgba(176,214,120,.22)'],
+      [.075, .14, 'rgba(255,255,240,.28)'], [.058, .06, 'rgba(255,255,244,.66)'],
+      [.052, .024, 'rgba(255,255,252,1)'], [.11, .035, 'rgba(176,214,120,.24)'],
     ]) {
       ink.beginPath();
       ink.arc(bowl.x, bowl.y, bowl.r - inset, bowl.from, bowl.to);
@@ -147,7 +148,7 @@ export function makeGround(plates, flute) {
   ink.beginPath();
   ink.moveTo(.09, KERF - SLOPE * .09);
   ink.lineTo(1.06, KERF - SLOPE * 1.06);
-  for (const [width, tint] of [[.3, 'rgba(182,224,58,.07)'], [.11, 'rgba(182,224,58,.16)'], [.04, 'rgba(206,238,104,.36)'], [.013, 'rgba(244,255,200,.74)']]) {
+  for (const [width, tint] of [[.3, 'rgba(182,224,58,.08)'], [.11, 'rgba(182,224,58,.18)'], [.04, 'rgba(206,238,104,.38)'], [.013, 'rgba(244,255,200,.78)']]) {
     ink.lineWidth = width;
     ink.strokeStyle = tint;
     ink.stroke();
@@ -159,17 +160,17 @@ export function makeGround(plates, flute) {
   const lower = BOWLS[1];
   ink.save();
   ink.lineWidth = .02;
-  ['rgba(255,96,72,.5)', 'rgba(255,190,70,.52)', 'rgba(230,255,96,.5)', 'rgba(96,232,190,.46)',
-    'rgba(88,150,255,.44)', 'rgba(150,104,255,.34)'].forEach((tint, i) => {
+  ['rgba(255,96,72,.56)', 'rgba(255,190,70,.58)', 'rgba(230,255,96,.56)', 'rgba(96,232,190,.52)',
+    'rgba(88,150,255,.48)', 'rgba(150,104,255,.38)'].forEach((tint, i) => {
     ink.beginPath();
-    ink.arc(lower.x, lower.y, lower.r + .08 - i * .016, -.1, .78);
+    ink.arc(lower.x, lower.y, lower.r + .08 - i * .016, -.12, .82);
     ink.strokeStyle = tint;
     ink.stroke();
   });
   // Fade the ends of the arc.
   ink.globalCompositeOperation = 'destination-out';
   const ends = ink.createRadialGradient(lower.x + .49 * Math.cos(.34), lower.y + .49 * Math.sin(.34), .06,
-    lower.x + .49 * Math.cos(.34), lower.y + .49 * Math.sin(.34), .3);
+    lower.x + .49 * Math.cos(.34), lower.y + .49 * Math.sin(.34), .32);
   ends.addColorStop(0, 'rgba(0,0,0,0)');
   ends.addColorStop(1, 'rgba(0,0,0,1)');
   ink.fillStyle = ends;

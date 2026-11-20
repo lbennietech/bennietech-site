@@ -153,12 +153,11 @@ function paintBehind(plate, part) {
 let behind = null;
 const behindTiles = () => behind ??= plates.map(paintBehind);
 
-// The 2D fallback's polished sides follow what the traced walls show: a
-// dark mirror of the studio, a crisp light strip, and bottle-green glass.
+// The 2D fallback's sides follow the diamond-ground float-glass sea-teal finish.
 const SIDE_STOPS = [
-  [0, '#12261c'], [.115, '#3f7a5f'], [.17, '#f2fbef'], [.207, '#7fb393'],
-  [.38, '#173a2b'], [.51, '#5c9a7c'], [.606, '#bfe2c8'], [.64, '#f6fbf1'],
-  [.69, '#6fa888'], [.84, '#1f4636'], [1, '#9cc8ac'],
+  [0, '#0e322e'], [.115, '#2b6d65'], [.17, '#d8f4ee'], [.207, '#5da69b'],
+  [.38, '#13443e'], [.51, '#3d877c'], [.606, '#96d0c4'], [.64, '#e6f8f4'],
+  [.69, '#4f9a8e'], [.84, '#185048'], [1, '#79beb2'],
 ];
 const ARRIS_STOPS = [[0, '#fcfff2'], [.38, '#f1f6df'], [.63, '#9fae94'], [.78, '#e1e9d9'], [1, '#fefff0']];
 const BACK = -.272, FRONT = .2805;
@@ -270,27 +269,38 @@ if (!glass) behindTiles().forEach((tile, part) => window.createImageBitmap?.(til
   faceSway = NaN;
 }, () => {}));
 
+// Pre-allocated camera & uniform buffers to eliminate per-frame GC allocations.
+const camRows = [new Float32Array(3), new Float32Array(3), new Float32Array(3)];
+const rightVec = new Float32Array(3), downVec = new Float32Array(3);
+const centreArr = [0, 0], viewArr = [0, 0], shiftArr = [0, 0], groundArr = [0, 0, 0, 0];
+const focusArr = [0, 0], tearArr = [0, 0, 0, 0], pointerPxArr = [0, 0], trailPxArr = [0, 0], velArr = [0, 0];
+const originArr = [0, 0], dirArr = [0, 0], pointerNormArr = [0, 0];
+
 // The turn as three rows over the B's own axes: screen x, screen y, and
 // depth, signed so the front face (larger z) is nearer.
-function turn(ax, ay, bx, by, zx, zy) {
-  const depth = [bx * zy - zx * by, zx * ay - ax * zy, ax * by - bx * ay];
-  const sign = depth[2] > 0 ? -1 : 1;
-  return [[ax, bx, zx], [ay, by, zy], depth.map(v => v * sign)];
-}
-
 function cameraRows(yaw, pitch, tilt) {
   const c = Math.cos(tilt), s = Math.sin(tilt);
   const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
-  return turn(c * cy - s * sy * sp, s * cy + c * sy * sp, -s * cp, c * cp,
-    c * sy + s * cy * sp, s * sy - c * cy * sp);
+  const ax = c * cy - s * sy * sp, ay = s * cy + c * sy * sp;
+  const bx = -s * cp, by = c * cp;
+  const zx = c * sy + s * cy * sp, zy = s * sy - c * cy * sp;
+  const dx = bx * zy - zx * by, dy = zx * ay - ax * zy, dz = ax * by - bx * ay;
+  const sign = dz > 0 ? -1 : 1;
+  camRows[0][0] = ax; camRows[0][1] = bx; camRows[0][2] = zx;
+  camRows[1][0] = ay; camRows[1][1] = by; camRows[1][2] = zy;
+  camRows[2][0] = dx * sign; camRows[2][1] = dy * sign; camRows[2][2] = dz * sign;
+  return camRows;
 }
 
 // Every place the B can reach as it sways, lifts, drags and follows the pointer.
-function groundCard(sway, lift, lightAngle = 0) {
+function groundCard(sway, lift, lightAngle = 0, out = [0, 0, 0, 0]) {
   const eff = sway + lightAngle * .26;
   const stretch = Math.min(1, w / (size * 3.4)) * (1 + Math.max(-.42, Math.min(.42, eff)) * .34);
-  return [w / 2 + size * (.32 * stretch - eff * .19), centre + size * (1.016 + lift * .23),
-    size * 1.28 * stretch, size * .25];
+  out[0] = w / 2 + size * (.32 * stretch - eff * .19);
+  out[1] = centre + size * (1.016 + lift * .23);
+  out[2] = size * 1.28 * stretch;
+  out[3] = size * .25;
+  return out;
 }
 
 // The block's corners front and back, and the corners of its halo.
@@ -415,6 +425,19 @@ function reflectedWalls(glint) {
   return wallRamps;
 }
 
+let stageBufW = 0, stageBufH = 0;
+function ensureStageBuffer() {
+  const cw = Math.max(1, Math.round(w * pixelRatio));
+  const ch = Math.max(1, Math.round(h * pixelRatio));
+  if (canvas.width !== cw || canvas.height !== ch) {
+    canvas.width = cw;
+    canvas.height = ch;
+  }
+  stageBufW = cw;
+  stageBufH = ch;
+  ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+}
+
 function draw() {
   const age = exposureAge();
   const isNeg = age >= 0;
@@ -425,11 +448,11 @@ function draw() {
   }
   glassDrawn = false;
   glitchShowing = isNeg;
-  ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
-  // While the GPU layer carries the calm scene, the stage canvas stays empty
-  // and untouched, so the browser has nothing to re-upload each frame.
+  // While the GPU layer carries the calm scene, the stage canvas stays tiny
+  // and untouched, avoiding redundant full-viewport 2D canvas compositing.
   if (stageDrawn) {
-    ctx.clearRect(0, 0, w, h);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
     stageDrawn = false;
   }
   stage.classList.toggle('negative', isNeg);
@@ -444,11 +467,14 @@ function draw() {
   const pitch = -.16 + Math.cos(time * .23) * .033 - pointer.y * .09 + drag.y + rig.gyroY;
   const tilt = -.115 + Math.sin(time * .22) * .018 + drag.x * .035;
   const rows = cameraRows(yaw, pitch, tilt);
-  const [[ax, bx, zx], [ay, by, zy]] = rows;
+  const r0 = rows[0], r1 = rows[1];
+  const ax = r0[0], bx = r0[1], zx = r0[2];
+  const ay = r1[0], by = r1[1], zy = r1[2];
   const lift = Math.sin(time * .56) * .012;
   const speed = Math.min(1, Math.hypot(pointer.vx, pointer.vy) * .18);
   const pulse = Math.min(1, Math.max(pointer.press * .65, pointer.pulse) + speed * .28);
-  const focus = [.56 + pointer.x * .48, .845 + pointer.y * .62];
+  focusArr[0] = .56 + pointer.x * .48;
+  focusArr[1] = .845 + pointer.y * .62;
   // Frame 0 renders at resting equilibrium (intro=1) to match rest.webp cleanly;
   // subsequent frames glide a subtle first-light wake over the first 1.15 seconds.
   const intro = time <= .001 || reduced.matches ? 1 : Math.min(1, time / 1.15);
@@ -460,10 +486,16 @@ function draw() {
     tearBeat = (tearBeat + 1) % 509;
     nextTear = time + .02 + Math.random() * .065;
   }
-  const tear = torn ? [...torn, tearBeat, exposure.seed] : [0, 0, 0, 0];
+  if (torn) {
+    tearArr[0] = torn[0]; tearArr[1] = torn[1]; tearArr[2] = tearBeat; tearArr[3] = exposure.seed;
+  } else {
+    tearArr[0] = 0; tearArr[1] = 0; tearArr[2] = 0; tearArr[3] = 0;
+  }
   const spread = .008 + .012 * Math.sin(time * .38) + pointer.press * .0055;
-  const pointerPx = [(pointer.x + 1) * w / 2, (pointer.y + 1) * h / 2];
-  const trailPx = [(pointer.trailX + 1) * w / 2, (pointer.trailY + 1) * h / 2];
+  pointerPxArr[0] = (pointer.x + 1) * w * .5;
+  pointerPxArr[1] = (pointer.y + 1) * h * .5;
+  trailPxArr[0] = (pointer.trailX + 1) * w * .5;
+  trailPxArr[1] = (pointer.trailY + 1) * h * .5;
 
   // Update ambient studio paper skylight wash smoothly without layout work.
   if (wash && !isNeg) {
@@ -479,23 +511,29 @@ function draw() {
   glitchShown = glassShown = false;
   if (isNeg && field) {
     // The cut's light runs along the kerf as the B is turned on screen.
-    const along = [ax - .27875 * bx, ay - .27875 * by];
-    const length = Math.hypot(...along);
+    const alongX = ax - .27875 * bx, alongY = ay - .27875 * by;
+    const invLen = 1 / Math.hypot(alongX, alongY);
+    originArr[0] = w * .5 + size * bx * (lift - .0211);
+    originArr[1] = centre + size * by * (lift - .0211);
+    dirArr[0] = alongX * invLen;
+    dirArr[1] = alongY * invLen;
     field.render({
       time, age, size, hold: exposure.holdStart, end: exposure.end, rings: exposure.rings,
-      origin: [w / 2 + size * bx * (lift - .0211), centre + size * by * (lift - .0211)],
-      dir: [along[0] / length, along[1] / length],
-      pointer: pointerPx, trail: trailPx, wake: pointer.wake,
-      pulse, tear, lightAngle: rig.lightRad,
+      origin: originArr, dir: dirArr,
+      pointer: pointerPxArr, trail: trailPxArr, wake: pointer.wake,
+      pulse, tear: tearArr, lightAngle: rig.lightRad,
     });
   }
-  if (isNeg) {
-    const drawn = oilVolume?.(ctx, {
-      w, h, size, centre, pixelRatio, detail: oilDetail, right: [ax, bx, zx], down: [ay, by, zy],
+  if (isNeg && oilVolume) {
+    rightVec[0] = ax; rightVec[1] = bx; rightVec[2] = zx;
+    downVec[0] = ay; downVec[1] = by; downVec[2] = zy;
+    velArr[0] = pointer.vx + drag.vx * 1.4;
+    velArr[1] = pointer.vy + drag.vy * 1.4;
+    const drawn = oilVolume(ctx, {
+      w, h, size, centre, pixelRatio, detail: oilDetail, right: rightVec, down: downVec,
       age: age + exposure.phase, lift, separation: spread,
-      tear, pulse, focus, lightAngle: rig.lightRad,
-      vel: [pointer.vx + drag.vx * 1.4, pointer.vy + drag.vy * 1.4],
-      rippleA: ripples[0], rippleB: ripples[1],
+      tear: tearArr, pulse, focus: focusArr, lightAngle: rig.lightRad,
+      vel: velArr, rippleA: ripples[0], rippleB: ripples[1],
     });
     if (drawn) {
       glitchShown = drawn === 'layer';
@@ -505,22 +543,28 @@ function draw() {
   }
   const sway = yaw + .46;
   const glint = .10 * Math.sin(time * .35) + pointer.x * .14 - pointer.y * .035;
-  const ground = groundCard(sway, lift, rig.lightRad);
+  const ground = groundCard(sway, lift, rig.lightRad, groundArr);
   const recovery = reduced.matches ? 1 : Math.min(1, (time - lastExposureEnd) / .74);
   // The filament's light breathes slowly, swells under a touch, and runs
   // high for a moment as the glass comes back after a glitch.
   const afterglow = reduced.matches ? 0 : Math.exp(-Math.max(0, time - lastExposureEnd) * 1.6);
   const glow = 1 + .1 * Math.sin(time * .9) * intro + .3 * pulse + .45 * afterglow;
+  centreArr[0] = w * .5; centreArr[1] = centre;
+  viewArr[0] = w; viewArr[1] = h;
+  shiftArr[0] = -spread; shiftArr[1] = spread;
+  pointerNormArr[0] = pointer.x; pointerNormArr[1] = pointer.y;
   // The GPU layer hides during a glitch, so a glitch without its liquid B
   // falls back to drawing the glass here.
   if (!isNeg && glass?.render({
-    rows, centre: [w / 2, centre], size, view: [w, h], lift, shift: [-spread, spread], glint, sway, pulse, ground,
-    recovery, lightAngle: rig.lightRad, intro, glow, time, fine: glassFine, shocks: ripples,
+    rows, centre: centreArr, size, view: viewArr, lift, shift: shiftArr, glint, sway, pulse, ground,
+    recovery, lightAngle: rig.lightRad, intro, glow, time, quality: glassQuality, detail: glassDetail,
+    pointer: pointerNormArr, shocks: ripples,
   })) {
     glassDrawn = glassShown = true;
     return;
   }
 
+  ensureStageBuffer();
   stageDrawn = true;
   if (!isNeg) {
     const [x, y, rx, ry] = ground;
@@ -602,13 +646,35 @@ function paceOil(elapsed) {
   }
 }
 
-// The glass is traced three times per pixel across its reeds. If calm
-// frames keep running long, not just through a stray hitch, it drops to one
-// trace for the rest of the visit.
-let glassFine = true, glassPace = 1 / 60, glassShown = false;
+// Multi-tier adaptive quality governor for the ray-traced glass B.
+// Keeps full native sharpness across Tier 2 (Ultra) and Tier 1 (Balanced),
+// ignoring stray GC hitches while reacting smoothly on sustained low-spec load.
+const maxGlassQuality = glass?.software ? 1 : 2;
+let glassQuality = maxGlassQuality, glassDetail = 1;
+let glassPace = 1 / 60, slowGlassRun = 0, quickGlassRun = 0, glassShown = false;
 function paceGlass(elapsed) {
-  glassPace += (Math.min(elapsed, .05) - glassPace) * .03;
-  if (glassPace > 1 / 40) glassFine = false;
+  glassPace += (Math.min(elapsed, .055) - glassPace) * .08;
+  const downThreshold = glassQuality === 2 ? 1 / 44 : glassQuality === 1 ? 1 / 38 : 1 / 34;
+  if (glassPace > downThreshold) {
+    quickGlassRun = 0;
+    if (++slowGlassRun >= 10) {
+      if (glassQuality > 0) glassQuality--;
+      else if (glassDetail > .66) glassDetail = Math.max(.65, Math.round((glassDetail - .14) * 100) / 100);
+      glassPace = 1 / 60;
+      slowGlassRun = 0;
+    }
+  } else {
+    slowGlassRun = Math.max(0, slowGlassRun - 1);
+    if (elapsed < 1 / 55 && (glassQuality < maxGlassQuality || glassDetail < 1)) {
+      if (++quickGlassRun >= 100) {
+        if (glassDetail < 1) glassDetail = Math.min(1, Math.round((glassDetail + .15) * 100) / 100);
+        else if (glassQuality < maxGlassQuality) glassQuality++;
+        quickGlassRun = 0;
+      }
+    } else if (elapsed > 1 / 48) {
+      quickGlassRun = 0;
+    }
+  }
 }
 
 // A critically damped turn gives the block weight when the finger changes
@@ -654,7 +720,7 @@ function tick(now) {
   last = now;
   // Each interval reflects the cost of the frame drawn before it.
   if (elapsed && glitchShown) paceOil(elapsed);
-  if (elapsed && glassShown && glassFine && time > 2) paceGlass(elapsed);
+  if (elapsed && glassShown && time > .6) paceGlass(elapsed);
   if (!reduced.matches) {
     if (oilVolume === undefined && time > .5) oilVolume = prepareOil(canvas);
     time += dt;
@@ -678,8 +744,14 @@ function fitCanvas() {
   size = Math.min(h * .31, w * .49);
   centre = h * .46;
   glass?.resize(pixelRatio, reachOf());
-  canvas.width = Math.round(w * pixelRatio);
-  canvas.height = Math.round(h * pixelRatio);
+  // Keep the underlying 2D stage canvas at 1x1 while WebGL draws calm frames
+  // so the browser avoids compositing an empty full-viewport 2D bitmap.
+  if (!glass) ensureStageBuffer();
+  else if (canvas.width !== 1 || canvas.height !== 1) {
+    canvas.width = 1;
+    canvas.height = 1;
+    stageBufW = stageBufH = 1;
+  }
 }
 
 function resize() {

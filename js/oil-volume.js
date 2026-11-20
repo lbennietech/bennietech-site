@@ -2,14 +2,73 @@
 // bridges, and Plateau-Rayleigh pendant drips. The camera basis matches the
 // glass renderer in the same logo units, and every cyclic term is strictly
 // periodic over 4 seconds so the baked fallback loops seamlessly.
-import { createRenderer, GLSL } from './gl/gl.js';
+import { createRenderer, program, GLSL } from './gl/gl.js';
 import { TEAR, tearRows } from './negative.js';
+
+// One-time GPU cubemap baker for the 9-scrim negative-fill HDR macro studio rig.
+// Replaces 18–36 analytic scrim evaluations per pixel with 2 hardware-filtered
+// cubemap lookups (sharp mipmapped + broad pre-convolved) for identical optics
+// at a fraction of the GPU cost on lower-spec devices.
+const oilCubeVert = `attribute vec2 p; varying vec2 uv; void main() { uv = p; gl_Position = vec4(p, 0., 1.); }`;
+const oilCubeFrag = `precision highp float;
+varying vec2 uv;
+uniform int face;
+uniform float broad;
+
+float scrim(vec3 reflected, vec3 aim, vec2 extent, float feather, vec2 gradDir) {
+  vec3 axis = normalize(aim);
+  vec3 horizontal = normalize(cross(vec3(0., 1., 0.), axis));
+  vec3 vertical = cross(axis, horizontal);
+  float facing = dot(reflected, axis);
+  vec2 s = vec2(dot(reflected, horizontal), dot(reflected, vertical)) / max(facing, .01);
+  vec2 d = abs(s) - extent;
+  float box = step(.01, facing) * (1. - smoothstep(-feather, feather, max(d.x, d.y)));
+  float ramp = clamp(.66 + .56 * dot(s / max(extent, vec2(.01)), gradDir), .18, 1.28);
+  return box * ramp;
+}
+
+vec3 evalStudio(vec3 reflected) {
+  vec3 room = vec3(.011, .0135, .0175) * (1.15 - .45 * reflected.y);
+  float f = 1. + broad * 2.4;
+  room += vec3(30.0, 31.5, 33.5) * scrim(reflected, vec3(-.35, -.47, .81), vec2(.062, .105), .030 * f, vec2(-.5, -.7));
+  room += vec3(15.5, 16.5, 17.6) * scrim(reflected, vec3(-.55, -.48, .68), vec2(.18, .46), .058 * f, vec2(-.6, -.65));
+  room += vec3(3.4, 3.65, 3.80) * scrim(reflected, vec3(-.48, -.06, .87), vec2(.16, .78), .095 * f, vec2(-.85, -.30));
+  room += vec3(2.9, 3.18, 3.35) * scrim(reflected, vec3(-.90, -.04, .43), vec2(.14, .92), .072 * f, vec2(-.8, 0.));
+  room += vec3(10.0, 10.6, 11.4) * scrim(reflected, vec3(.46, -.32, .83), vec2(.050, .13), .030 * f, vec2(.6, -.6));
+  room += vec3(4.0, 4.30, 4.65) * scrim(reflected, vec3(.84, -.10, .53), vec2(.22, .90), .088 * f, vec2(.75, -.20));
+  room += vec3(3.1, 3.3, 3.45) * scrim(reflected, vec3(.10, -.92, .38), vec2(.68, .16), .056 * f, vec2(0., -1.));
+  room += vec3(1.28, 1.44, 1.38) * scrim(reflected, vec3(.32, .82, .47), vec2(.65, .24), .10 * f, vec2(.4, .8));
+  room += vec3(1.80, 1.95, 2.08) * scrim(reflected, vec3(-.72, .24, -.65), vec2(.22, .80), .078 * f, vec2(-1., 0.));
+  return room;
+}
+
+vec3 faceDir(vec2 st) {
+  if (face == 0) return normalize(vec3( 1., -st.y, -st.x));
+  if (face == 1) return normalize(vec3(-1., -st.y,  st.x));
+  if (face == 2) return normalize(vec3( st.x,  1.,  st.y));
+  if (face == 3) return normalize(vec3( st.x, -1., -st.y));
+  if (face == 4) return normalize(vec3( st.x, -st.y,  1.));
+  return normalize(vec3(-st.x, -st.y, -1.));
+}
+
+void main() {
+  float e = broad > .5 ? 1. / 64. : 1. / 256.;
+  vec3 c = (
+    evalStudio(faceDir(uv + vec2(-e * .6, -e * .2))) +
+    evalStudio(faceDir(uv + vec2( e * .6,  e * .2))) +
+    evalStudio(faceDir(uv + vec2(-e * .2,  e * .6))) +
+    evalStudio(faceDir(uv + vec2( e * .2, -e * .6)))
+  ) * .25;
+  vec3 enc = sqrt(clamp(c / (c + 3.5), 0., .996));
+  gl_FragColor = vec4(enc, 1.);
+}`;
 
 const fragment = GLSL.head + GLSL.tone + TEAR + `
 uniform vec2 resolution, focus, view, vel;
 uniform vec3 rightAxis, downAxis, screen;
 uniform vec4 tear, rippleA, rippleB;
 uniform float age, lift, separation, pulse, lightAngle;
+uniform samplerCube envSharp, envSoft;
 
 const vec3 centre = vec3(.56, .845, 0.);
 const vec3 lime = vec3(.56, .97, .04);
@@ -293,22 +352,6 @@ vec3 normal(vec3 p) {
                  + e.yxy * surface(p + e.yxy) + e.xxx * surface(p + e.xxx));
 }
 
-// Energy-conserving, pixel-footprint-filtered studio scrim: stays razor-sharp at 4K
-// retina while eliminating dotted bevel aliasing at mobile & baked-sheet resolutions.
-float scrim(vec3 reflected, vec3 aim, vec2 extent, float feather, vec2 gradDir, float aa) {
-  vec3 axis = normalize(aim);
-  vec3 horizontal = normalize(cross(vec3(0., 1., 0.), axis));
-  vec3 vertical = cross(axis, horizontal);
-  float facing = dot(reflected, axis);
-  vec2 uv = vec2(dot(reflected, horizontal), dot(reflected, vertical)) / max(facing, .01);
-  float ef = feather + aa;
-  vec2 d = abs(uv) - extent;
-  float box = step(.01, facing) * (1. - smoothstep(-ef, ef, max(d.x, d.y)));
-  float ramp = clamp(.66 + .56 * dot(uv / max(extent, vec2(.01)), gradDir), .18, 1.28);
-  float conserve = extent.x / (extent.x + aa * .65);
-  return box * ramp * conserve;
-}
-
 vec2 waveRipple(vec2 p, vec4 rip, out float amp) {
   amp = 0.;
   if (rip.w <= .001 || rip.z > 2.6) return vec2(0.);
@@ -328,42 +371,15 @@ vec3 thinFilm(float ndv, float thickness) {
   return mix(vec3(.28, .48, .52), irid * vec3(.62, .96, .92), .76);
 }
 
-// Consolidated HDR negative-fill macro studio rig: broad, cleanly separated
-// photographic softboxes sweep smoothly across curved bevels (zero zebra ridges
-// or dotted aliasing) while high-HDR front strobes paint wet-jewel catchlights
-// directly onto the plump bellies of every hanging drop and satellite pearl.
-vec3 studioEnv(vec3 reflected, float broad, float aa) {
-  vec3 room = vec3(.011, .0135, .0175) * (1.15 - .45 * reflected.y);
-  float f = 1. + broad * 2.4;
-
-  // 1. Pinpoint HDR overhead-front macro catchlight (jewel highlight on every drop & satellite).
-  room += vec3(30.0, 31.5, 33.5) * scrim(reflected, vec3(-.35, -.47, .81), vec2(.062, .105), .030 * f, vec2(-.5, -.7), aa * .45);
-
-  // 2. Hero overhead-left gradated softbox (sculpted liquid crescents & sweeping face ribbons).
-  room += vec3(15.5, 16.5, 17.6) * scrim(reflected, vec3(-.55, -.48, .68), vec2(.18, .46), .058 * f, vec2(-.6, -.65), aa * .55);
-
-  // 3. Tall architectural front-left softbox (continuous liquid-silver silk curtains down face).
-  room += vec3(3.4, 3.65, 3.80) * scrim(reflected, vec3(-.48, -.06, .87), vec2(.16, .78), .095 * f, vec2(-.85, -.30), aa * .5);
-
-  // 4. Clean left architectural rim scrim (one uninterrupted silky silver edge, zero dotted bevel).
-  room += vec3(2.9, 3.18, 3.35) * scrim(reflected, vec3(-.90, -.04, .43), vec2(.14, .92), .072 * f, vec2(-.8, 0.), aa);
-
-  // 5. Tight front-right secondary macro glint (dual-highlight jewel depth on drop bulbs).
-  room += vec3(10.0, 10.6, 11.4) * scrim(reflected, vec3(.46, -.32, .83), vec2(.050, .13), .030 * f, vec2(.6, -.6), aa * .5);
-
-  // 6. Single continuous right curved-barrel scrim (sweeps dark chrome cleanly around both
-  //    curved right bowls and rims dark droplets without double-stripe zebra ridges).
-  room += vec3(4.0, 4.30, 4.65) * scrim(reflected, vec3(.84, -.10, .53), vec2(.22, .90), .088 * f, vec2(.75, -.20), aa * .85);
-
-  // 7. Cool overhead cove strip (catches the poured-oil top dome and upper bowl shoulders).
-  room += vec3(3.1, 3.3, 3.45) * scrim(reflected, vec3(.10, -.92, .38), vec2(.68, .16), .056 * f, vec2(0., -1.), aa * .7);
-
-  // 8. Cool silver-emerald lower-right bounce card (carves the plump underbelly of falling drops).
-  room += vec3(1.28, 1.44, 1.38) * scrim(reflected, vec3(.32, .82, .47), vec2(.65, .24), .10 * f, vec2(.4, .8), aa * .5);
-
-  // 9. Rear-left grazing rim scrim for dark droplet silhouette separation.
-  room += vec3(1.80, 1.95, 2.08) * scrim(reflected, vec3(-.72, .24, -.65), vec2(.22, .80), .078 * f, vec2(-1., 0.), aa * .7);
-  return room;
+// Fast HDR cubemap lookup of the baked 9-scrim macro studio rig (sharp mipmapped + broad).
+vec3 sampleOilStudio(vec3 reflected, float aa) {
+  vec3 eS = textureCube(envSharp, reflected, clamp(aa * 4.2, 0., 2.2)).rgb;
+  vec3 s2 = eS * eS;
+  vec3 sharp = 3.5 * s2 / max(1. - s2, .008);
+  vec3 eB = textureCube(envSoft, reflected).rgb;
+  vec3 b2 = eB * eB;
+  vec3 soft = 3.5 * b2 / max(1. - b2, .008);
+  return sharp * .89 + soft * .11;
 }
 
 // Analytical glossy reflection of the glowing lime filament bar across wet lips,
@@ -430,11 +446,9 @@ vec3 shade(vec3 p, vec3 view, float pixel, out float ndvOut) {
   float ndv = max(dot(n, view), 0.);
   ndvOut = ndv;
 
-  // Pixel-footprint specular filter increases gently on grazing high-curvature bevels.
+  // Pixel-footprint mip filter increases gently on grazing high-curvature bevels.
   float aa = pixel * (10. + 20. * (1. - ndv));
-  vec3 envSharp = studioEnv(reflected, 0., aa);
-  vec3 envSoft = studioEnv(reflected, 1., aa);
-  vec3 room = envSharp * .89 + envSoft * .11;
+  vec3 room = sampleOilStudio(reflected, aa);
 
   // Heavy crude oil / black obsidian lacquer Fresnel (IOR ~1.55 -> F0 = 0.048).
   float fresnel = .048 + .952 * pow(1. - ndv, 4.9);
@@ -523,7 +537,7 @@ void main() {
   float pixel = 2.85 / resolution.y, edge = pixel * 1.25;
   float prevD = 1e3, prevT = tEnter, edgeD = 1e3, edgeT = tEnter;
 
-  for (int i = 0; i < 92; i++) {
+  for (int i = 0; i < 76; i++) {
     vec3 p = ro + rd * t;
     float oil = surface(p), core = emitter(p), d = min(oil, core);
     nearestCore = min(nearestCore, core);
@@ -533,7 +547,7 @@ void main() {
     }
     if (edgeD > edge && d > prevD && prevD < edge) { edgeD = prevD; edgeT = prevT; }
     prevD = d; prevT = t;
-    t += max(.00035, d * .68);
+    t += max(.00038, d * (d > .08 ? .84 : .72));
     if (t > tExit) break;
   }
   if (!hit && edgeD > edge && prevD < edge) { edgeD = prevD; edgeT = prevT; }
@@ -565,6 +579,43 @@ void main() {
 }
 `;
 
+function bakeOilCube(gl, size, broad) {
+  const bakeProg = program(gl, oilCubeVert, oilCubeFrag);
+  if (!bakeProg) return null;
+  const cube = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_CUBE_MAP, cube);
+  for (let i = 0; i < 6; i++) {
+    gl.texImage2D(gl.TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, gl.RGBA, size, size, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  }
+  gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, broad > .5 ? gl.LINEAR : gl.LINEAR_MIPMAP_LINEAR);
+  gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+  const fbo = gl.createFramebuffer();
+  gl.useProgram(bakeProg);
+  const loc = gl.getAttribLocation(bakeProg, 'p');
+  gl.enableVertexAttribArray(loc);
+  gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  gl.uniform1f(gl.getUniformLocation(bakeProg, 'broad'), broad);
+  const faceLoc = gl.getUniformLocation(bakeProg, 'face');
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+  gl.viewport(0, 0, size, size);
+  for (let i = 0; i < 6; i++) {
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_CUBE_MAP_POSITIVE_X + i, cube, 0);
+    gl.uniform1i(faceLoc, i);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  if (broad < .5) {
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, cube);
+    gl.generateMipmap(gl.TEXTURE_CUBE_MAP);
+  }
+  gl.deleteFramebuffer(fbo);
+  gl.deleteProgram(bakeProg);
+  return cube;
+}
+
 export function createOilVolume(hardwareOnly = false, stage) {
   const image = document.createElement('canvas');
   if (hardwareOnly) {
@@ -581,6 +632,18 @@ export function createOilVolume(hardwareOnly = false, stage) {
   }
   const renderer = createRenderer(image, fragment, { alpha: true });
   if (!renderer) return null;
+  const { gl, prog } = renderer;
+  const sharpCube = bakeOilCube(gl, 256, 0);
+  const softCube = bakeOilCube(gl, 64, 1);
+  if (!sharpCube || !softCube) return null;
+  gl.useProgram(prog);
+  const pLoc = gl.getAttribLocation(prog, 'p');
+  gl.enableVertexAttribArray(pLoc);
+  gl.vertexAttribPointer(pLoc, 2, gl.FLOAT, false, 0, 0);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_CUBE_MAP, sharpCube);
+  gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_CUBE_MAP, softCube);
+  gl.uniform1i(gl.getUniformLocation(prog, 'envSharp'), 1);
+  gl.uniform1i(gl.getUniformLocation(prog, 'envSoft'), 2);
   if (stage) {
     image.className = 'oil';
     image.setAttribute('aria-hidden', 'true');
@@ -640,10 +703,16 @@ function bakedTake() {
     image.src = new URL('../assets/liquid/exposure-' + i + '.webp', import.meta.url);
     return image;
   });
-  return (ctx, { w, h, size, centre = h * .45, lift, age, tear }) => {
+  return (ctx, { w, h, size, centre = h * .45, pixelRatio = 1, lift, age, tear }) => {
     const frame = Math.floor((age % 4) * 16);
     const sheet = sheets[Math.floor(frame / 16)];
     if (!sheet.complete || !sheet.naturalWidth) return false;
+    const cw = Math.max(1, Math.round(w * pixelRatio)), ch = Math.max(1, Math.round(h * pixelRatio));
+    if (ctx.canvas.width !== cw || ctx.canvas.height !== ch) {
+      ctx.canvas.width = cw;
+      ctx.canvas.height = ch;
+    }
+    ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
     const width = size * 2.20, height = size * 2.85;
     const sw = sheet.naturalWidth / 4, sh = sheet.naturalHeight / 4;
     const sx = frame % 4 * sw, sy = Math.floor(frame % 16 / 4) * sh;

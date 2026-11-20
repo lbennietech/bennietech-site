@@ -59,9 +59,9 @@ const filament = new Path2D();
 filament.moveTo(.09, KERF - .27875 * .09);
 filament.lineTo(filamentEnd, KERF - .27875 * filamentEnd);
 
-// What the reeds see: pale glass over paper, a green rim of trapped light,
-// the ghost of the back contour, and the glow entering from the kerf.
-const behind = plates.map((plate, part) => {
+// What the 2D fallback's reeds see: pale glass over paper, a green rim of
+// trapped light, the ghost of the back contour, and the glow from the kerf.
+function paintBehind(plate, part) {
   const tile = document.createElement('canvas');
   tile.width = Math.ceil((1.21 + PAD * 2) * DENSITY);
   tile.height = Math.ceil((1.7 + PAD_Y * 2) * DENSITY);
@@ -130,7 +130,7 @@ const behind = plates.map((plate, part) => {
   g.save();
   g.translate(.085, -.054);
   g.lineWidth = .084;
-  g.strokeStyle = 'rgba(49,87,73,.22)';
+  g.strokeStyle = 'rgba(49,87,73,.12)';
   g.stroke(plate);
   g.lineWidth = .019;
   g.strokeStyle = 'rgba(49,81,68,.43)';
@@ -148,12 +148,17 @@ const behind = plates.map((plate, part) => {
     g.stroke(filament);
   }
   return tile;
-});
-// The polished sides look along the glass, so they carry its green.
+}
+// The GPU traces its own light, so only the 2D fallback needs these.
+let behind = null;
+const behindTiles = () => behind ??= plates.map(paintBehind);
+
+// The 2D fallback's polished sides follow what the traced walls show: a
+// dark mirror of the studio, a crisp light strip, and bottle-green glass.
 const SIDE_STOPS = [
-  [0, '#1c3b2f'], [.115, '#5f907a'], [.17, '#e2f2df'], [.207, '#86b096'],
-  [.38, '#1f4a3b'], [.51, '#68977f'], [.606, '#b6d5bc'], [.64, '#eef5e6'],
-  [.69, '#7aa28a'], [.84, '#2a5444'], [1, '#9cbaa2'],
+  [0, '#12261c'], [.115, '#3f7a5f'], [.17, '#f2fbef'], [.207, '#7fb393'],
+  [.38, '#173a2b'], [.51, '#5c9a7c'], [.606, '#bfe2c8'], [.64, '#f6fbf1'],
+  [.69, '#6fa888'], [.84, '#1f4636'], [1, '#9cc8ac'],
 ];
 const ARRIS_STOPS = [[0, '#fcfff2'], [.38, '#f1f6df'], [.63, '#9fae94'], [.78, '#e1e9d9'], [1, '#fefff0']];
 const BACK = -.272, FRONT = .2805;
@@ -184,7 +189,7 @@ function refreshFaces(sway, density) {
 function paintFace(g, plate, part, sway, density) {
   g.setTransform(density, 0, 0, density, 0, 0);
   g.globalCompositeOperation = 'source-over';
-  const tile = behind[part];
+  const tile = behindTiles()[part];
   const flutes = Math.ceil(1.21 / FLUTE);
   const refract = sway * .62;
   const crest = sway * 2.1;
@@ -197,13 +202,13 @@ function paintFace(g, plate, part, sway, density) {
       x, 0, FLUTE + .0008, 1.7);
     const p = Math.min(.84, Math.max(.16, .5 + crest + (k - flutes / 2) * .009));
     const shade = g.createLinearGradient(x, 0, x + FLUTE, 0);
-    shade.addColorStop(0, 'rgba(30,60,48,.39)');
-    shade.addColorStop(.15, 'rgba(35,66,54,.07)');
+    shade.addColorStop(0, 'rgba(22,46,36,.6)');
+    shade.addColorStop(.15, 'rgba(35,66,54,.1)');
     shade.addColorStop(p - .13, 'rgba(255,255,242,0)');
     shade.addColorStop(p, 'rgba(255,255,244,.75)');
     shade.addColorStop(p + .07, 'rgba(255,255,242,.04)');
     shade.addColorStop(.86, 'rgba(235,246,226,.14)');
-    shade.addColorStop(1, 'rgba(30,60,48,.30)');
+    shade.addColorStop(1, 'rgba(22,46,36,.5)');
     g.fillStyle = shade;
     g.fillRect(x, 0, FLUTE, 1.7);
   }
@@ -257,11 +262,10 @@ let w, h, size, centre, pixelRatio, time = 0, last = 0, frame = 0, lastTap = -1;
 
 const field = createField(canvas);
 const glass = createGlass(canvas, {
-  outlines: halves.map(half => half.points), tiles: behind, scale: DENSITY, pad: [PAD, PAD_Y], flute: FLUTE,
-  sideStops: SIDE_STOPS, arrisStops: ARRIS_STOPS, back: BACK, front: FRONT, groundMap,
+  outlines: halves.map(half => half.points), flute: FLUTE, back: BACK, front: FRONT, groundMap,
   halo: haloMap, haloPad: HALO_PAD, filament: filamentLine,
 });
-if (!glass) behind.forEach((tile, part) => window.createImageBitmap?.(tile).then(bitmap => {
+if (!glass) behindTiles().forEach((tile, part) => window.createImageBitmap?.(tile).then(bitmap => {
   behind[part] = bitmap;
   faceSway = NaN;
 }, () => {}));
@@ -472,7 +476,7 @@ function draw() {
     }
   }
 
-  glitchShown = false;
+  glitchShown = glassShown = false;
   if (isNeg && field) {
     // The cut's light runs along the kerf as the B is turned on screen.
     const along = [ax - .27875 * bx, ay - .27875 * by];
@@ -510,10 +514,10 @@ function draw() {
   // The GPU layer hides during a glitch, so a glitch without its liquid B
   // falls back to drawing the glass here.
   if (!isNeg && glass?.render({
-    rows, centre: [w / 2, centre], size, lift, shift: [-spread, spread], glint, sway, pulse, focus, ground,
-    recovery, lightAngle: rig.lightRad, intro, glow,
+    rows, centre: [w / 2, centre], size, view: [w, h], lift, shift: [-spread, spread], glint, sway, pulse, ground,
+    recovery, lightAngle: rig.lightRad, intro, glow, time, fine: glassFine, shocks: ripples,
   })) {
-    glassDrawn = true;
+    glassDrawn = glassShown = true;
     return;
   }
 
@@ -598,6 +602,15 @@ function paceOil(elapsed) {
   }
 }
 
+// The glass is traced three times per pixel across its reeds. If calm
+// frames keep running long, not just through a stray hitch, it drops to one
+// trace for the rest of the visit.
+let glassFine = true, glassPace = 1 / 60, glassShown = false;
+function paceGlass(elapsed) {
+  glassPace += (Math.min(elapsed, .05) - glassPace) * .03;
+  if (glassPace > 1 / 40) glassFine = false;
+}
+
 // A critically damped turn gives the block weight when the finger changes
 // direction. Its settling time is independent of the display's refresh rate.
 function followPointer(dt) {
@@ -641,6 +654,7 @@ function tick(now) {
   last = now;
   // Each interval reflects the cost of the frame drawn before it.
   if (elapsed && glitchShown) paceOil(elapsed);
+  if (elapsed && glassShown && glassFine && time > 2) paceGlass(elapsed);
   if (!reduced.matches) {
     if (oilVolume === undefined && time > .5) oilVolume = prepareOil(canvas);
     time += dt;

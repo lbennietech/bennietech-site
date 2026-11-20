@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-0.275 -0.03 1.75 1.75">
+  <style>
+    .ink { fill: #121411; }
+    .kerf { stroke: #8fbd1f; }
+    @media (prefers-color-scheme: dark) {
+      .ink { fill: #ebe8df; }
+      .kerf { stroke: #c6ec5a; }
+    }
+  </style>
+  <mask id="b" maskUnits="userSpaceOnUse" x="-1" y="-1" width="3" height="3">
+    <path fill="#fff" d="M0 0H.57A.43 .43 0 0 1 .57 .86H0Z"/>
+    <path fill="#fff" d="M0 .71H.71A.49 .49 0 0 1 .71 1.69H0Z"/>
+    <path fill="#000" d="M-.4 1.024L1.271 .5582V.6931L-.4 1.159Z"/>
+  </mask>
+  <rect class="ink" x="-.1" y="-.1" width="1.5" height="1.9" mask="url(#b)"/>
+  <path class="kerf" d="M.06 .9633L.93 .7208" stroke-width=".05" fill="none"/>
+</svg>

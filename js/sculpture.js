@@ -1,6 +1,6 @@
 import { createField } from './field.js';
 import { createGlass } from './glass.js';
-import { makeGround } from './glass-ground.js';
+import { makeGround, makeHalo, HALO_PAD } from './glass-ground.js';
 import { prepareOil } from './oil-volume.js';
 import { exposureTear } from './negative.js';
 
@@ -151,13 +151,15 @@ const behind = plates.map((plate, part) => {
 });
 // The polished sides look along the glass, so they carry its green.
 const SIDE_STOPS = [
-  [0, '#243e33'], [.115, '#6d9280'], [.17, '#dfeddb'], [.207, '#91ae97'],
-  [.38, '#294d40'], [.51, '#739883'], [.606, '#bbd0b9'], [.64, '#e8eee0'],
-  [.69, '#839e89'], [.84, '#345749'], [1, '#a2b59f'],
+  [0, '#1c3b2f'], [.115, '#5f907a'], [.17, '#e2f2df'], [.207, '#86b096'],
+  [.38, '#1f4a3b'], [.51, '#68977f'], [.606, '#b6d5bc'], [.64, '#eef5e6'],
+  [.69, '#7aa28a'], [.84, '#2a5444'], [1, '#9cbaa2'],
 ];
 const ARRIS_STOPS = [[0, '#fcfff2'], [.38, '#f1f6df'], [.63, '#9fae94'], [.78, '#e1e9d9'], [1, '#fefff0']];
 const BACK = -.272, FRONT = .2805;
 const groundMap = makeGround(plates, FLUTE);
+const filamentLine = [[.09, KERF - .27875 * .09], [filamentEnd, KERF - .27875 * filamentEnd]];
+const haloMap = makeHalo(plates, filamentLine);
 
 // Without WebGL the glass is drawn on the stage canvas instead. Its faces are
 // composed off screen from bitmaps that stay resident between frames.
@@ -225,6 +227,9 @@ const canvas = document.querySelector('.exhibit canvas');
 const ctx = canvas.getContext('2d');
 const stage = canvas.closest('main');
 const wash = stage.querySelector('.studio-wash');
+const chrome = document.querySelector('meta[name="theme-color"]');
+const paperTone = chrome?.content;
+let chromeDark = false;
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 
 const pointer = {
@@ -254,7 +259,7 @@ const field = createField(canvas);
 const glass = createGlass(canvas, {
   outlines: halves.map(half => half.points), tiles: behind, scale: DENSITY, pad: [PAD, PAD_Y], flute: FLUTE,
   sideStops: SIDE_STOPS, arrisStops: ARRIS_STOPS, back: BACK, front: FRONT, groundMap,
-  filament: [[.09, KERF - .27875 * .09], [filamentEnd, KERF - .27875 * filamentEnd]],
+  halo: haloMap, haloPad: HALO_PAD, filament: filamentLine,
 });
 if (!glass) behind.forEach((tile, part) => window.createImageBitmap?.(tile).then(bitmap => {
   behind[part] = bitmap;
@@ -284,6 +289,12 @@ function groundCard(sway, lift, lightAngle = 0) {
     size * 1.28 * stretch, size * .25];
 }
 
+// The block's corners front and back, and the corners of its halo.
+const reachPoints = [
+  ...halves.flatMap(half => half.points.flatMap(([u, v]) => [[u, v, BACK], [u, v, FRONT]])),
+  [-HALO_PAD, -HALO_PAD, 0], [1.21 + HALO_PAD, -HALO_PAD, 0],
+  [1.21 + HALO_PAD, 1.69 + HALO_PAD, 0], [-HALO_PAD, 1.69 + HALO_PAD, 0],
+];
 function reachOf() {
   const box = [Infinity, Infinity, -Infinity, -Infinity];
   const steps = n => Array.from({ length: n }, (_, i) => i / (n - 1) * 2 - 1);
@@ -295,7 +306,7 @@ function reachOf() {
     const bx = -s * Math.cos(pitch), by = c * Math.cos(pitch);
     const zx = c * Math.sin(yaw) + s * Math.cos(yaw) * Math.sin(pitch);
     const zy = s * Math.sin(yaw) - c * Math.cos(yaw) * Math.sin(pitch);
-    for (const half of halves) for (const [u, v] of half.points) for (const z of [BACK, FRONT]) {
+    for (const [u, v, z] of reachPoints) {
       const dv = v - .845 + offset;
       const x = w / 2 + size * (ax * (u - .56) + bx * dv + zx * z);
       const yy = centre + size * (ay * (u - .56) + by * dv + zy * z);
@@ -418,6 +429,12 @@ function draw() {
     stageDrawn = false;
   }
   stage.classList.toggle('negative', isNeg);
+  // Through the hold, the browser's own chrome goes dark with the stage.
+  const held = isNeg && age >= exposure.holdStart && age < exposure.end;
+  if (chrome && held !== chromeDark) {
+    chromeDark = held;
+    chrome.content = held ? '#000000' : paperTone;
+  }
 
   const yaw = -.46 + Math.sin(time * .30) * .055 + pointer.x * .18 + drag.x + rig.gyroX;
   const pitch = -.16 + Math.cos(time * .23) * .033 - pointer.y * .09 + drag.y + rig.gyroY;
@@ -484,12 +501,16 @@ function draw() {
   const sway = yaw + .46;
   const glint = .10 * Math.sin(time * .35) + pointer.x * .14 - pointer.y * .035;
   const ground = groundCard(sway, lift, rig.lightRad);
+  const recovery = reduced.matches ? 1 : Math.min(1, (time - lastExposureEnd) / .74);
+  // The filament's light breathes slowly, swells under a touch, and runs
+  // high for a moment as the glass comes back after a glitch.
+  const afterglow = reduced.matches ? 0 : Math.exp(-Math.max(0, time - lastExposureEnd) * 1.6);
+  const glow = 1 + .1 * Math.sin(time * .9) * intro + .3 * pulse + .45 * afterglow;
   // The GPU layer hides during a glitch, so a glitch without its liquid B
   // falls back to drawing the glass here.
   if (!isNeg && glass?.render({
     rows, centre: [w / 2, centre], size, lift, shift: [-spread, spread], glint, sway, pulse, focus, ground,
-    recovery: reduced.matches ? 1 : Math.min(1, (time - lastExposureEnd) / .74),
-    lightAngle: rig.lightRad, intro,
+    recovery, lightAngle: rig.lightRad, intro, glow,
   })) {
     glassDrawn = true;
     return;
@@ -508,6 +529,12 @@ function draw() {
     ctx.setTransform(ax * size * pixelRatio, ay * size * pixelRatio,
       bx * size * pixelRatio, by * size * pixelRatio,
       (w / 2 + x * size) * pixelRatio, (centre + y * size) * pixelRatio);
+  }
+  if (!isNeg) {
+    plane(0, .5);
+    ctx.globalAlpha = Math.min(1, .62 * glow + .24 * pulse);
+    ctx.drawImage(haloMap, -HALO_PAD, -HALO_PAD, 1.21 + HALO_PAD * 2, 1.69 + HALO_PAD * 2);
+    ctx.globalAlpha = 1;
   }
   const sides = reflectedWalls(glint + rig.lightRad * .22);
   refreshFaces(sway + rig.lightRad * .22, Math.min(size * pixelRatio, 760));

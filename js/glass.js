@@ -38,10 +38,10 @@ void main() {
 }`;
 
 const fragment = `precision highp float;
-uniform float kind, part, sway, glint, flute, front, back, pixel, recovery, pulse, lightAngle, intro;
+uniform float kind, part, sway, glint, flute, front, back, pixel, recovery, pulse, lightAngle, intro, glow, haloPad;
 uniform vec3 row3;
 uniform vec2 tile, pad, filamentRange, focus;
-uniform sampler2D behind, sideRamp, arrisRamp, groundMap;
+uniform sampler2D behind, sideRamp, arrisRamp, groundMap, halo;
 varying vec3 plate;
 varying float side;
 
@@ -90,7 +90,9 @@ vec3 reeds(vec2 p, float inside, float cutDist) {
   // Subtle internal lime light trapped along the reed cusps near the kerf,
   // surging outward through the flutes when the filament is excited.
   float kerfGlow = exp(-cutDist * (5.2 - 1.9 * pulse)) * (.35 + .65 * cusp);
-  colour += vec3(.42, .62, .08) * kerfGlow * (.22 + .36 * pulse);
+  colour += vec3(.42, .62, .08) * kerfGlow * (.22 + .36 * pulse) * glow;
+  // Fainter light scattered deep into the block keeps the whole B faintly lit.
+  colour += vec3(.30, .44, .05) * exp(-cutDist * 2.1) * (.05 + .07 * cusp) * glow;
   // Photoelastic birefringent stress wave travelling from the kerf and pointer contact point.
   float wave = exp(-abs(cutDist - pulse * .58) * 18.) * pulse * (.45 + .55 * cusp);
   float radialWave = exp(-abs(dFocus - (1. - pulse) * .72) * 15.) * pulse * (.3 + .7 * cusp);
@@ -165,7 +167,10 @@ void main() {
     float internal = exp(-31. * abs(exitPoint.y + .27875 * exitPoint.x - .98));
     // Direct kerf wall catches the lime filament across its polished thickness.
     float kerfWall = max(0., (part < .5 ? 1. : -1.) * n.y) * smoothstep(.15, .95, abs(n.y));
-    colour += vec3(.17, .21, .028) * (1. + 1.05 * pulse) * (spill * (1. + .62 * kerfWall) + internal * .76) * (.38 + .62 * depth);
+    colour += vec3(.17, .21, .028) * (1. + 1.05 * pulse) * (spill * (1. + .62 * kerfWall) + internal * .76) * (.38 + .62 * depth) * glow;
+    // Light trapped in the block escapes where the polished walls meet the faces.
+    float lip = exp(-(front - plate.z) * 70.) + .6 * exp(-(plate.z - back) * 70.);
+    colour += vec3(.20, .27, .035) * lip * exp(-cutDist * 2.6) * (.5 + .5 * fresnel) * glow;
     // Subtle spectral edge piping right inside the polished front arris.
     float bevelBand = smoothstep(.022, .006, front - plate.z) * smoothstep(.002, .008, front - plate.z);
     colour += mix(vec3(.07, .05, -.02), vec3(-.02, .05, .07), .5 + .5 * n.x) * bevelBand * (.45 + .55 * fresnel);
@@ -185,7 +190,10 @@ void main() {
     face = mix(face, vec3(.94, .98, .88), (.22 + .16 * pulse) * innerLip);
     // Warm lime rim along the inner bevel adjacent to the diagonal kerf.
     float kerfRim = (1. - smoothstep(.003, .018 + .009 * pulse, -cutEdge)) * smoothstep(.08, .22, p.x);
-    face += vec3(.22, .30, .04) * (1. + .90 * pulse) * kerfRim;
+    face += vec3(.22, .30, .04) * (1. + .90 * pulse) * kerfRim * glow;
+    // Edge-lit glass glows along its whole contour, most strongly near the light.
+    float perimeter = exp(-max(inside - .006, 0.) * 46.) * (1. - edge);
+    face += vec3(.16, .23, .03) * perimeter * (.25 + .75 * exp(-cutDist * 2.4)) * glow;
     // As the print resolves back into glass, the cut's light travels a
     // short distance into the reeds and dies there.
     float travel = cutDist - (.05 + .46 * recovery);
@@ -197,6 +205,14 @@ void main() {
     float wakePulse = (1. - intro) * .45;
     vec3 bar = mix(vec3(.62, .80, .16), vec3(.96, 1., .76), clamp(z * z + .38 * pulse + wakePulse, 0., 1.));
     gl_FragColor = vec4(bar, 1.);
+  } else if (kind > 4.5) {
+    // The halo is light, so it adds to the paper rather than covering it.
+    vec2 huv = (p + haloPad) / (vec2(1.21, 1.69) + 2. * haloPad);
+    vec4 light = texture2D(halo, vec2(huv.x, 1. - huv.y));
+    vec2 rim = min(huv, 1. - huv);
+    float fade = smoothstep(0., .06, min(rim.x, rim.y));
+    float a = light.a * fade * (.62 * glow + .24 * pulse);
+    gl_FragColor = vec4(light.rgb * a, a * .82);
   } else if (kind > 3.5) {
     vec2 guv = vec2(p.x, -p.y) * .5 + .5;
     float shift = (sway * .0042 + lightAngle * .0075) * (1. + .55 * pulse);
@@ -218,10 +234,10 @@ void main() {
     float cap = smoothstep(filamentRange.x - .028, filamentRange.x + .008, p.x)
       * (1. - smoothstep(filamentRange.y - .008, filamentRange.y + .028, p.x));
     float wakeBoost = (1. - intro) * .28;
-    float glow = (.29 + .18 * pulse + wakeBoost) * exp(-d * d * (4.4 - 1.2 * pulse)) * cap;
-    float halo = (.12 + .10 * pulse + wakeBoost * .5) * exp(-d * d * 18.) * cap;
+    float bloom = (.29 + .18 * pulse + wakeBoost) * glow * exp(-d * d * (4.4 - 1.2 * pulse)) * cap;
+    float spread = (.12 + .10 * pulse + wakeBoost * .5) * glow * exp(-d * d * 18.) * cap;
     float core = (1. - smoothstep(.055, .175 + .045 * pulse, d)) * cap * cap;
-    float alpha = min(1., max(glow + halo, core));
+    float alpha = min(1., max(bloom + spread, core));
     vec3 colour = mix(vec3(178., 224., 50.) / 255., vec3(249., 255., 224.) / 255., core);
     gl_FragColor = vec4(colour * alpha, alpha);
   }
@@ -236,6 +252,28 @@ function rampTexture(gl, stops) {
   g.fillStyle = gradient;
   g.fillRect(0, 0, 256, 1);
   return texture(gl, strip);
+}
+// The reeds compress the scene behind them several times over, so the
+// textures they sample are mipmapped and filtered along the compression.
+// Without that, fine lines behind the glass break into stitches and crawl
+// as the B sways. WebGL 1 mipmaps only power-of-two sizes.
+function mipTexture(gl, source) {
+  const pot = n => 2 ** Math.min(12, Math.ceil(Math.log2(n)));
+  const square = document.createElement('canvas');
+  square.width = pot(source.width);
+  square.height = pot(source.height);
+  const g = square.getContext('2d');
+  g.imageSmoothingQuality = 'high';
+  g.drawImage(source, 0, 0, square.width, square.height);
+  const tex = texture(gl, square);
+  gl.generateMipmap(gl.TEXTURE_2D);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+  const aniso = gl.getExtension('EXT_texture_filter_anisotropic');
+  if (aniso) {
+    gl.texParameterf(gl.TEXTURE_2D, aniso.TEXTURE_MAX_ANISOTROPY_EXT,
+      Math.min(8, gl.getParameter(aniso.MAX_TEXTURE_MAX_ANISOTROPY_EXT)));
+  }
+  return tex;
 }
 function texture(gl, source) {
   const tex = gl.createTexture();
@@ -288,7 +326,7 @@ function filamentBars([[x0, y0], [x1, y1]], near, far) {
   return { data: data.concat(card), barCount: box.length, glowCount: 6 };
 }
 
-export function createGlass(stage, { outlines, tiles, scale, pad, flute, sideStops, arrisStops, filament, back, front, groundMap }) {
+export function createGlass(stage, { outlines, tiles, scale, pad, flute, sideStops, arrisStops, filament, back, front, groundMap, halo, haloPad = 0 }) {
   const canvas = document.createElement('canvas');
   canvas.className = 'glass';
   canvas.setAttribute('aria-hidden', 'true');
@@ -305,7 +343,10 @@ export function createGlass(stage, { outlines, tiles, scale, pad, flute, sideSto
   const halves = outlines.map(points => prism(points, back, front));
   const bars = filamentBars(filament, .1615, -.1445);
   const card = [-1, -1, 0, 0, 1, -1, 0, 0, 1, 1, 0, 0, -1, -1, 0, 0, 1, 1, 0, 0, -1, 1, 0, 0];
-  const all = [...halves.flatMap(h => h.data), ...bars.data, ...card];
+  // The halo lies in the block's middle plane, around the whole B.
+  const [l, t, r, b] = [-haloPad, -haloPad, 1.21 + haloPad, 1.69 + haloPad];
+  const glowCard = [l, t, 0, 0, r, t, 0, 0, r, b, 0, 0, l, t, 0, 0, r, b, 0, 0, l, b, 0, 0];
+  const all = [...halves.flatMap(h => h.data), ...bars.data, ...card, ...glowCard];
   gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(all), gl.STATIC_DRAW);
   const position = gl.getAttribLocation(prog, 'position');
@@ -317,19 +358,22 @@ export function createGlass(stage, { outlines, tiles, scale, pad, flute, sideSto
 
   const uniform = {};
   const u = name => uniform[name] ??= gl.getUniformLocation(prog, name);
-  const behind = tiles.map(tile => texture(gl, tile));
+  const behind = tiles.map(tile => mipTexture(gl, tile));
   const sideRamp = rampTexture(gl, sideStops), arrisRamp = rampTexture(gl, arrisStops);
   const groundTexture = texture(gl, groundMap);
+  const haloTexture = halo ? texture(gl, halo) : null;
   gl.uniform2f(u('tile'), tiles[0].width / scale, tiles[0].height / scale);
   gl.uniform2f(u('pad'), pad[0], pad[1]);
   gl.uniform1f(u('flute'), flute);
   gl.uniform1f(u('front'), front);
   gl.uniform1f(u('back'), back);
   gl.uniform2f(u('filamentRange'), filament[0][0], filament[1][0]);
-  [['behind', 0], ['sideRamp', 1], ['arrisRamp', 2], ['groundMap', 3]].forEach(([name, unit]) => gl.uniform1i(u(name), unit));
+  gl.uniform1f(u('haloPad'), haloPad);
+  [['behind', 0], ['sideRamp', 1], ['arrisRamp', 2], ['groundMap', 3], ['halo', 4]].forEach(([name, unit]) => gl.uniform1i(u(name), unit));
   gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, sideRamp);
   gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, arrisRamp);
   gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, groundTexture);
+  gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, haloTexture);
   gl.enable(gl.DEPTH_TEST);
   gl.depthFunc(gl.LEQUAL);
   gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
@@ -350,7 +394,7 @@ export function createGlass(stage, { outlines, tiles, scale, pad, flute, sideSto
       canvas.width = Math.max(1, Math.round(box[2] * ratio));
       canvas.height = Math.max(1, Math.round(box[3] * ratio));
     },
-    render({ rows, centre, size, lift, shift, glint, sway, ground, recovery, pulse = 0, focus = [.56, .845], lightAngle = 0, intro = 1 }) {
+    render({ rows, centre, size, lift, shift, glint, sway, ground, recovery, pulse = 0, focus = [.56, .845], lightAngle = 0, intro = 1, glow = 1 }) {
       if (gl.isContextLost()) return false;
       gl.viewport(0, 0, canvas.width, canvas.height);
       // The glow pass leaves depth writes off, which would also mask the clear.
@@ -370,6 +414,7 @@ export function createGlass(stage, { outlines, tiles, scale, pad, flute, sideSto
       gl.uniform1f(u('pulse'), pulse);
       gl.uniform1f(u('lightAngle'), lightAngle);
       gl.uniform1f(u('intro'), intro);
+      gl.uniform1f(u('glow'), glow);
       gl.uniform2f(u('focus'), ...focus);
       gl.uniform1f(u('pixel'), 1 / (size * ratio));
 
@@ -382,6 +427,11 @@ export function createGlass(stage, { outlines, tiles, scale, pad, flute, sideSto
       gl.uniform1f(u('kind'), 4);
       gl.drawArrays(gl.TRIANGLES, groundFirst, 6);
       gl.uniform1f(u('ground'), 0);
+      // Then the halo, which the glass drawn over it hides where it stands.
+      if (haloTexture) {
+        gl.uniform1f(u('kind'), 5);
+        gl.drawArrays(gl.TRIANGLES, groundFirst + 6, 6);
+      }
       gl.enable(gl.DEPTH_TEST);
       gl.disable(gl.BLEND);
       let first = 0;

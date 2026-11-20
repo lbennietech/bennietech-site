@@ -1,6 +1,66 @@
-// A soft contact shadow under the block and a transmission print further
-// along the paper. The two cut profiles and their reeds form the print.
-// Both renderers use the same plate, painted once in glass units.
+// The paper beneath the suspended B: a soft ambient shadow under the block,
+// and the light it transmits, cast back across the paper. The cast is a faint
+// green shadow of the glass, in which the curved walls focus light into
+// bright crescents, the reeds into fine lines and the kerf into a lime seam.
+// A sliver of spectrum splits off the lower bowl. Both renderers use the same
+// plate, painted once in glass units.
+const BOWLS = [{ x: .57, y: .43, r: .43, from: -1.5708, to: .70 }, { x: .71, y: 1.2, r: .49, from: -.62, to: 1.5708 }];
+const KERF = .98, SLOPE = .27875;
+
+// Blur by halving and doubling. Unlike a canvas filter it works everywhere,
+// and the repeated bilinear passes come out close to a gaussian.
+function soften(source, levels) {
+  const sizes = [[source.width, source.height]];
+  const resample = (from, [width, height]) => {
+    const to = document.createElement('canvas');
+    to.width = width;
+    to.height = height;
+    const g = to.getContext('2d');
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(from, 0, 0, width, height);
+    return to;
+  };
+  let level = source;
+  for (let i = 0; i < levels; i++) {
+    sizes.push(sizes[i].map(n => Math.max(1, n >> 1)));
+    level = resample(level, sizes[i + 1]);
+  }
+  for (let i = levels - 1; i >= 0; i--) level = resample(level, sizes[i]);
+  return level === source ? resample(source, sizes[0]) : level;
+}
+
+// The light the filament pours into the block leaks back out of it as a soft
+// lime halo, brightest along the kerf. It is painted in glass units, in the
+// B's own plane, so it turns with the block. The margin lets it fade to
+// nothing before the edge of the map.
+export const HALO_PAD = .42;
+export function makeHalo(plates, [[x0, y0], [x1, y1]]) {
+  const density = 120;
+  const halo = document.createElement('canvas');
+  halo.width = Math.ceil((1.21 + HALO_PAD * 2) * density);
+  halo.height = Math.ceil((1.69 + HALO_PAD * 2) * density);
+  const shape = document.createElement('canvas');
+  shape.width = halo.width;
+  shape.height = halo.height;
+  const g = shape.getContext('2d');
+  g.setTransform(density, 0, 0, density, HALO_PAD * density, HALO_PAD * density);
+  g.fillStyle = 'rgba(168,214,64,.62)';
+  plates.forEach(plate => g.fill(plate));
+  g.lineCap = 'round';
+  g.beginPath();
+  g.moveTo(x0, y0);
+  g.lineTo(x1, y1);
+  g.strokeStyle = 'rgba(206,248,92,.55)';
+  g.lineWidth = .16;
+  g.stroke();
+  const out = halo.getContext('2d');
+  out.globalAlpha = .7;
+  out.drawImage(soften(shape, 4), 0, 0);
+  out.globalAlpha = .45;
+  out.drawImage(soften(shape, 2), 0, 0);
+  return halo;
+}
+
 export function makeGround(plates, flute) {
   const ground = document.createElement('canvas');
   const density = 420;
@@ -21,113 +81,135 @@ export function makeGround(plates, flute) {
     g.fillRect(-1, -1, 2, 2);
     g.restore();
   }
-  pool(.10, .012, .99, .14, -.045, [
-    [0, 'rgba(54,63,48,.23)'], [.46, 'rgba(75,77,57,.12)'], [1, 'rgba(92,89,70,0)'],
+  // The block hangs above the paper, so its shadow is all penumbra: a broad
+  // occlusion that deepens only slightly beneath the footprint.
+  pool(.1, .006, .98, .15, -.03, [
+    [0, 'rgba(58,66,54,.13)'], [.5, 'rgba(70,76,62,.06)'], [1, 'rgba(84,86,70,0)'],
   ]);
-  pool(-.07, .018, .58, .058, -.024, [
-    [0, 'rgba(40,56,43,.22)'], [.43, 'rgba(53,69,54,.13)'], [1, 'rgba(65,74,57,0)'],
-  ]);
-  pool(.45, -.036, .92, .084, -.072, [
-    [0, 'rgba(74,87,69,.18)'], [.5, 'rgba(86,95,73,.09)'], [1, 'rgba(102,105,82,0)'],
+  pool(.02, .012, .7, .062, -.02, [
+    [0, 'rgba(38,50,40,.19)'], [.45, 'rgba(48,60,48,.10)'], [1, 'rgba(60,68,54,0)'],
   ]);
 
+  // The cast, drawn flat in glass units, then laid along the paper.
   const print = document.createElement('canvas');
+  const scale = 408;
   print.width = 512;
   print.height = 708;
   const ink = print.getContext('2d');
-  const scale = 408;
   ink.scale(scale, scale);
   ink.translate(.02, .02);
-  const transmission = ink.createLinearGradient(0, 0, .65, 1.7);
-  transmission.addColorStop(0, 'rgba(108,136,110,.10)');
-  transmission.addColorStop(.48, 'rgba(159,184,131,.16)');
-  transmission.addColorStop(.54, 'rgba(199,218,137,.22)');
-  transmission.addColorStop(1, 'rgba(73,102,83,.20)');
+  ink.lineCap = 'round';
 
-  for (const plate of plates) {
+  for (const [part, plate] of plates.entries()) {
     ink.save();
     ink.clip(plate);
-    ink.fillStyle = transmission;
+    // Thick green glass passes less light than open paper.
+    const body = ink.createLinearGradient(0, 0, .5, 1.7);
+    body.addColorStop(0, 'rgba(58,92,72,.13)');
+    body.addColorStop(.55, 'rgba(66,104,78,.19)');
+    body.addColorStop(1, 'rgba(52,84,64,.15)');
+    ink.fillStyle = body;
     ink.fillRect(0, 0, 1.21, 1.7);
-    ink.strokeStyle = 'rgba(84,115,86,.28)';
-    ink.lineWidth = .048;
-    ink.stroke(plate);
-    ink.strokeStyle = 'rgba(255,253,217,.90)';
-    ink.lineWidth = .024;
-    ink.stroke(plate);
-    // Secondary internal reflection rim offset through the slab thickness.
-    ink.save();
-    ink.translate(.042, -.026);
-    ink.strokeStyle = 'rgba(186,225,68,.26)';
-    ink.lineWidth = .016;
-    ink.stroke(plate);
-    ink.restore();
-    // Each channel focuses to a tapered line. The far ends fan out as the
-    // transmitted light travels away from the glass, with warm/cool dispersion.
-    const light = ink.createLinearGradient(0, 0, 0, 1.69);
-    light.addColorStop(0, 'rgba(255,253,218,.22)');
-    light.addColorStop(.37, 'rgba(255,255,228,.95)');
-    light.addColorStop(.68, 'rgba(230,245,168,.65)');
-    light.addColorStop(1, 'rgba(249,251,210,0)');
-    const fringe = ink.createLinearGradient(0, 0, 0, 1.69);
-    fringe.addColorStop(0, 'rgba(168,218,74,0)');
-    fringe.addColorStop(.38, 'rgba(176,226,64,.36)');
-    fringe.addColorStop(.72, 'rgba(124,184,96,.24)');
-    fringe.addColorStop(1, 'rgba(124,184,96,0)');
+
+    // Each reed focuses its strip into a fine line, strongest midway.
+    const line = ink.createLinearGradient(0, 0, 0, 1.69);
+    line.addColorStop(0, 'rgba(255,254,236,0)');
+    line.addColorStop(.3, 'rgba(255,254,236,.62)');
+    line.addColorStop(.62, 'rgba(250,253,226,.72)');
+    line.addColorStop(1, 'rgba(250,253,226,.06)');
+    ink.fillStyle = line;
     for (let x = 0; x < 1.21; x += flute) {
-      ink.fillStyle = fringe;
       ink.beginPath();
-      ink.moveTo(x * 1.19 - .058, 0);
-      ink.quadraticCurveTo(x + .088, .86, x + .012, 1.69);
-      ink.quadraticCurveTo(x + .112, .85, x * 1.19 - .032, 0);
+      ink.moveTo(x * 1.12 - .03, 0);
+      ink.quadraticCurveTo(x + .03, .85, x + .006, 1.69);
+      ink.quadraticCurveTo(x + .046, .85, x * 1.12 - .018, 0);
       ink.fill();
-      ink.fillStyle = light;
+    }
+
+    // The round wall bends light inward into a bright crescent just inside
+    // the shadow's edge, fringed with the glass's own green.
+    const bowl = BOWLS[part];
+    for (const [inset, width, tint] of [
+      [.075, .14, 'rgba(255,255,240,.26)'], [.058, .06, 'rgba(255,255,244,.62)'],
+      [.052, .024, 'rgba(255,255,252,1)'], [.11, .035, 'rgba(176,214,120,.22)'],
+    ]) {
       ink.beginPath();
-      ink.moveTo(x * 1.19 - .07, 0);
-      ink.quadraticCurveTo(x + .074, .86, x, 1.69);
-      ink.quadraticCurveTo(x + .097, .85, x * 1.19 - .045, 0);
-      ink.fill();
+      ink.arc(bowl.x, bowl.y, bowl.r - inset, bowl.from, bowl.to);
+      ink.lineWidth = width;
+      ink.strokeStyle = tint;
+      ink.stroke();
     }
     ink.restore();
   }
-  // The lime filament inside the diagonal cut projects a warm lime caustic bar
-  // and a fine focal core between the two cast halves.
+
+  // The lime filament projects a soft seam where the halves part.
   ink.save();
   ink.beginPath();
-  ink.moveTo(.09, .98 - .27875 * .09);
-  ink.lineTo(1.07, .98 - .27875 * 1.07);
-  ink.lineCap = 'round';
-  ink.strokeStyle = 'rgba(182,224,58,.38)';
-  ink.lineWidth = .105;
-  ink.stroke();
-  ink.strokeStyle = 'rgba(234,250,164,.68)';
-  ink.lineWidth = .036;
-  ink.stroke();
-  ink.strokeStyle = 'rgba(252,255,228,.85)';
-  ink.lineWidth = .012;
-  ink.stroke();
+  ink.moveTo(.09, KERF - SLOPE * .09);
+  ink.lineTo(1.06, KERF - SLOPE * 1.06);
+  for (const [width, tint] of [[.3, 'rgba(182,224,58,.07)'], [.11, 'rgba(182,224,58,.16)'], [.04, 'rgba(206,238,104,.36)'], [.013, 'rgba(244,255,200,.74)']]) {
+    ink.lineWidth = width;
+    ink.strokeStyle = tint;
+    ink.stroke();
+  }
   ink.restore();
 
-  g.save();
-  g.transform(.94, .016, -.54, .137, .45, -.159);
-  g.globalAlpha = .75;
-  g.filter = 'blur(5.5px)';
-  g.drawImage(print, -.02, -.02, print.width / scale, print.height / scale);
-  // Only a patch of the paper lies at the focal distance of the reeds.
-  // Let the ends of the cast fall back into the wider penumbra.
-  const focus = ink.createRadialGradient(.57, .81, .14, .57, .81, 1.04);
+  // Dispersion at the lower bowl's polished edge spreads a sliver of
+  // spectrum just outside its crescent, red outermost.
+  const lower = BOWLS[1];
+  ink.save();
+  ink.lineWidth = .02;
+  ['rgba(255,96,72,.5)', 'rgba(255,190,70,.52)', 'rgba(230,255,96,.5)', 'rgba(96,232,190,.46)',
+    'rgba(88,150,255,.44)', 'rgba(150,104,255,.34)'].forEach((tint, i) => {
+    ink.beginPath();
+    ink.arc(lower.x, lower.y, lower.r + .08 - i * .016, -.1, .78);
+    ink.strokeStyle = tint;
+    ink.stroke();
+  });
+  // Fade the ends of the arc.
+  ink.globalCompositeOperation = 'destination-out';
+  const ends = ink.createRadialGradient(lower.x + .49 * Math.cos(.34), lower.y + .49 * Math.sin(.34), .06,
+    lower.x + .49 * Math.cos(.34), lower.y + .49 * Math.sin(.34), .3);
+  ends.addColorStop(0, 'rgba(0,0,0,0)');
+  ends.addColorStop(1, 'rgba(0,0,0,1)');
+  ink.fillStyle = ends;
+  ink.beginPath();
+  ink.arc(lower.x, lower.y, lower.r + .13, -.3, 1);
+  ink.arc(lower.x, lower.y, lower.r - .03, 1, -.3, true);
+  ink.fill();
+  ink.restore();
+
+  // Lay the cast along the paper, then blur it there, so the penumbra is
+  // as wide across the paper as it is deep into it.
+  const cast = document.createElement('canvas');
+  cast.width = ground.width;
+  cast.height = ground.height;
+  const lay = cast.getContext('2d');
+  lay.setTransform(density, 0, 0, density, .96 * density, .25 * density);
+  lay.transform(.94, .016, -.54, .137, .45, -.159);
+  lay.imageSmoothingQuality = 'high';
+  lay.drawImage(print, -.02, -.02, print.width / scale, print.height / scale);
+
+  // Most of the cast lies out of focus. Only a patch of paper at the reeds'
+  // focal distance resolves it sharply.
+  const soft = soften(cast, 3);
+  const sharp = soften(cast, 1);
+  const focusInk = sharp.getContext('2d');
+  focusInk.setTransform(density * .62, 0, 0, density * .13, (.56 + .96) * density, (-.03 + .25) * density);
+  const focus = focusInk.createRadialGradient(0, 0, .15, 0, 0, 1);
   focus.addColorStop(0, '#fff');
-  focus.addColorStop(.52, 'rgba(255,255,255,.80)');
+  focus.addColorStop(.55, 'rgba(255,255,255,.55)');
   focus.addColorStop(1, 'rgba(255,255,255,0)');
-  ink.globalCompositeOperation = 'destination-in';
-  ink.fillStyle = focus;
-  ink.fillRect(-.02, -.02, print.width / scale, print.height / scale);
-  g.globalAlpha = .80;
-  g.filter = 'blur(1px)';
-  g.drawImage(print, -.02, -.02, print.width / scale, print.height / scale);
+  focusInk.globalCompositeOperation = 'destination-in';
+  focusInk.fillStyle = focus;
+  focusInk.fillRect(-4, -4, 8, 8);
+
+  g.save();
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.globalAlpha = .85;
+  g.drawImage(soft, 0, 0);
+  g.globalAlpha = .95;
+  g.drawImage(sharp, 0, 0);
   g.restore();
-  pool(.39, .013, .48, .038, -.085, [
-    [0, 'rgba(251,253,206,.68)'], [.48, 'rgba(225,241,158,.34)'], [1, 'rgba(220,232,157,0)'],
-  ]);
   return ground;
 }

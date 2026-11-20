@@ -490,6 +490,7 @@ function draw() {
       w, h, size, centre, pixelRatio, detail: oilDetail, right: [ax, bx, zx], down: [ay, by, zy],
       age: age + exposure.phase, lift, separation: spread,
       tear, pulse, focus, lightAngle: rig.lightRad,
+      vel: [pointer.vx + drag.vx * 1.4, pointer.vy + drag.vy * 1.4],
       rippleA: ripples[0], rippleB: ripples[1],
     });
     if (drawn) {

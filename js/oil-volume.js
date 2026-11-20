@@ -1,11 +1,13 @@
 // Orthographic ray casting of the two wet solids and their pendant liquid.
 // The camera basis comes from the engraving renderer, in the same logo units.
 import { createRenderer, GLSL } from './gl/gl.js';
+import { TEAR, tearRows } from './negative.js';
 
-const fragment = GLSL.head + GLSL.tone + `
-uniform vec2 resolution, focus;
-uniform vec3 rightAxis, downAxis, tear;
-uniform float age, lift, separation, pulse;
+const fragment = GLSL.head + GLSL.tone + TEAR + `
+uniform vec2 resolution, focus, view;
+uniform vec3 rightAxis, downAxis, screen;
+uniform vec4 tear, rippleA, rippleB;
+uniform float age, lift, separation, pulse, lightAngle;
 const vec3 centre = vec3(.56,.845,0.);
 const vec3 lime = vec3(.54,.94,.035);
 
@@ -94,6 +96,22 @@ float panel(vec3 reflected,vec3 aim,vec2 extent,float feather) {
   vec2 d=abs(uv)-extent;
   return step(.01,facing)*(1.-smoothstep(-feather,feather,max(d.x,d.y)));
 }
+vec2 waveRipple(vec2 p, vec4 rip, out float amp) {
+  amp = 0.;
+  if (rip.w <= .001 || rip.z > 2.6) return vec2(0.);
+  vec2 d = p - rip.xy;
+  float r = length(d);
+  float front = rip.z * .78;
+  float env = exp(-pow(r - front, 2.) * 16.) * exp(-rip.z * 1.45) * rip.w;
+  float w = sin((r - front) * 44.) * env;
+  amp = w;
+  return (d / max(r, .001)) * w;
+}
+vec3 thinFilm(float ndv, float thickness) {
+  vec3 phase = 6.283185 * (2. * thickness * 1.44 * max(ndv, .14)) / vec3(650., 545., 455.);
+  vec3 irid = .5 + .5 * cos(phase);
+  return mix(vec3(.45, .52, .48), irid, .72);
+}
 vec3 shade(vec3 p,vec3 view) {
   vec3 n=normal(p);
   // Shallow surface ripples bend the softboxes across the face. They live
@@ -104,9 +122,15 @@ vec3 shade(vec3 p,vec3 view) {
   float rDist=length(df);
   float capillary=sin(rDist*42.-age*11.)*exp(-rDist*3.2)*pulse;
   vec2 cDir=df/max(rDist,.001);
-  n=normalize(n+n.z*vec3(.018*cos(p.x*31.+ripple)+.038*cDir.x*capillary,.016*ripple+.038*cDir.y*capillary,0.));
+  float ampA, ampB;
+  vec2 wA = waveRipple(p.xy, rippleA, ampA);
+  vec2 wB = waveRipple(p.xy, rippleB, ampB);
+  vec2 totalCap = cDir * capillary * .038 + (wA + wB) * .048;
+  n=normalize(n+n.z*vec3(.018*cos(p.x*31.+ripple)+totalCap.x,.016*ripple+totalCap.y,0.));
   vec3 r=reflect(-view,n);
   vec3 reflected=vec3(dot(r,rightAxis),dot(r,downAxis),dot(r,view));
+  float ca = cos(lightAngle * .68), sa = sin(lightAngle * .68);
+  reflected.xz = mat2(ca, -sa, sa, ca) * reflected.xz;
   vec3 room=vec3(.095,.10,.115)*(1.22-.74*reflected.y);
   // The large diffusion frame reads as a gradient in the liquid, bracketed
   // by two narrow reflection cards on the necks and reflected bulbs.
@@ -120,18 +144,29 @@ vec3 shade(vec3 p,vec3 view) {
   room+=vec3(2.55)*panel(reflected,vec3(.92,.18,.4),vec2(.052,.88),.032);
   float ndv=max(dot(n,view),0.);
   float fresnel=.042+(.958-.19*smoothstep(1.64,1.85,p.y))*pow(1.-ndv,4.8);
-  vec3 col=vec3(.0024,.0026,.0032)+room*fresnel;
+  // Restrained physical thin-film petrol iridescence at extreme grazing angles & capillary crests.
+  float filmThick = 345. + 92. * sin(p.x * 5.2 + p.y * 3.8 + age * .6) + 75. * (capillary + ampA + ampB);
+  vec3 sheen = thinFilm(ndv, filmThick) * pow(1. - ndv, 3.4) * (.13 + .11 * abs(ampA + ampB) + .06 * pulse);
+  vec3 col=vec3(.0024,.0026,.0032)+room*fresnel+sheen*vec3(.58,.92,.76);
   float gap=emitter(p);
-  float lit=exp(-max(gap,0.)*(14.5-3.2*pulse));
+  float meniscusShimmer = 1. + .16 * sin(p.x * 26. - age * 4.2);
+  float lit=exp(-max(gap,0.)*(14.2-3.2*pulse)) * meniscusShimmer;
   float cutFacing=max(0.,-sign(p.y+.27875*p.x-.98)*n.y);
-  col+=lime*lit*(1.+.45*pulse)*(.065+.68*cutFacing+.28*pow(1.-ndv,3.)*cutFacing);
-  col+=lime*exp(-max(gap,0.)*24.)*(1.+.5*pulse)*panel(reflected,vec3(.05,.65,.35),vec2(1.1,.18),.19);
+  col+=lime*lit*(1.+.52*pulse)*(.072+.72*cutFacing+.34*pow(1.-ndv,3.)*cutFacing);
+  col+=lime*exp(-max(gap,0.)*23.)*(1.+.55*pulse)*panel(reflected,vec3(.05,.65,.35),vec2(1.1,.18),.19);
   return col;
 }
 void main() {
   vec2 uv=(gl_FragCoord.xy/resolution-.5)*vec2(2.20,-2.85);
   uv.y+=.35;
-  if(uv.y>=tear.x && uv.y<tear.y) uv.x-=tear.z;
+  // During the handover the liquid shows only in the rows that have already
+  // torn over to the negative, displaced exactly as the field beneath it.
+  if(tear.x>0.) {
+    float kind, split, seam;
+    vec2 from=tearAt(screen.xy+uv*screen.z,view,tear,kind,split,seam);
+    if(kind>.5 || seam>.5) { gl_FragColor=vec4(0.); return; }
+    uv=(from-screen.xy)/screen.z;
+  }
   vec3 view=normalize(cross(rightAxis,downAxis));
   vec3 ro=centre+rightAxis*uv.x+downAxis*(uv.y-lift)+view*1.40;
   vec3 rd=-view;
@@ -203,9 +238,17 @@ export function createOilVolume(hardwareOnly = false, stage) {
   // Drivers often finish compiling on the first real draw. One pixel now
   // keeps that cost out of the first glitch.
   image.width = image.height = 1;
-  renderer.draw({ resolution: [1, 1], rightAxis: [1, 0, 0], downAxis: [0, 1, 0], age: 0, lift: 0, separation: .01, pulse: 0, focus: [.56, .845] });
+  renderer.draw({
+    resolution: [1, 1], rightAxis: [1, 0, 0], downAxis: [0, 1, 0], age: 0, lift: 0, separation: .01,
+    pulse: 0, focus: [.56, .845], tear: [0, 0, 0, 0], lightAngle: 0,
+    rippleA: [0, 0, 10, 0], rippleB: [0, 0, 10, 0],
+  });
   let lastSize = 0, lastCentre = 0;
-  return function render(ctx, { w, h, size, centre = h * .45, pixelRatio, detail = 1, right, down, age, lift, separation, strip, pulse = 0, focus = [.56, .845] }) {
+  function render(ctx, {
+    w, h, size, centre = h * .45, pixelRatio, detail = 1, right, down, age, lift, separation,
+    tear = [0, 0, 0, 0], pulse = 0, focus = [.56, .845], lightAngle = 0,
+    rippleA = [0, 0, 10, 0], rippleB = [0, 0, 10, 0],
+  }) {
     if (renderer.gl.isContextLost()) return false;
     const width = size * 2.20, height = size * 2.85;
     // Edges are resolved analytically in the shader, so no supersampling.
@@ -222,13 +265,16 @@ export function createOilVolume(hardwareOnly = false, stage) {
       lastSize = size;
       lastCentre = centre;
     }
-    const tear = strip ? [(strip.y - centre) / size, (strip.y + strip.height - centre) / size, strip.shift / size] : [0, 0, 0];
-    renderer.draw({ resolution: [rw, rh], rightAxis: right, downAxis: down, age, lift, separation, tear, pulse, focus });
+    renderer.draw({
+      resolution: [rw, rh], rightAxis: right, downAxis: down, age, lift, separation, pulse, focus,
+      tear, view: [w, h], screen: [w / 2, centre, size], lightAngle, rippleA, rippleB,
+    });
     // Offscreen callers can still take a frame. In the exhibit the GPU
-    // presents its own layer directly, including the displaced scan strip.
+    // presents its own layer directly, torn rows included.
     if (!stage) ctx.drawImage(image, (w - width) / 2, top, width, height);
     return true;
-  };
+  }
+  return render;
 }
 
 // The baked take is sampled from the same surface at 16 fps. It keeps the
@@ -239,7 +285,7 @@ function bakedTake() {
     image.src = new URL('../assets/liquid/exposure-' + i + '.webp', import.meta.url);
     return image;
   });
-  return (ctx, { w, h, size, centre = h * .45, lift, age, strip }) => {
+  return (ctx, { w, h, size, centre = h * .45, lift, age, tear }) => {
     const frame = Math.floor((age % 4) * 16);
     const sheet = sheets[Math.floor(frame / 16)];
     if (!sheet.complete || !sheet.naturalWidth) return false;
@@ -247,15 +293,18 @@ function bakedTake() {
     const sw = sheet.naturalWidth / 4, sh = sheet.naturalHeight / 4;
     const sx = frame % 4 * sw, sy = Math.floor(frame % 16 / 4) * sh;
     const left = (w - width) / 2, top = centre + size * (.35 + lift) - height / 2;
-    if (!strip) {
+    if (!tear?.[0]) {
       ctx.drawImage(sheet, sx, sy, sw, sh, left, top, width, height);
       return true;
     }
-    const start = Math.min(1, Math.max(0, (strip.y - top) / height));
-    const end = Math.min(1, Math.max(0, (strip.y + strip.height - top) / height));
-    for (const [from, to, shift] of [[0, start, 0], [start, end, strip.shift], [end, 1, 0]]) {
-      if (to > from) ctx.drawImage(sheet, sx, sy + from * sh, sw, (to - from) * sh,
-        left + shift, top + from * height, width, (to - from) * height);
+    // Slices on the torn rows that have gone over to the negative.
+    for (const row of tearRows(tear, [w, h], top, top + height)) {
+      const y0 = Math.max(top, row.top), y1 = Math.min(top + height, row.top + row.height);
+      if (row.print || y1 <= y0) continue;
+      const from = ((row.smear ? row.top : y0) - row.slip - top) / height;
+      const to = from + (row.smear ? .5 : y1 - y0) / height;
+      const a = Math.max(0, from), b = Math.min(1, to);
+      if (b > a) ctx.drawImage(sheet, sx, sy + a * sh, sw, (b - a) * sh, left + row.shift, y0, width, y1 - y0);
     }
     return true;
   };

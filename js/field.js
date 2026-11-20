@@ -5,13 +5,17 @@
 // thrown from its cut the dither is fine, while further out the picture
 // breaks into flat macroblocks that refresh out of step. At each exposure the
 // calm scene is held as a dithered ghost that dissolves block by block, and
-// it re-forms the same way just before the calm scene returns.
+// it re-forms the same way just before the calm scene returns. At the
+// handover the display loses sync, and torn rows of the full-colour calm
+// print interleave with the negative.
 import { createRenderer } from './gl/gl.js';
+import { TEAR } from './negative.js';
 
 const fragment = `precision highp float;
-uniform vec2 res, origin, dir, pointer;
-uniform vec4 ghostBox;
-uniform float cell, time, age, hold, end, size, ghostReady, pulse;
+${TEAR}
+uniform vec2 res, origin, dir, pointer, trail;
+uniform vec4 ghostBox, tear;
+uniform float cell, time, age, hold, end, size, ghostReady, pulse, dpr, wake, lightAngle;
 uniform vec3 rings;
 uniform sampler2D ghost;
 
@@ -76,6 +80,15 @@ float scene(vec2 q, out float tint) {
     ring += pulse * .85 * exp(-pFront * pFront);
   }
 
+  // Long-persistence phosphor comet wake trailing swift pointer sweeps.
+  float comet = 0.;
+  if (wake > .01) {
+    vec2 pa = q - trail, ba = pointer - trail;
+    float h = clamp(dot(pa, ba) / max(dot(ba, ba), 1.), 0., 1.);
+    float sd = length(pa - ba * h);
+    comet = wake * .52 * exp(-sd / (size * .095)) * (.35 + .65 * h);
+  }
+
   vec2 u = q / res.y;
   float warp = fbm(u * 1.6 + vec2(time * .02, -time * .015));
   float smoke = smoothstep(.46, .82, fbm(u * 3.3 + warp * 1.7 + vec2(-time * .035, time * .02))) * .36;
@@ -85,8 +98,8 @@ float scene(vec2 q, out float tint) {
   vec2 v = (q / res - .5) * vec2(1.25, 1.1);
   float vignette = 1. - smoothstep(.25, .95, length(v));
 
-  tint = clamp(sheet * 1.4 + ring * (.48 + .25 * pulse) + glow * .7, 0., 1.);
-  return clamp(sheet + glow + ring * .85 + smoke + scan, 0., 1.) * quiet(q) * vignette;
+  tint = clamp(sheet * 1.4 + ring * (.48 + .25 * pulse) + glow * .7 + comet * .9, 0., 1.);
+  return clamp(sheet + glow + ring * .85 + comet + smoke + scan, 0., 1.) * quiet(q) * vignette;
 }
 
 vec4 heldGlass(vec2 screen) {
@@ -95,8 +108,42 @@ vec4 heldGlass(vec2 screen) {
   return texture2D(ghost, vec2(uv.x, 1. - uv.y));
 }
 
+// The calm print as it stood before the exposure: the captured glass over
+// paper that follows the page's own gradient, studio wash, and grain.
+vec3 paperAt(vec2 s) {
+  vec2 uv = s / res;
+  float t = length((uv - vec2(.36, .26)) / vec2(.64, .74)) * .7071;
+  vec3 c = mix(vec3(.984, .976, .945), vec3(.937, .925, .886), clamp(t / .43, 0., 1.));
+  c = mix(c, vec3(.867, .867, .824), clamp((t - .43) / .35, 0., 1.));
+  c = mix(c, vec3(.784, .788, .737), clamp((t - .78) / .34, 0., 1.));
+  float diag = uv.x * .899 + uv.y * .438 - lightAngle * .18;
+  float lightWash = smoothstep(.16, .26, diag) * (1. - smoothstep(.26, .45, diag));
+  c = mix(c, vec3(1., .996, .953), lightWash * .24);
+  return c * (1. - .05 * hash(floor(s)));
+}
+vec3 printAt(vec2 s, float split) {
+  vec3 paper = paperAt(s);
+  if (ghostReady < .5) return paper;
+  // The channels lose registration with each other.
+  vec4 r = heldGlass(s + vec2(split, 0.)), g = heldGlass(s), b = heldGlass(s - vec2(split, 0.));
+  return vec3(mix(paper.r, r.r, r.a), mix(paper.g, g.g, g.a), mix(paper.b, b.b, b.a));
+}
+
 void main() {
   vec2 p = vec2(gl_FragCoord.x, res.y - gl_FragCoord.y);
+  vec2 from = p;
+  if (tear.x > 0.) {
+    float kind, split, seam;
+    from = tearAt(p / dpr, res / dpr, tear, kind, split, seam) * dpr;
+    if (seam > .5) { gl_FragColor = vec4(.80, .96, .32, 1.); return; }
+    if (kind > .5) {
+      vec3 print = printAt(from, split * dpr);
+      // An inverted row reads as the photographic negative of the print.
+      if (kind > 1.5) print = (1. - dot(print, vec3(.3, .59, .11))) * vec3(.80, .86, .76);
+      gl_FragColor = vec4(print, 1.);
+      return;
+    }
+  }
   vec2 ci = floor(p / cell);
   vec2 local = floor(p - ci * cell);
   float lit = floor(cell * .72 + .5);
@@ -104,10 +151,11 @@ void main() {
   bool inDot = all(greaterThanEqual(local, vec2(inset))) && all(lessThan(local, vec2(inset + lit)));
   if (!inDot) { gl_FragColor = vec4(0., 0., 0., 1.); return; }
 
-  // Rows occasionally tear sideways.
-  vec2 cc = ci;
+  // Rows occasionally tear sideways. At the handover the negative follows
+  // the torn rows a whole cell at a time, so its dots stay on the grid.
+  vec2 cc = ci + floor((from - p) / cell + .5);
   float row = floor(ci.y / 3.), beat = floor(time * 7.);
-  if (hash(vec2(row, beat)) > .985) cc.x += floor((hash(vec2(beat, row)) - .5) * 14.);
+  if (hash(vec2(row, beat)) > .985 - .05 * tear.x) cc.x += floor((hash(vec2(beat, row)) - .5) * 14.);
 
   // Bits go where the B is: fine dither near it, coarse blocks far away.
   vec2 centre = (cc + .5) * cell;
@@ -124,7 +172,7 @@ void main() {
   // Datamosh: a few blocks show the picture from somewhere else.
   vec2 mb = floor(cc / 8.);
   float mosh = hash(mb + floor(time * 5.) * 1.31);
-  if (mosh > .972) sample_ += (vec2(hash(mb * 1.7), hash(mb * 2.3)) - .5) * cell * 40.;
+  if (mosh > .972 - .06 * tear.x) sample_ += (vec2(hash(mb * 1.7), hash(mb * 2.3)) - .5) * cell * 40.;
 
   // The pointer is a loupe over the picture; the grid itself stays put.
   vec2 lens = sample_ - pointer;
@@ -185,6 +233,7 @@ export function createField(stage) {
   let ghostBox = [0, 0, 1, 1];
 
   return {
+    canvas,
     resize(w, h, ratio) {
       // Software rasterisers draw the panel at CSS resolution.
       scale = software ? 1 : ratio;
@@ -196,7 +245,7 @@ export function createField(stage) {
       ghostBox = [x / w, y / h, width / w, height / h];
       try { ghost = renderer.texture(source, ghost ?? undefined); } catch { ghost = null; }
     },
-    render({ time, age, hold, end, rings, origin, dir, size, pointer, pulse = 0 }) {
+    render({ time, age, hold, end, rings, origin, dir, size, pointer, trail = pointer, wake = 0, pulse = 0, tear = [0, 0, 0, 0], lightAngle = 0 }) {
       if (gl.isContextLost()) return;
       const uniforms = {
         res: [canvas.width, canvas.height],
@@ -204,7 +253,9 @@ export function createField(stage) {
         time, age, hold, end, rings, size: size * scale, dir,
         origin: [origin[0] * scale, origin[1] * scale],
         pointer: [pointer[0] * scale, pointer[1] * scale],
-        ghostReady: ghost ? 1 : 0, ghostBox, pulse,
+        trail: [trail[0] * scale, trail[1] * scale],
+        wake, lightAngle,
+        ghostReady: ghost ? 1 : 0, ghostBox, pulse, tear, dpr: scale,
       };
       if (ghost) uniforms.ghost = ghost;
       renderer.draw(uniforms);

@@ -2,12 +2,10 @@ import { createField } from './field.js';
 import { createGlass } from './glass.js';
 import { makeGround } from './glass-ground.js';
 import { prepareOil } from './oil-volume.js';
-import { exposureStrip } from './negative.js';
-import { insideCut } from './inside-cut.js';
+import { exposureTear } from './negative.js';
 
 // The two radii, baseline and diagonal kerf come from the production B mark.
 // Both glass halves and their projected light share this exact silhouette.
-const TAU = Math.PI * 2;
 const upper = { x: .57, y: .43, r: .43 };
 const lower = { x: .71, y: 1.20, r: .49 };
 const edge = (circle, y) => circle.x + Math.sqrt(Math.max(0, circle.r ** 2 - (y - circle.y) ** 2));
@@ -89,8 +87,8 @@ const behind = plates.map((plate, part) => {
 
   // Light carried along inside the glass from the kerf.
   const towards = part ? 1 : -1;
-  const cut = part ? 1.0475 : .9125;
-  const x0 = .5, y0 = cut - .27875 * x0;
+  const cutIntercept = part ? 1.0475 : .9125;
+  const x0 = .5, y0 = cutIntercept - .27875 * x0;
   const glow = g.createLinearGradient(x0, y0, x0 + towards * normal[0] * .5, y0 + towards * normal[1] * .5);
   glow.addColorStop(0, lime(.85));
   glow.addColorStop(.06, lime(.49));
@@ -192,8 +190,8 @@ function paintFace(g, plate, part, sway, density) {
     const x = k * FLUTE;
     // Each reed compresses a wider strip of the scene behind it.
     const seen = FLUTE * 3.3;
-    const centre = x + FLUTE / 2 + refract + .011 * Math.sin(k * 2.31 + part);
-    g.drawImage(tile, (centre - seen / 2 + PAD) * DENSITY, PAD_Y * DENSITY, seen * DENSITY, 1.7 * DENSITY,
+    const centreX = x + FLUTE / 2 + refract + .011 * Math.sin(k * 2.31 + part);
+    g.drawImage(tile, (centreX - seen / 2 + PAD) * DENSITY, PAD_Y * DENSITY, seen * DENSITY, 1.7 * DENSITY,
       x, 0, FLUTE + .0008, 1.7);
     const p = Math.min(.84, Math.max(.16, .5 + crest + (k - flutes / 2) * .009));
     const shade = g.createLinearGradient(x, 0, x + FLUTE, 0);
@@ -226,8 +224,30 @@ function paintFace(g, plate, part, sway, density) {
 const canvas = document.querySelector('.exhibit canvas');
 const ctx = canvas.getContext('2d');
 const stage = canvas.closest('main');
+const wash = stage.querySelector('.studio-wash');
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
-const pointer = { x: 0, y: 0, tx: 0, ty: 0, vx: 0, vy: 0, press: 0, tPress: 0, vPress: 0, pulse: 0 };
+
+const pointer = {
+  x: 0, y: 0, tx: 0, ty: 0, vx: 0, vy: 0,
+  press: 0, tPress: 0, vPress: 0, pulse: 0,
+  trailX: 0, trailY: 0, wake: 0,
+};
+// Tactile drag-to-inspect orbit with spring return on release.
+const drag = {
+  down: false, moved: false, startX: 0, startY: 0,
+  x: 0, y: 0, tx: 0, ty: 0, vx: 0, vy: 0,
+};
+// Direct studio light angle (scroll wheel) and passive mobile tilt parallax.
+const rig = { lightDeg: 0, lightRad: 0, lightTarget: 0, gyroX: 0, gyroY: 0 };
+// Travelling capillary ripple memory for the obsidian liquid shader.
+const ripples = [[.56, .845, 10, 0], [.56, .845, 10, 0]];
+let rippleSlot = 0;
+
+function pushRipple(fx, fy, strength = 1) {
+  ripples[rippleSlot] = [fx, fy, 0, strength];
+  rippleSlot = (rippleSlot + 1) % ripples.length;
+}
+
 let w, h, size, centre, pixelRatio, time = 0, last = 0, frame = 0, lastTap = -1;
 
 const field = createField(canvas);
@@ -256,18 +276,19 @@ function cameraRows(yaw, pitch, tilt) {
     c * sy + s * cy * sp, s * sy - c * cy * sp);
 }
 
-// Every place the B can reach as it sways, lifts and follows the pointer.
-function groundCard(sway, lift) {
-  const stretch = Math.min(1, w / (size * 3.4)) * (1 + sway * .37);
-  return [w / 2 + size * (.32 * stretch - sway * .21), centre + size * (1.016 + lift * .23),
+// Every place the B can reach as it sways, lifts, drags and follows the pointer.
+function groundCard(sway, lift, lightAngle = 0) {
+  const eff = sway + lightAngle * .26;
+  const stretch = Math.min(1, w / (size * 3.4)) * (1 + Math.max(-.42, Math.min(.42, eff)) * .34);
+  return [w / 2 + size * (.32 * stretch - eff * .19), centre + size * (1.016 + lift * .23),
     size * 1.28 * stretch, size * .25];
 }
 
 function reachOf() {
   const box = [Infinity, Infinity, -Infinity, -Infinity];
   const steps = n => Array.from({ length: n }, (_, i) => i / (n - 1) * 2 - 1);
-  for (const y of steps(5)) for (const p of steps(5)) for (const t of [-1, 1]) for (const offset of [-.038, .038]) {
-    const yaw = -.46 + y * .235, pitch = -.16 + p * .123, tilt = -.115 + t * .018;
+  for (const y of steps(5)) for (const p of steps(5)) for (const t of [-1, 1]) for (const offset of [-.048, .048]) {
+    const yaw = -.46 + y * .56, pitch = -.16 + p * .28, tilt = -.115 + t * .022;
     const c = Math.cos(tilt), s = Math.sin(tilt);
     const ax = c * Math.cos(yaw) - s * Math.sin(yaw) * Math.sin(pitch);
     const ay = s * Math.cos(yaw) + c * Math.sin(yaw) * Math.sin(pitch);
@@ -283,21 +304,27 @@ function reachOf() {
     }
   }
   // The shadow and caustic lie on the ground beneath it.
-  for (const sway of [-.235, .235]) {
-    const [x, y, rx, ry] = groundCard(sway, .012);
+  for (const sway of [-.52, .52]) {
+    const [x, y, rx, ry] = groundCard(sway, .012, sway * .5);
     box[0] = Math.min(box[0], x - rx);
     box[2] = Math.max(box[2], x + rx);
     box[3] = Math.max(box[3], y + ry);
   }
   return box;
 }
+
 let glitchShowing = false, stageDrawn = true, glassDrawn = false;
-let lastExposureEnd = -Infinity;
+let lastExposureEnd = -Infinity, tearBeat = 0, nextTear = 0, lastWashKey = '';
 let oilVolume;
 // Each exposure is planned afresh so no two play alike: a stutter of up to
 // three brief flashes, a hold of uneven length, rings and drips in their own
 // phase, and an irregular wait before the next. Now and then a short
 // aftershock follows closely behind.
+//
+// Every flash is [start, end, share of the calm print it keeps, how hard it
+// tears]. Each opening flash bites further into the print. The hold tears in
+// and out over its own uneven lengths, and about half the time the signal
+// relapses for a frame or two after it has locked back onto the glass.
 function planExposure(start, aftershock = false) {
   const flashes = [];
   let t = 0;
@@ -305,14 +332,27 @@ function planExposure(start, aftershock = false) {
   const count = aftershock ? 1 + (Math.random() < .5) : roll < .2 ? 0 : roll < .62 ? 1 : roll < .88 ? 2 : 3;
   for (let i = 0; i < count; i++) {
     const length = .045 + Math.random() * .13;
-    flashes.push([t, t + length]);
+    flashes.push([t, t + length, Math.max(.3, .84 - i * .18 - Math.random() * .14), .7 + Math.random() * .3]);
     t += length + .07 + Math.random() * .3;
   }
   const hold = aftershock ? .35 + Math.random() * .5
     : Math.random() < .12 ? 3.4 + Math.random() * 1.2 : 1.5 + Math.random() * 1.9;
+  const end = t + hold;
+  const tail = [];
+  if (Math.random() < (aftershock ? .25 : .5)) {
+    let after = end + .06 + Math.random() * .34;
+    for (let i = 0, n = 1 + (Math.random() < .35); i < n; i++) {
+      const length = .03 + Math.random() * .08;
+      tail.push([after, after + length, .6 + Math.random() * .3, .55 + Math.random() * .45]);
+      after += length + .05 + Math.random() * .2;
+    }
+  }
   const second = t > 0 ? t : .25 + Math.random() * .3;
   return {
-    start, flashes, aftershock, holdStart: t, end: t + hold,
+    start, flashes, tail, aftershock, holdStart: t, end, finish: tail.length ? tail.at(-1)[1] : end,
+    tearIn: Math.min(hold * .45, (aftershock ? .22 : .34) + Math.random() * .36),
+    tearOut: Math.min(hold * .4, .26 + Math.random() * .3),
+    entryCalm: count ? .38 : .62,
     rings: [0, second, second + .9 + Math.random() * .8],
     phase: Math.random() * 4, seed: Math.random(),
   };
@@ -322,16 +362,20 @@ let exposure = planExposure(3 + Math.random() * 3);
 function exposureAge() {
   if (reduced.matches) return -1;
   const age = time - exposure.start;
-  if (age >= exposure.end) {
+  // The glass starts to recover when the hold ends, even if the signal
+  // still relapses afterwards.
+  if (age >= exposure.end && lastExposureEnd < exposure.start) lastExposureEnd = exposure.start + exposure.end;
+  if (age >= exposure.finish) {
     // Waits average about thirteen seconds but range from six to twenty-six.
     const shock = !exposure.aftershock && Math.random() < .14;
     const wait = shock ? 1.2 + Math.random() * 2.2 : 6 + Math.min(20, -Math.log(1 - Math.random()) * 7);
     exposure = planExposure(time + wait, shock);
-    lastExposureEnd = time;
     return -1;
   }
   if (age < 0) return -1;
-  if (age < exposure.holdStart) return exposure.flashes.some(([a, b]) => age >= a && age < b) ? age : -1;
+  const within = flashes => flashes.some(([a, b]) => age >= a && age < b);
+  if (age < exposure.holdStart) return within(exposure.flashes) ? age : -1;
+  if (age >= exposure.end) return within(exposure.tail) ? age : -1;
   return age;
 }
 
@@ -356,16 +400,16 @@ function reflectedWalls(glint) {
   return wallRamps;
 }
 
-let exteriorPose;
 function draw() {
   const age = exposureAge();
+  const isNeg = age >= 0;
   // The held print can come straight from the last presented glass frame.
-  if (age >= 0 && !glitchShowing && field) {
+  if (isNeg && !glitchShowing && field) {
     if (glassDrawn) field.capture(glass.canvas, glass.box, w, h);
     else field.capture(canvas, [0, 0, w, h], w, h);
   }
   glassDrawn = false;
-  glitchShowing = age >= 0;
+  glitchShowing = isNeg;
   ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
   // While the GPU layer carries the calm scene, the stage canvas stays empty
   // and untouched, so the browser has nothing to re-upload each frame.
@@ -373,19 +417,46 @@ function draw() {
     ctx.clearRect(0, 0, w, h);
     stageDrawn = false;
   }
-  stage.classList.toggle('negative', age >= 0);
-  const yaw = -.46 + Math.sin(time * .30) * .055 + pointer.x * .18;
-  const pitch = -.16 + Math.cos(time * .23) * .033 - pointer.y * .09;
-  const tilt = -.115 + Math.sin(time * .22) * .018;
+  stage.classList.toggle('negative', isNeg);
+
+  const yaw = -.46 + Math.sin(time * .30) * .055 + pointer.x * .18 + drag.x + rig.gyroX;
+  const pitch = -.16 + Math.cos(time * .23) * .033 - pointer.y * .09 + drag.y + rig.gyroY;
+  const tilt = -.115 + Math.sin(time * .22) * .018 + drag.x * .035;
   const rows = cameraRows(yaw, pitch, tilt);
   const [[ax, bx, zx], [ay, by, zy]] = rows;
   const lift = Math.sin(time * .56) * .012;
   const speed = Math.min(1, Math.hypot(pointer.vx, pointer.vy) * .18);
   const pulse = Math.min(1, Math.max(pointer.press * .65, pointer.pulse) + speed * .28);
   const focus = [.56 + pointer.x * .48, .845 + pointer.y * .62];
+  // Frame 0 renders at resting equilibrium (intro=1) to match rest.webp cleanly;
+  // subsequent frames glide a subtle first-light wake over the first 1.15 seconds.
+  const intro = time <= .001 || reduced.matches ? 1 : Math.min(1, time / 1.15);
+
+  // Torn rows are re-cut on an irregular beat, faster than the frame rate
+  // can make regular.
+  const torn = isNeg ? exposureTear(age, exposure) : null;
+  if (torn && time >= nextTear) {
+    tearBeat = (tearBeat + 1) % 509;
+    nextTear = time + .02 + Math.random() * .065;
+  }
+  const tear = torn ? [...torn, tearBeat, exposure.seed] : [0, 0, 0, 0];
+  const spread = .008 + .012 * Math.sin(time * .38) + pointer.press * .0055;
+  const pointerPx = [(pointer.x + 1) * w / 2, (pointer.y + 1) * h / 2];
+  const trailPx = [(pointer.trailX + 1) * w / 2, (pointer.trailY + 1) * h / 2];
+
+  // Update ambient studio paper skylight wash smoothly without layout work.
+  if (wash && !isNeg) {
+    const wx = (-rig.lightRad * 48 - pointer.x * 16).toFixed(1);
+    const wy = (-pointer.y * 12).toFixed(1);
+    const key = wx + ',' + wy;
+    if (key !== lastWashKey) {
+      lastWashKey = key;
+      wash.style.transform = `translate3d(${wx}px,${wy}px,0)`;
+    }
+  }
 
   glitchShown = false;
-  if (age >= 0 && field) {
+  if (isNeg && field) {
     // The cut's light runs along the kerf as the B is turned on screen.
     const along = [ax - .27875 * bx, ay - .27875 * by];
     const length = Math.hypot(...along);
@@ -393,16 +464,16 @@ function draw() {
       time, age, size, hold: exposure.holdStart, end: exposure.end, rings: exposure.rings,
       origin: [w / 2 + size * bx * (lift - .0211), centre + size * by * (lift - .0211)],
       dir: [along[0] / length, along[1] / length],
-      pointer: [(pointer.x + 1) * w / 2, (pointer.y + 1) * h / 2],
-      pulse,
+      pointer: pointerPx, trail: trailPx, wake: pointer.wake,
+      pulse, tear, lightAngle: rig.lightRad,
     });
   }
-  const spread = .008 + .012 * Math.sin(time * .38) + pointer.press * .0055;
-  if (age >= 0) {
+  if (isNeg) {
     const drawn = oilVolume?.(ctx, {
       w, h, size, centre, pixelRatio, detail: oilDetail, right: [ax, bx, zx], down: [ay, by, zy],
-      age: age + exposure.phase, lift, separation: spread, strip: exposureStrip(age, exposure, w, h),
-      pulse, focus,
+      age: age + exposure.phase, lift, separation: spread,
+      tear, pulse, focus, lightAngle: rig.lightRad,
+      rippleA: ripples[0], rippleB: ripples[1],
     });
     if (drawn) {
       glitchShown = drawn === 'layer';
@@ -412,24 +483,20 @@ function draw() {
   }
   const sway = yaw + .46;
   const glint = .10 * Math.sin(time * .35) + pointer.x * .14 - pointer.y * .035;
-  const ground = groundCard(sway, lift);
+  const ground = groundCard(sway, lift, rig.lightRad);
   // The GPU layer hides during a glitch, so a glitch without its liquid B
   // falls back to drawing the glass here.
-  if (age < 0) {
-    const recovery = reduced.matches ? 1 : Math.min(1, (time - lastExposureEnd) / .74);
-    exteriorPose = { yaw, pitch, tilt, lift, spread, glint, sway, pulse, focus, recovery };
-    const u = filamentEnd - .56, v = KERF - .27875 * filamentEnd - .845 + lift;
-    insideCut.placeTip(w / 2 + size * (ax * u + bx * v - zx * .1445),
-      centre + size * (ay * u + by * v - zy * .1445), Math.atan2(ay - .27875 * by, ax - .27875 * bx));
-    if (glass?.render({ rows, centre: [w / 2, centre], size, lift,
-      shift: [-spread, spread], glint, sway, pulse, focus, ground, recovery })) {
-      glassDrawn = true;
-      return;
-    }
+  if (!isNeg && glass?.render({
+    rows, centre: [w / 2, centre], size, lift, shift: [-spread, spread], glint, sway, pulse, focus, ground,
+    recovery: reduced.matches ? 1 : Math.min(1, (time - lastExposureEnd) / .74),
+    lightAngle: rig.lightRad, intro,
+  })) {
+    glassDrawn = true;
+    return;
   }
 
   stageDrawn = true;
-  if (age < 0) {
+  if (!isNeg) {
     const [x, y, rx, ry] = ground;
     ctx.drawImage(groundMap, x - rx, y - ry, rx * 2, ry * 2);
   }
@@ -442,8 +509,8 @@ function draw() {
       bx * size * pixelRatio, by * size * pixelRatio,
       (w / 2 + x * size) * pixelRatio, (centre + y * size) * pixelRatio);
   }
-  const sides = reflectedWalls(glint);
-  refreshFaces(sway, Math.min(size * pixelRatio, 760));
+  const sides = reflectedWalls(glint + rig.lightRad * .22);
+  refreshFaces(sway + rig.lightRad * .22, Math.min(size * pixelRatio, 760));
   // Only the rim of each layer can show past the face in front of it, so the
   // block's sides are built from overlapping outline strokes, not fills.
   ctx.lineJoin = 'round';
@@ -513,12 +580,32 @@ function followPointer(dt) {
   pointer.y = pointer.ty + (dy + my * dt) * decay;
   pointer.vx = (pointer.vx - rate * mx * dt) * decay;
   pointer.vy = (pointer.vy - rate * my * dt) * decay;
+
   const dp = pointer.press - pointer.tPress;
   const mp = pointer.vPress + 12 * dp, pDecay = Math.exp(-12 * dt);
   pointer.press = pointer.tPress + (dp + mp * dt) * pDecay;
   pointer.vPress = (pointer.vPress - 12 * mp * dt) * pDecay;
   pointer.pulse *= Math.exp(-3.2 * dt);
+
+  // Drag orbit spring physics (weightier return than hover tilt).
+  const dRate = drag.down ? 14 : 7.8, dDecay = Math.exp(-dRate * dt);
+  const ddx = drag.x - drag.tx, ddy = drag.y - drag.ty;
+  const dmx = drag.vx + dRate * ddx, dmy = drag.vy + dRate * ddy;
+  drag.x = drag.tx + (ddx + dmx * dt) * dDecay;
+  drag.y = drag.ty + (ddy + dmy * dt) * dDecay;
+  drag.vx = (drag.vx - dRate * dmx * dt) * dDecay;
+  drag.vy = (drag.vy - dRate * dmy * dt) * dDecay;
+
+  // Smooth studio light sweep, phosphor comet trail, and capillary ripple waves.
+  rig.lightRad += (rig.lightTarget - rig.lightRad) * (1 - Math.exp(-10 * dt));
+  const tLerp = 1 - Math.exp(-7.5 * dt);
+  pointer.trailX += (pointer.x - pointer.trailX) * tLerp;
+  pointer.trailY += (pointer.y - pointer.trailY) * tLerp;
+  const spd = Math.min(1, Math.hypot(pointer.vx, pointer.vy) * .22);
+  pointer.wake = Math.max(pointer.wake * Math.exp(-4.2 * dt), spd);
+  for (const rip of ripples) if (rip[3] > 0 && rip[2] < 3.5) rip[2] += dt;
 }
+
 function tick(now) {
   frame = 0;
   const elapsed = last ? (now - last) / 1000 : 0;
@@ -534,11 +621,13 @@ function tick(now) {
   draw();
   if (!reduced.matches && !document.hidden) frame = requestAnimationFrame(tick);
 }
+
 function refresh() {
   cancelAnimationFrame(frame);
   last = 0;
-  if (!document.hidden && !insideCut.active) frame = requestAnimationFrame(tick);
+  if (!document.hidden) frame = requestAnimationFrame(tick);
 }
+
 function fitCanvas() {
   w = canvas.clientWidth;
   h = canvas.clientHeight;
@@ -546,77 +635,94 @@ function fitCanvas() {
   field?.resize(w, h, pixelRatio);
   size = Math.min(h * .31, w * .49);
   centre = h * .46;
-  glass?.resize(pixelRatio, insideCut.active ? [0, 0, w, h] : reachOf());
+  glass?.resize(pixelRatio, reachOf());
   canvas.width = Math.round(w * pixelRatio);
   canvas.height = Math.round(h * pixelRatio);
 }
+
 function resize() {
   fitCanvas();
-  // Motion can be enabled for the first time from within a photographic
-  // detail. Establish the exterior pose before handing the mesh to its camera.
-  if (!insideCut.active || !exteriorPose) draw();
-  if (insideCut.active) insideCut.redraw();
+  draw();
   document.querySelector('.silhouette').hidden = true;
+  stage.classList.add('ready');
   refresh();
 }
+
 function pointAt(event) {
   if (!event.isPrimary) return;
   pointer.tx = Math.max(-1, Math.min(1, event.clientX / w * 2 - 1));
   pointer.ty = Math.max(-1, Math.min(1, event.clientY / h * 2 - 1));
 }
-canvas.addEventListener('pointermove', pointAt);
+
+canvas.addEventListener('pointermove', event => {
+  pointAt(event);
+  if (drag.down && event.isPrimary) {
+    const dx = (event.clientX - drag.startX) / Math.max(240, w * .45);
+    const dy = (event.clientY - drag.startY) / Math.max(240, h * .45);
+    if (!drag.moved && Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 6) {
+      drag.moved = true;
+      stage.classList.add('dragging');
+    }
+    if (drag.moved) {
+      drag.tx = Math.max(-.34, Math.min(.34, dx * .52));
+      drag.ty = Math.max(-.16, Math.min(.16, -dy * .32));
+    }
+  }
+});
+
 canvas.addEventListener('pointerdown', event => {
   if (!event.isPrimary) return;
   pointAt(event);
   pointer.tPress = 1;
   pointer.pulse = 1;
+  drag.down = true;
+  drag.moved = false;
+  drag.startX = event.clientX;
+  drag.startY = event.clientY;
+  pushRipple(.56 + pointer.tx * .48, .845 + pointer.ty * .62, 1);
   if (!reduced.matches && time - lastTap < .35 && exposureAge() < 0) {
     if (oilVolume === undefined) oilVolume = prepareOil(canvas);
     exposure = planExposure(time);
   }
   lastTap = time;
 });
-function release() { pointer.tx = pointer.ty = pointer.tPress = 0; }
+
+function releaseDrag() {
+  drag.down = false;
+  drag.moved = false;
+  drag.tx = 0;
+  drag.ty = 0;
+  stage.classList.remove('dragging');
+}
+function release() {
+  pointer.tx = pointer.ty = pointer.tPress = 0;
+  releaseDrag();
+}
 canvas.addEventListener('pointerleave', release);
 canvas.addEventListener('pointercancel', release);
-canvas.addEventListener('pointerup', event => {
+window.addEventListener('pointerup', event => {
+  if (!event.isPrimary) return;
   pointer.tPress = 0;
-  if (event.pointerType !== 'mouse') release();
+  releaseDrag();
+  if (event.pointerType !== 'mouse') pointer.tx = pointer.ty = 0;
 });
+
+// Wheel gently sweeps the studio key-light without scrolling the viewport.
+stage.addEventListener('wheel', event => {
+  if (reduced.matches) return;
+  event.preventDefault();
+  const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+  rig.lightDeg = Math.max(-55, Math.min(55, rig.lightDeg + Math.sign(delta) * Math.min(7, Math.abs(delta) * .06)));
+  rig.lightTarget = rig.lightDeg * Math.PI / 180;
+}, { passive: false });
+
+// Subtle passive mobile tilt parallax when available.
+window.addEventListener('deviceorientation', event => {
+  if (event.gamma == null || event.beta == null) return;
+  rig.gyroX = Math.max(-.12, Math.min(.12, event.gamma / 45 * .12));
+  rig.gyroY = Math.max(-.08, Math.min(.08, (event.beta - 45) / 45 * .08));
+}, { passive: true });
+
 document.addEventListener('visibilitychange', refresh);
 reduced.addEventListener('change', refresh);
 new ResizeObserver(resize).observe(canvas);
-
-// Freeze the exposure clock while the visitor is examining the material.
-// Only the viewport is allocated, even when the full mesh spans many screens.
-insideCut.connect({
-  available: () => !!glass && !glass.canvas.getContext('webgl').isContextLost(),
-  setActive(active) {
-    cancelAnimationFrame(frame);
-    frame = last = 0;
-    release();
-    lastTap = -Infinity;
-    if (!w || !h) return;
-    glass?.resize(pixelRatio, active ? [0, 0, w, h] : reachOf());
-    if (active) stage.classList.remove('negative');
-    else { draw(); refresh(); }
-  },
-  paint(cam) {
-    if (!glass || !exteriorPose || !w || !h) return false;
-    const pose = exteriorPose;
-    const blend = (a, b) => a + (b - a) * cam.align;
-    const rows = cameraRows(blend(pose.yaw, -.55), blend(pose.pitch, -.065), blend(pose.tilt, -.15));
-    const sizeInside = cam.scale * 375;
-    const cx = cam.x + 367.5 * cam.scale, cy = cam.y + 375 * cam.scale;
-    const magnification = sizeInside / size;
-    const [gx, gy, rx, ry] = groundCard(pose.sway, pose.lift);
-    const spread = blend(pose.spread, .055);
-    return glass.render({
-      rows, centre:[cx, cy], size:sizeInside, lift:blend(pose.lift, 0), shift:[-spread, spread],
-      glint:blend(pose.glint, .024 + .048 * cam.gaze), sway:blend(pose.sway, -.072 + .017 * cam.gaze),
-      pulse:blend(pose.pulse, .15), focus:pose.focus, recovery:blend(pose.recovery, 1),
-      ground:[cx + (gx - w / 2) * magnification, cy + (gy - centre) * magnification, rx * magnification, ry * magnification],
-    });
-  },
-});
-glass?.canvas.addEventListener('webglcontextlost', insideCut.redraw);

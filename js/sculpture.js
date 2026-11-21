@@ -236,7 +236,8 @@ const ctx = canvas.getContext('2d');
 const stage = canvas.closest('main');
 const wash = stage.querySelector('.studio-wash');
 const chrome = document.querySelector('meta[name="theme-color"]');
-const PAPER_TONE = '#e5e1d8', SPACE_TONE = '#03060b';
+const PAPER_TONE = '#e5e1d8', SPACE_TONE = '#03060b', LOUVER_TONE = '#c8c7f3', QUANTUM_TONE = '#0d1026';
+const STAGE_TONES = [PAPER_TONE, SPACE_TONE, LOUVER_TONE, QUANTUM_TONE];
 let chromeDark = false;
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 
@@ -367,78 +368,82 @@ function reachOf(variant = glassVariant) {
 
 let glitchShowing = false, stageDrawn = true, glassDrawn = false;
 let lastExposureEnd = -Infinity, tearBeat = 0, nextTear = 0, lastWashKey = '';
-// Rotates through all 3 sculpture variants once per black-liquid exposure:
+// Rotates through all 5 sculpture variants once per black-liquid exposure:
 //   0 = Starship B, a kitbashed megastructure patrolled by a small fleet, in deep space
 //   1 = Classic Reeded Architectural Float-Glass B
-//   2 = AAA 3D Plush Fur B (Bright Orange Fur + Bright Purple Streaks, PBD Physics & Light Breeze)
-const GLASS_VARIANTS = 3, STARSHIP = 0;
-// The starship holds the stage for at least this long unless a double-tap
-// calls the glitch sooner.
-const STARSHIP_STAY = 10.5;
+//   2 = Plush Fur B (Copper-Orange Fur + Violet Streaks, PBD Physics & Light Breeze)
+//   3 = Architectural Terrazzo & Emerald Louver B (Kinetic Concentric Fins + Violet Grid Studio)
+//   4 = Quantum Glass Voxel Core B (Micro-Grid Containment + 3D Neural Voxels + PCB Studio)
+const GLASS_VARIANTS = 5, STARSHIP = 0, LOUVER = 3, VOXEL = 4;
+// Featured themed worlds hold the stage long enough to explore unless a
+// double-tap calls the glitch sooner.
+const STARSHIP_STAY = 10.5, FEATURE_STAY = 10.0;
 let glassVariant = 0, swappedExposure = null;
-let spaceOn = false, spaceShiftX = 0, spaceShiftY = 0;
+let stageMode = 0, spaceShiftX = 0, spaceShiftY = 0;
 
-function setSpace(on) {
-  on = Boolean(on && space);
-  stage.classList.toggle('space', on);
-  if (on === spaceOn) return;
-  spaceOn = on;
-  space?.activate(on);
-  if (chrome && !chromeDark) chrome.content = on ? SPACE_TONE : PAPER_TONE;
+function stageModeFor(variant) {
+  if (!space) return 0;
+  if (variant === STARSHIP) return 1;
+  if (variant === LOUVER) return 2;
+  if (variant === VOXEL) return 3;
+  return 0;
+}
+
+function setStage(mode) {
+  mode = space ? mode : 0;
+  stage.classList.toggle('space', mode === 1);
+  stage.classList.toggle('louver', mode === 2);
+  stage.classList.toggle('quantum', mode === 3);
+  if (mode === stageMode) return;
+  stageMode = mode;
+  space?.activate(mode);
+  if (chrome && !chromeDark) chrome.content = STAGE_TONES[mode] || PAPER_TONE;
 }
 
 // Each glitch hands the stage to the next work, unseen behind the black.
 function advanceVariant() {
   glassVariant = (glassVariant + 1) % GLASS_VARIANTS;
-  setSpace(glassVariant === STARSHIP);
+  setStage(stageModeFor(glassVariant));
   if (glass) glass.resize(pixelRatio, reachOf(glassVariant));
   if (glassVariant === STARSHIP) glass?.arrive();
 }
 let oilVolume;
-// Each exposure is planned afresh so no two play alike: a stutter of up to
-// three brief flashes, a hold of uneven length, rings and drips in their own
-// phase, and an irregular wait before the next. Now and then a short
-// aftershock follows closely behind.
-//
-// Every flash is [start, end, share of the calm print it keeps, how hard it
-// tears]. Each opening flash bites further into the print. The hold tears in
-// and out over its own uneven lengths, and about half the time the signal
-// relapses for a frame or two after it has locked back onto the glass.
+// Each exposure is planned afresh so no two play alike, tuned for a snappy,
+// high-voltage changeover: 0-2 crisp opening stutters, a brisk black-liquid
+// hold (~0.7-1.2s) with clean unseen mid-hold swap, fast sync-loss tear in/out,
+// and an occasional brief relapse flash.
 function planExposure(start, aftershock = false) {
   const flashes = [];
   let t = 0;
   const roll = Math.random();
-  const count = aftershock ? 1 + (Math.random() < .5) : roll < .2 ? 0 : roll < .62 ? 1 : roll < .88 ? 2 : 3;
+  const count = aftershock ? (Math.random() < .45 ? 1 : 0) : roll < .42 ? 0 : roll < .85 ? 1 : 2;
   for (let i = 0; i < count; i++) {
-    const length = .045 + Math.random() * .13;
-    flashes.push([t, t + length, Math.max(.3, .84 - i * .18 - Math.random() * .14), .7 + Math.random() * .3]);
-    t += length + .07 + Math.random() * .3;
+    const length = .032 + Math.random() * .05;
+    flashes.push([t, t + length, Math.max(.34, .82 - i * .2 - Math.random() * .12), .72 + Math.random() * .28]);
+    t += length + .035 + Math.random() * .08;
   }
-  const hold = aftershock ? .35 + Math.random() * .5
-    : Math.random() < .12 ? 3.4 + Math.random() * 1.2 : 1.5 + Math.random() * 1.9;
+  const hold = aftershock ? .24 + Math.random() * .20
+    : Math.random() < .10 ? 1.22 + Math.random() * .33 : .70 + Math.random() * .48;
   const end = t + hold;
   const tail = [];
-  if (Math.random() < (aftershock ? .25 : .5)) {
-    let after = end + .06 + Math.random() * .34;
-    for (let i = 0, n = 1 + (Math.random() < .35); i < n; i++) {
-      const length = .03 + Math.random() * .08;
-      tail.push([after, after + length, .6 + Math.random() * .3, .55 + Math.random() * .45]);
-      after += length + .05 + Math.random() * .2;
-    }
+  if (Math.random() < (aftershock ? .12 : .28)) {
+    const after = end + .04 + Math.random() * .09;
+    const length = .025 + Math.random() * .03;
+    tail.push([after, after + length, .62 + Math.random() * .28, .58 + Math.random() * .42]);
   }
-  const second = t > 0 ? t : .25 + Math.random() * .3;
+  const second = t > 0 ? t : .14 + Math.random() * .14;
   return {
     start, flashes, tail, aftershock, holdStart: t, end, finish: tail.length ? tail.at(-1)[1] : end,
-    tearIn: Math.min(hold * .45, (aftershock ? .22 : .34) + Math.random() * .36),
-    tearOut: Math.min(hold * .4, .26 + Math.random() * .3),
-    entryCalm: count ? .38 : .62,
-    rings: [0, second, second + .9 + Math.random() * .8],
+    tearIn: Math.min(hold * .38, (aftershock ? .13 : .16) + Math.random() * .13),
+    tearOut: Math.min(hold * .35, .14 + Math.random() * .13),
+    entryCalm: count ? .36 : .58,
+    rings: [0, second, second + .34 + Math.random() * .26],
     phase: Math.random() * 4, seed: Math.random(),
   };
 }
 if (!glass) glassVariant = 1;
-setSpace(glassVariant === STARSHIP);
-let exposure = planExposure(spaceOn ? STARSHIP_STAY + Math.random() * 3 : 3 + Math.random() * 3);
+setStage(stageModeFor(glassVariant));
+let exposure = planExposure(stageMode === 1 ? STARSHIP_STAY + Math.random() * 3 : 3 + Math.random() * 3);
 
 function exposureAge() {
   if (reduced.matches) return -1;
@@ -454,11 +459,12 @@ function exposureAge() {
   }
   if (age >= exposure.finish) {
     // Waits average about thirteen seconds but range from six to twenty-six.
-    // The starship always gets its full stay, with no aftershock.
-    const starship = glassVariant === STARSHIP && spaceOn;
-    const shock = !starship && !exposure.aftershock && Math.random() < .14;
+    // The starship and new themed works get a full stay with no premature aftershock.
+    const featured = stageMode > 0;
+    const minStay = glassVariant === STARSHIP ? STARSHIP_STAY : FEATURE_STAY;
+    const shock = !featured && !exposure.aftershock && Math.random() < .14;
     let wait = shock ? 1.2 + Math.random() * 2.2 : 6 + Math.min(20, -Math.log(1 - Math.random()) * 7);
-    if (starship) wait = Math.max(wait, STARSHIP_STAY + Math.random() * 3.5);
+    if (featured) wait = Math.max(wait, minStay + Math.random() * 3.5);
     exposure = planExposure(time + wait, shock);
     return -1;
   }
@@ -469,9 +475,9 @@ function exposureAge() {
   return age;
 }
 
-// What the glitch's torn print rows need to rebuild the starfield behind the B.
+// What the glitch's torn print rows need to rebuild the active themed backdrop behind the B.
 function spaceStill() {
-  return spaceOn ? { view: [w, h], shift: [spaceShiftX, spaceShiftY] } : null;
+  return stageMode > 0 ? { mode: stageMode, view: [w, h], shift: [spaceShiftX, spaceShiftY] } : null;
 }
 
 function glassRamp(x, y, dx, dy, stops) {
@@ -530,7 +536,7 @@ function draw() {
   const held = isNeg && age >= exposure.holdStart && age < exposure.end;
   if (chrome && held !== chromeDark) {
     chromeDark = held;
-    chrome.content = held ? '#000000' : spaceOn ? SPACE_TONE : PAPER_TONE;
+    chrome.content = held ? '#000000' : (STAGE_TONES[stageMode] || PAPER_TONE);
   }
 
   const yaw = -.46 + Math.sin(time * .30) * .055 + pointer.x * .18 + drag.x + rig.gyroX;
@@ -568,8 +574,8 @@ function draw() {
   trailPxArr[1] = (pointer.trailY + 1) * h * .5;
 
   // Update ambient studio paper skylight wash smoothly without layout work.
-  // In space the starfield drifts a little the other way instead.
-  if (spaceOn && !isNeg) {
+  // On themed WebGL stages (space, louver studio, quantum PCB) the backdrop drifts subtly instead.
+  if (stageMode > 0 && !isNeg) {
     const sx = Math.round((-rig.lightRad * 10 - pointer.x * 14) * 2) / 2;
     const sy = Math.round(-pointer.y * 10 * 2) / 2;
     if (sx !== spaceShiftX || sy !== spaceShiftY) {

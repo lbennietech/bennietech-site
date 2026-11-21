@@ -1,14 +1,18 @@
 // The sculpture layer: one WebGL canvas that carries whichever B is on show.
 //
-// Three works share this context so a swap during the black glitch costs
+// Five works share this context so a swap during the black glitch costs
 // nothing:
 //   0 = Starship B: a kitbashed deep-space megastructure and its fleet
 //       (`glass-scifi.js`)
 //   1 = Classic reeded Fe2+ float-glass B (`glass-reeded.js`)
-//   2 = Plush fur B, bright orange with purple streaks (`glass-fur.js`)
+//   2 = Plush fur B, copper-orange with violet streaks (`glass-fur.js`)
+//   3 = Architectural Terrazzo & Emerald Louver B (`glass-louver.js`)
+//   4 = Quantum Glass Voxel Core B (`glass-voxel.js`)
 import { initReededGlass } from './glass-reeded.js';
 import { initFurGlass } from './glass-fur.js';
 import { initStarshipGlass } from './glass-scifi.js';
+import { initLouverGlass } from './glass-louver.js';
+import { initVoxelGlass } from './glass-voxel.js';
 
 export function createGlass(stage, { outlines, flute, filament, back, front, reededGroundMap, furGroundMap, halo, haloPad = 0 }) {
   const canvas = document.createElement('canvas');
@@ -29,7 +33,9 @@ export function createGlass(stage, { outlines, flute, filament, back, front, ree
     software, outlines, flute, filament, back, front, groundMap: reededGroundMap, halo, haloPad,
   }) : null;
   const fur = initFurGlass(gl, { software, groundMap: furGroundMap || reededGroundMap });
-  if (!starship && !reeded && !fur) return null;
+  const louver = outlines ? initLouverGlass(gl, { software, outlines, filament }) : null;
+  const voxel = outlines ? initVoxelGlass(gl, { software, outlines, filament }) : null;
+  if (!starship && !reeded && !fur && !louver && !voxel) return null;
   stage.after(canvas);
 
   let box = [0, 0, 1, 1], baseRatio = 1, ratio = 1, activeScale = 1;
@@ -71,6 +77,8 @@ export function createGlass(stage, { outlines, flute, filament, back, front, ree
       const frame = { box, ratio };
       if (variant === 1 && reeded) return reeded.render(params, frame);
       if (variant === 2 && fur) return fur.render(params, frame);
+      if (variant === 3 && louver) return louver.render(params, frame);
+      if (variant === 4 && voxel) return voxel.render(params, frame);
       if (starship) return starship.render(params, frame);
       return reeded ? reeded.render(params, frame) : false;
     },

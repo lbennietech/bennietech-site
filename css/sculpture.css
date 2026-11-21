@@ -181,7 +181,9 @@ canvas.space {
   pointer-events: none;
   will-change: opacity, transform;
 }
-main.space.ready canvas.space { opacity: 1; transition: opacity .9s ease; }
+main.space.ready canvas.space,
+main.louver.ready canvas.space,
+main.quantum.ready canvas.space { opacity: 1; transition: opacity .9s ease; }
 main.space {
   background-color: #020308;
   background-image:
@@ -192,9 +194,35 @@ main.space {
     radial-gradient(ellipse 60% 50% at 80% 28%, rgba(10, 42, 56, .32), transparent 70%),
     linear-gradient(#020308, #03060c);
 }
-main.space::after { opacity: 0; }
-main.space .studio-wash { opacity: 0; }
-main.space .signature img:first-child { opacity: 0; }
-main.space .signature-night { opacity: 1; }
-main.space .email { color: #b7bcb2; --fringe: #8fb02a; }
-main.space .email:hover, main.space .email:focus-visible { color: #eef0ea; --fringe: #c6ec5a; }
+main.space::after,
+main.louver::after,
+main.quantum::after { opacity: 0; }
+main.space .studio-wash,
+main.louver .studio-wash,
+main.quantum .studio-wash { opacity: 0; }
+main.space .signature img:first-child,
+main.quantum .signature img:first-child { opacity: 0; }
+main.space .signature-night,
+main.quantum .signature-night { opacity: 1; }
+main.space .email,
+main.quantum .email { color: #b7bcb2; --fringe: #8fb02a; }
+main.space .email:hover, main.space .email:focus-visible,
+main.quantum .email:hover, main.quantum .email:focus-visible { color: #eef0ea; --fringe: #c6ec5a; }
+
+/* Architectural Terrazzo & Emerald Louver studio stage (light lavender wall + violet-magenta grid). */
+main.louver {
+  background-color: #c8c7f3;
+  background-image: linear-gradient(180deg, #d7d8f7 0%, #c1c0f2 59.5%, #5b33ec 60.5%, #9f29f4 100%);
+}
+main.louver .email { color: #28274a; --fringe: #009c64; }
+main.louver .email:hover, main.louver .email:focus-visible { color: #12112a; --fringe: #00c482; }
+
+/* Quantum Glass Voxel PCB studio stage (deep cyber-indigo circuit plane). */
+main.quantum {
+  background-color: #0d1026;
+  background-image:
+    radial-gradient(ellipse 52% 46% at 50% 48%, rgba(160, 44, 210, .28), rgba(34, 88, 220, .14) 55%, transparent 82%),
+    linear-gradient(180deg, #0b0d20, #121536);
+}
+main.quantum .email { color: #c5cbe8; --fringe: #ff48cc; }
+main.quantum .email:hover, main.quantum .email:focus-visible { color: #ffffff; --fringe: #68d8ff; }

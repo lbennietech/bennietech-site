@@ -193,7 +193,7 @@ export function makeReededGround(plates, flute) {
   return ground;
 }
 
-// Bespoke plush velvety cast shadow with warm orange & electric violet indirect color bounce for Variant 2 (Fur B).
+// A broad studio key casts the upper lobe farther and softer than the lower one.
 export function makeFurGround(plates) {
   const ground = document.createElement('canvas');
   const density = 420;
@@ -215,73 +215,30 @@ export function makeFurGround(plates) {
     g.restore();
   }
 
-  // Broad airy sunlit gallery penumbra with whisper-warm tangerine/plum bounce
-  pool(.14, .014, 1.14, .19, -.03, [
-    [0, 'rgba(62,38,32,.15)'], [.48, 'rgba(78,48,38,.07)'], [1, 'rgba(90,62,50,0)'],
+  pool(.16, .006, 1.10, .19, -.035, [
+    [0, 'rgba(70,45,42,.19)'], [.51, 'rgba(76,56,54,.075)'], [1, 'rgba(78,60,56,0)'],
   ]);
-  // Soft diffused contact shadow directly beneath the levitating furry lower curve
-  pool(.04, .020, .72, .076, -.02, [
-    [0, 'rgba(42,24,28,.22)'], [.48, 'rgba(62,34,34,.10)'], [1, 'rgba(82,52,48,0)'],
+  pool(-.04, .014, .65, .069, -.035, [
+    [0, 'rgba(46,34,42,.24)'], [.48, 'rgba(60,40,43,.115)'], [1, 'rgba(80,55,51,0)'],
   ]);
-  // Delicate indirect bright-orange + bright-purple bounce sheen on the warm paper
-  pool(.24, .004, .92, .14, -.04, [
-    [0, 'rgba(232,96,24,.10)'], [.52, 'rgba(148,44,210,.06)'], [1, 'rgba(148,44,210,0)'],
+  pool(.28, -.005, .88, .13, -.04, [
+    [0, 'rgba(191,100,57,.085)'], [.56, 'rgba(126,77,116,.044)'], [1, 'rgba(126,77,116,0)'],
   ]);
 
-  const print = document.createElement('canvas');
-  const scale = 408;
-  print.width = 512;
-  print.height = 708;
-  const ink = print.getContext('2d');
-  ink.scale(scale, scale);
-  ink.translate(.02, .02);
-  ink.lineCap = 'round';
-  ink.lineJoin = 'round';
-
-  for (const plate of plates) {
-    ink.save();
-    const body = ink.createLinearGradient(0, 0, .9, 1.7);
-    body.addColorStop(0, 'rgba(64,34,30,.24)');
-    body.addColorStop(.52, 'rgba(54,26,38,.28)');
-    body.addColorStop(1, 'rgba(70,36,28,.24)');
-    ink.fillStyle = body;
-    ink.fill(plate);
-    ink.lineWidth = .20;
-    ink.strokeStyle = 'rgba(92,42,32,.14)';
-    ink.stroke(plate);
-    ink.restore();
-  }
-
-  // Soft sunlit slit peeking gently between the split-B furry halves
-  ink.save();
-  ink.globalCompositeOperation = 'destination-out';
-  ink.beginPath();
-  ink.moveTo(.04, KERF - SLOPE * .04);
-  ink.lineTo(1.12, KERF - SLOPE * 1.12);
-  ink.lineWidth = .085;
-  ink.strokeStyle = 'rgba(0,0,0,.72)';
-  ink.stroke();
-  ink.restore();
-
-  const cast = document.createElement('canvas');
-  cast.width = ground.width;
-  cast.height = ground.height;
-  const lay = cast.getContext('2d');
-  lay.setTransform(density, 0, 0, density, .96 * density, .27 * density);
-  lay.transform(.94, .016, -.54, .137, .45, -.159);
-  lay.imageSmoothingQuality = 'high';
-  lay.drawImage(print, -.02, -.02, print.width / scale, print.height / scale);
-
-  // Plush, sunlit, deeply feathered gallery shadow (zero hard dark slab!)
-  const ultraSoft = soften(cast, 5);
-  const soft = soften(cast, 3);
-
-  g.save();
   g.setTransform(1, 0, 0, 1, 0, 0);
-  g.globalAlpha = .72;
-  g.drawImage(ultraSoft, 0, 0);
-  g.globalAlpha = .42;
-  g.drawImage(soft, 0, 0);
-  g.restore();
+  plates.forEach((plate, part) => {
+    const cast = document.createElement('canvas');
+    cast.width = ground.width;
+    cast.height = ground.height;
+    const lay = cast.getContext('2d');
+    lay.setTransform(density, 0, 0, density, .96 * density, .27 * density);
+    lay.transform(.89, .010, -.47, .115, .40, -.143);
+    lay.lineJoin = 'round';
+    lay.lineWidth = .09;
+    lay.fillStyle = lay.strokeStyle = part ? 'rgba(65,43,43,.22)' : 'rgba(79,58,56,.20)';
+    lay.fill(plate);
+    lay.stroke(plate);
+    g.drawImage(soften(cast, part ? 5 : 6), 0, 0);
+  });
   return ground;
 }

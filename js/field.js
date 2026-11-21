@@ -128,8 +128,8 @@ vec4 heldGlass(vec2 screen) {
 // The calm print as it stood before the exposure: the captured glass over
 // paper that follows the page's own gradient, studio wash, and grain.
 vec3 paperAt(vec2 s) {
-  // Behind the starship the print is deep space, not paper.
-  if (spaceOn > .5) return spaceColor(s / dpr - spaceShift);
+  // Behind themed stages (space, architectural louver studio, quantum PCB) the print matches that stage.
+  if (spaceOn > .5) return stageColor(s / dpr - spaceShift, spaceOn);
   vec2 uv = s / res;
   float t = length((uv - vec2(.36, .26)) / vec2(.64, .74)) * .7071;
   vec3 c = mix(vec3(.984, .976, .945), vec3(.937, .925, .886), clamp(t / .43, 0., 1.));
@@ -200,10 +200,14 @@ void main() {
   sample_ = pointer + lens * (1. - (.3 + .22 * pulse) * exp(-dot(lens, lens) / (size * size * .7)));
 
   // The ghost of the calm scene dissolves, and later returns, block by block.
+  // Scales cleanly with shorter black glitch holds so entry/exit stays crisp.
   vec2 gb = floor(ci / 8.);
   float delay = hash(gb * 1.7 + 3.1);
-  float held = max(age < hold ? 1. : 0., age >= hold ? 1. - smoothstep(delay * .6, delay * .6 + .1, age - hold) : 0.);
-  held = max(held, smoothstep(end - .32 + delay * .22, end - .26 + delay * .22, age)) * ghostReady;
+  float holdLen = max(end - hold, .24);
+  float diss = min(.32, holdLen * .34);
+  float refm = min(.22, holdLen * .25);
+  float held = max(age < hold ? 1. : 0., age >= hold ? 1. - smoothstep(delay * diss, delay * diss + .065, age - hold) : 0.);
+  held = max(held, smoothstep(end - refm + delay * (refm * .68), end - refm + delay * (refm * .68) + .055, age)) * ghostReady;
   float threshold = (bayer(ci) + .5) / 16.;
   bool fromGhost = held > threshold;
 
@@ -217,7 +221,7 @@ void main() {
   if (fromGhost) {
     // The held frame rises as it breaks up, and settles back as it re-forms,
     // so the glass B drifts out from behind the liquid and returns.
-    float rise = min(smoothstep(hold - .08, hold + .56, age), 1. - smoothstep(end - .35, end, age));
+    float rise = min(smoothstep(hold - .05, hold + min(.34, holdLen * .40), age), 1. - smoothstep(end - min(.26, holdLen * .30), end, age));
     vec4 glass = heldGlass(sample_ + size * vec2(-.13, .46) * rise);
     // Print the optically dense edges in silver and preserve the lime kerf core.
     float ink = 1. - dot(glass.rgb, vec3(.27, .64, .09));
@@ -266,7 +270,7 @@ export function createField(stage) {
     // Upload just the glass layer when available, before it is hidden.
     capture(source, [x, y, width, height], w, h, beams = null, space = null) {
       ghostBox = [x / w, y / h, width / w, height / h];
-      spaceHeld = space ? 1 : 0;
+      spaceHeld = space ? (space.mode ?? 1) : 0;
       if (space) {
         spaceView = space.view.slice();
         spaceShift = space.shift.slice();

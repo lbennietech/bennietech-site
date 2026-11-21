@@ -1,11 +1,17 @@
-// Deep-space stage for the starship B.
+// Full-viewport procedural stage backdrops for themed B sculptures.
 //
-// A static backdrop drawn once per resize on its own full-viewport WebGL
-// layer: a cold starfield with a faint galactic band and dust, a teal and
-// violet nebula, and the night side of a giant planet whose limb catches a
-// sunrise in the lower right. The sun throws a warm glare and a thin
-// anamorphic streak across the horizon. The same GLSL (`SPACE`) rebuilds the
-// backdrop inside the glitch's torn print rows, so the tear matches.
+// Drawn once per resize (or stage change) on a single oversized WebGL canvas
+// (`canvas.space`) that drifts subtly with pointer & light sweep:
+//   mode 1 = Deep space (Starship B): starfield, galactic band, nebula, planet sunrise
+//   mode 2 = Architectural studio (Terrazzo & Emerald Louver B): luminous
+//            lavender-tiled gallery wall, receding ultraviolet-magenta drafting
+//            grid floor, soft flanking periwinkle studio bounce
+//   mode 3 = Cybernetic PCB studio (Quantum Glass Voxel B): deep indigo
+//            anisotropic etched circuit-board plane, subtle fiber-optic traces
+//            and peripheral cobalt/neon-pink ambient glow
+//
+// The same GLSL (`SPACE` + `stageColor`) rebuilds the active backdrop inside
+// the glitch's torn print rows (`field.js`), so the handover matches pixel for pixel.
 import { program } from './gl/gl.js';
 
 // Everything is in viewport CSS pixels, so the layer and the glitch field
@@ -167,18 +173,198 @@ vec3 spaceTone(vec3 c) {
 vec3 spaceColor(vec2 p) {
   return spaceTone(spaceAt(p));
 }
+
+// ---------------------------------------------------------------------------
+// Stage 2: Architectural Terrazzo & Emerald Louver Studio (Image 1 mood)
+// Luminous cool-lavender tiled gallery wall above a vibrant perspective
+// ultraviolet-to-magenta coordinate grid floor.
+// ---------------------------------------------------------------------------
+float gridLine(float coord, float w) {
+  float d = abs(fract(coord + .5) - .5);
+  return 1. - smoothstep(0., max(w, .001), d);
+}
+
+vec3 louverStageColor(vec2 p) {
+  vec2 v = max(spaceView, vec2(1.));
+  vec2 uv = p / v;
+  float aspect = v.x / v.y;
+  float tall = clamp((1.05 - aspect) / .55, 0., 1.);
+  // Horizon sits behind the lower waist of the B so the luminous floor wraps
+  // cleanly beneath the floating sculpture while keeping the top-left bright.
+  float horiz = mix(.61, .64, tall);
+
+  // Architectural studio wall: luminous cool pale-periwinkle architectural tiles (Image 1 back wall!).
+  vec2 wallUv = vec2((uv.x - .5) * aspect, uv.y);
+  vec3 wallTop = vec3(.845, .845, .968);
+  vec3 wallBot = vec3(.735, .725, .958);
+  vec3 wall = mix(wallTop, wallBot, smoothstep(0., horiz, uv.y));
+  // Soft overhead daylight gradient falling behind the hero B
+  float keyGlow = exp(-dot((uv - vec2(.56, .24)) * vec2(1.1, 1.55), (uv - vec2(.56, .24)) * vec2(1.1, 1.55)) * 1.8);
+  wall += vec3(.09, .088, .062) * keyGlow;
+
+  // Crisp large-format architectural concrete/tile panel seams
+  vec2 tileG = (wallUv + vec2(.16, .04)) * vec2(4.4, 4.4);
+  float seamPx = 4.4 / v.y * 1.1;
+  float tileSeam = max(gridLine(tileG.x, seamPx), gridLine(tileG.y, seamPx));
+  vec2 tid = floor(tileG + .5);
+  float tTone = sHash(tid + 17.3);
+  wall *= .972 + .038 * tTone;
+
+  // Clean luminous architectural gallery wall (zero blurry stickers; crisp panel seams & subtle cobalt studio air)
+  float sideWash = smoothstep(.26, .95, abs(uv.x - .5)) * smoothstep(.04, .60, uv.y);
+  wall = mix(wall, vec3(.66, .66, .96), sideWash * .22);
+
+  // Keep top-left brand lockup spotless, bright, and 100% legible.
+  vec2 lock = (p - vec2(115., 36.)) / vec2(240., 96.);
+  float quietLock = exp(-dot(lock, lock));
+  wall = mix(wall, vec3(.882, .884, .974), quietLock * .78);
+  wall -= vec3(.085, .085, .135) * tileSeam * (1. - quietLock * .88) * .58;
+
+  // Perspective isometric-feel ultraviolet -> electric magenta drafting grid floor (Image 1 exact palette!).
+  float dy = max(uv.y - horiz, .0008);
+  float zf = .35 / (dy + .078);
+  float xf = (uv.x - .5) * aspect * zf * 1.15;
+  // ~28 deg isometric diagonal orientation matching Image 1's iconic grid!
+  mat2 rotG = mat2(.8829, -.4695, .4695, .8829);
+  vec2 gp = rotG * vec2(xf, zf) * 4.45;
+  float dzdy = .35 / ((dy + .078) * (dy + .078)) / v.y;
+  float fw = clamp(dzdy * 4.6 + zf * 4.4 / v.y, .014, .24);
+  float gMajor = max(gridLine(gp.x, fw), gridLine(gp.y, fw));
+  float gSub = max(gridLine(gp.x * 2., fw * 1.8), gridLine(gp.y * 2., fw * 1.8)) * smoothstep(2.4, .85, zf);
+
+  // Saturated cobalt-violet (left) -> electric ultraviolet -> radiant magenta (right) floor!
+  float diagFloor = clamp(uv.x * .74 + (uv.y - horiz) / (1. - horiz) * .62, 0., 1.);
+  vec3 floorCol = mix(vec3(.24, .17, .88), vec3(.47, .14, .93), smoothstep(.04, .56, diagFloor));
+  floorCol = mix(floorCol, vec3(.76, .13, .95), smoothstep(.38, 1.0, diagFloor));
+  // Subtle light bounce directly in front of the floating sculpture
+  vec2 hotD = (uv - vec2(.53, horiz + .21)) * vec2(1.45, 2.5);
+  floorCol += vec3(.13, .08, .16) * exp(-dot(hotD, hotD) * 2.4);
+  // Razor-crisp luminous lavender-white coordinate grid lines
+  float horizonFade = smoothstep(.0, .048, uv.y - horiz) * (1. - smoothstep(2.5, 4.8, zf));
+  vec3 lineCol = mix(vec3(.76, .72, 1.), vec3(1., .84, 1.), diagFloor);
+  floorCol = mix(floorCol, lineCol, gMajor * .62 * horizonFade);
+  floorCol = mix(floorCol, lineCol, gSub * .16 * horizonFade);
+  // Crisp architectural cove seam where studio wall meets drafting floor
+  float cove = exp(-abs(uv.y - horiz) / .014);
+  vec3 col = mix(wall, floorCol, smoothstep(horiz - .002, horiz + .002, uv.y));
+  col = mix(col, vec3(.28, .22, .82), cove * .28);
+  // Gentle photographic corner vignette
+  vec2 vig = (uv - .5) * vec2(1.06, 1.12);
+  col *= 1. - .13 * smoothstep(.45, 1.05, length(vig));
+  return clamp(col, 0., 1.);
+}
+
+// ---------------------------------------------------------------------------
+// Stage 3: Quantum Glass Voxel PCB Studio (Image 2 mood)
+// Deep, dark, silky midnight slate-indigo etched silicon/PCB substrate with
+// isotropic razor-sharp 90/45-deg micro-traces, tiny round vias & crisp cables.
+// ---------------------------------------------------------------------------
+float pcbEtch(vec2 q, float px) {
+  // 1:1 isotropic cell grid so every trace has exact crisp constant thickness
+  // and every micro-via pad is a true geometric circle (zero stretching!).
+  vec2 cell = floor(q);
+  vec2 f = fract(q) - .5;
+  float h = sHash(cell + 4.13);
+  float h2 = sHash(cell * 1.91 + 7.77);
+  // Continuous 45-degree mitered PCB traces (horizontal, vertical, or crisp elbow bend!)
+  float d = 1.;
+  if (h < .34) {
+    d = abs(f.x);
+  } else if (h < .68) {
+    d = abs(f.y);
+  } else if (h < .84) {
+    // 45-deg diagonal routing segment passing cleanly through cell corners
+    float s = h2 > .5 ? 1. : -1.;
+    d = abs((f.x + s * f.y) * .7071);
+  } else {
+    // Crisp 90-deg trace elbow with micro-via pad
+    float sx = h2 > .5 ? 1. : -1.;
+    float sy = fract(h2 * 7.3) > .5 ? 1. : -1.;
+    float d1 = f.x * sx > 0. ? abs(f.y) : length(f);
+    float d2 = f.y * sy > 0. ? abs(f.x) : length(f);
+    d = min(d1, d2);
+  }
+  float w = .052;
+  float line = 1. - smoothstep(w, w + px, d);
+  // Tiny perfectly round micro-via ring at select trace junctions
+  float r = length(f);
+  float via = (1. - smoothstep(.13, .13 + px, r)) * smoothstep(.055, .055 + px, r) * step(.82, h2);
+  return max(line * .75, via * .95);
+}
+
+vec3 voxelStageColor(vec2 p) {
+  vec2 v = max(spaceView, vec2(1.));
+  vec2 uv = p / v;
+  float aspect = v.x / v.y;
+  vec2 c = (uv - vec2(.50, .48)) * vec2(aspect, 1.);
+  // Subtle clean studio perspective plane (mild slope keeps traces razor-crisp and isotropic!)
+  float persp = 1. / (1. + (.48 - uv.y) * .36);
+  mat2 iso = mat2(.819, -.573, .573, .819);
+  vec2 pcb = iso * vec2(c.x * persp * 1.15, c.y * persp * 1.24);
+
+  float px = (1. / max(v.y, 1.)) * 24. * persp;
+  float etch1 = pcbEtch(pcb * 19., px);
+  float etch2 = pcbEtch(pcb * 38. + vec2(4.7, 2.1), px * 1.5);
+  // Subtle directional embossed metallic bevel shading (dark engraved groove + crisp specular lip!)
+  float etchEmb = pcbEtch((pcb + vec2(.0035, .0035)) * 19., px);
+  float highlight = max(0., etch1 - etchEmb * .65) * .72 + etch2 * .26;
+  float groove = max(0., etchEmb - etch1 * .65);
+
+  // Deep silky midnight slate-indigo PCB substrate (Image 2 luxury dark tone!)
+  vec3 col = mix(vec3(.007, .009, .026), vec3(.024, .028, .072), smoothstep(.98, .05, length(c * vec2(.85, 1.05))));
+
+  // Focused neon-magenta & sapphire-cobalt indirect bounce light radiating directly from the B!
+  float rB = length(c * vec2(1.06, .92));
+  float pinkBounce = exp(-rB * rB * 5.0);
+  float blueBounce = exp(-length((c - vec2(-.10, .14)) * vec2(1.15, 1.25)) * 3.8);
+  col += vec3(.078, .010, .108) * pinkBounce;
+  col += vec3(.012, .038, .135) * blueBounce;
+
+  // Etched dark-metallic PCB traces catch ONLY a subtle, razor-crisp metallic sheen!
+  vec3 traceLit = vec3(.024, .034, .085) + vec3(.22, .04, .22) * pinkBounce + vec3(.04, .14, .34) * blueBounce;
+  col += traceLit * highlight * (.48 + .72 * pinkBounce + .48 * blueBounce);
+  col *= 1. - groove * .34;
+
+  // Two razor-thin glossy electric-cobalt fiber-optic cables sweeping cleanly across the lower floor
+  float cY1 = .76 + .065 * sin((uv.x - .5) * 4.5 + .4) + (uv.x - .5) * .14;
+  float cY2 = .83 - .055 * sin((uv.x - .5) * 3.8 - .5) - (uv.x - .5) * .11;
+  float dCab1 = abs(uv.y - cY1) * v.y;
+  float dCab2 = abs(uv.y - cY2) * v.y;
+  float cabMask1 = smoothstep(.07, .24, abs(uv.x - .5));
+  float cabMask2 = smoothstep(.09, .26, abs(uv.x - .5));
+  col *= 1. - exp(-abs(uv.y - (cY1 + .0045)) * v.y / 3.2) * cabMask1 * .45;
+  col *= 1. - exp(-abs(uv.y - (cY2 + .0045)) * v.y / 3.2) * cabMask2 * .40;
+  col += vec3(.08, .36, 1.15) * (exp(-dCab1 * dCab1 / 1.8) * cabMask1 * .72 + exp(-dCab2 * dCab2 / 1.6) * cabMask2 * .52);
+  col += vec3(.45, .82, 1.3) * exp(-dCab1 * dCab1 / .45) * cabMask1 * .35;
+
+  // Keep top-left corner behind the night wordmark calm, dark, and razor-sharp.
+  vec2 lock = (p - vec2(115., 36.)) / vec2(240., 95.);
+  float quietLock = 1. - .68 * exp(-dot(lock, lock));
+  col *= quietLock;
+
+  // Cinematic studio vignette drawing 100% focus to the glowing quantum B!
+  vec2 vig = (uv - .5) * vec2(1.08, 1.15);
+  col *= 1. - .46 * smoothstep(.30, .96, length(vig));
+  return spaceTone(col * 1.18);
+}
+
+vec3 stageColor(vec2 p, float mode) {
+  if (mode > 2.5) return voxelStageColor(p);
+  if (mode > 1.5) return louverStageColor(p);
+  return spaceColor(p);
+}
 `;
 
 const vert = `attribute vec2 p; void main() { gl_Position = vec4(p, 0., 1.); }`;
 const frag = `precision highp float;
 ${SPACE}
 uniform vec2 res;
-uniform float scale, pad;
+uniform float scale, pad, stageMode;
 void main() {
   vec2 px = vec2(gl_FragCoord.x, res.y - gl_FragCoord.y);
   vec2 css = px / scale - pad;
-  vec3 c = spaceColor(css);
-  // Dither the deep gradients so they never band.
+  vec3 c = stageColor(css, stageMode);
+  // Dither smooth gradients so they never band.
   c += (sHash(px + 7.31) - .5) / 255.;
   gl_FragColor = vec4(c, 1.);
 }`;
@@ -201,9 +387,9 @@ export function createSpace(before, { software = false } = {}) {
   const loc = gl.getAttribLocation(prog, 'p');
   const u = name => gl.getUniformLocation(prog, name);
 
-  let view = [1, 1], ratio = 1, dirty = true, active = false;
+  let view = [1, 1], ratio = 1, dirty = true, mode = 0;
   function paint() {
-    if (!active || !dirty || view[0] < 2 || gl.isContextLost()) return;
+    if (!mode || !dirty || view[0] < 2 || gl.isContextLost()) return;
     dirty = false;
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.useProgram(prog);
@@ -214,6 +400,7 @@ export function createSpace(before, { software = false } = {}) {
     gl.uniform2f(u('spaceView'), view[0], view[1]);
     gl.uniform1f(u('scale'), ratio);
     gl.uniform1f(u('pad'), SPACE_PAD);
+    gl.uniform1f(u('stageMode'), mode);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
   canvas.addEventListener('webglcontextrestored', () => { dirty = true; paint(); });
@@ -234,9 +421,13 @@ export function createSpace(before, { software = false } = {}) {
       dirty = true;
       paint();
     },
-    // The backdrop is painted lazily, the first time the starship needs it.
-    activate(on) {
-      active = on;
+    // Mode: 0 = off (paper), 1 = deep space, 2 = louver studio, 3 = quantum PCB studio.
+    activate(next) {
+      const m = typeof next === 'number' ? next : (next ? 1 : 0);
+      if (m !== mode) {
+        mode = m;
+        if (mode) dirty = true;
+      }
       paint();
     },
   };

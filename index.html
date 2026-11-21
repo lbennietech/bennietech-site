@@ -31,27 +31,33 @@
       </picture>
       <canvas aria-hidden="true"></canvas>
     </div>
-    <a class="email" href="mailto:lukebennie@gmail.com" aria-label="Email Luke Bennie at lukebennie@gmail.com">
-      <svg viewBox="0 0 34 26" aria-hidden="true" focusable="false">
-        <!-- An envelope with one scan strip torn sideways, fringed in olive. -->
-        <defs>
-          <g id="mail-art" fill="none" stroke-width="2.35" stroke-linecap="butt" stroke-linejoin="miter">
-            <rect x="3" y="3.5" width="28" height="19"/>
-            <path d="M3 3.5 17 14.2 31 3.5"/>
+    <header class="brand">
+      <div class="signature">
+        <img src="/assets/logo/bennietech-wordmark.svg" width="1004" height="175" alt="BennieTech">
+        <img class="signature-night" src="/assets/logo/bennietech-wordmark-dark.svg" width="1004" height="175" alt="">
+      </div>
+      <a class="email" href="mailto:lukebennie@gmail.com" aria-label="Email Luke Bennie at lukebennie@gmail.com">
+        <svg viewBox="0 0 34 26" aria-hidden="true" focusable="false">
+          <!-- An envelope with one scan strip torn sideways, fringed in olive. -->
+          <defs>
+            <g id="mail-art" fill="none" stroke-width="2.35" stroke-linecap="butt" stroke-linejoin="miter">
+              <rect x="3" y="3.5" width="28" height="19"/>
+              <path d="M3 3.5 17 14.2 31 3.5"/>
+            </g>
+            <clipPath id="mail-above"><rect x="-6" y="-2" width="46" height="13.4"/></clipPath>
+            <clipPath id="mail-strip"><rect x="-6" y="11.4" width="46" height="4.4"/></clipPath>
+            <clipPath id="mail-below"><rect x="-6" y="15.8" width="46" height="12"/></clipPath>
+          </defs>
+          <use href="#mail-art" stroke="currentColor" clip-path="url(#mail-above)"/>
+          <use href="#mail-art" stroke="currentColor" clip-path="url(#mail-below)"/>
+          <g class="mail-tear">
+            <use href="#mail-art" class="mail-fringe" clip-path="url(#mail-strip)" transform="translate(1 0)"/>
+            <use href="#mail-art" stroke="currentColor" clip-path="url(#mail-strip)" transform="translate(2.4 0)"/>
           </g>
-          <clipPath id="mail-above"><rect x="-6" y="-2" width="46" height="13.4"/></clipPath>
-          <clipPath id="mail-strip"><rect x="-6" y="11.4" width="46" height="4.4"/></clipPath>
-          <clipPath id="mail-below"><rect x="-6" y="15.8" width="46" height="12"/></clipPath>
-        </defs>
-        <use href="#mail-art" stroke="currentColor" clip-path="url(#mail-above)"/>
-        <use href="#mail-art" stroke="currentColor" clip-path="url(#mail-below)"/>
-        <g class="mail-tear">
-          <use href="#mail-art" class="mail-fringe" clip-path="url(#mail-strip)" transform="translate(1 0)"/>
-          <use href="#mail-art" stroke="currentColor" clip-path="url(#mail-strip)" transform="translate(2.4 0)"/>
-        </g>
-      </svg>
-      <span class="email-address" aria-hidden="true">lukebennie@gmail.com</span>
-    </a>
+        </svg>
+        <span class="email-address" aria-hidden="true">lukebennie@gmail.com</span>
+      </a>
+    </header>
     <div class="studio-wash" aria-hidden="true"></div>
   </main>
   <script type="module">

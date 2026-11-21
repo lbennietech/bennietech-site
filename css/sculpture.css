@@ -60,41 +60,60 @@ main::after {
 .silhouette {
   position: absolute;
   left: calc(50% - .98 * var(--unit));
-  top: calc(50% - var(--unit));
+  top: calc(48% - var(--unit));
   width: calc(2.56 * var(--unit));
   height: auto;
   pointer-events: none;
 }
+
+.brand {
+  position: absolute;
+  left: max(clamp(22px, 3.0vw, 44px), calc(env(safe-area-inset-left) + 16px));
+  top: max(clamp(16px, 2.8vh, 36px), calc(env(safe-area-inset-top) + 12px));
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  pointer-events: none;
+}
+.signature {
+  position: relative;
+  width: clamp(110px, 9.2vw, 144px);
+  flex: 0 0 auto;
+  pointer-events: none;
+  user-select: none;
+}
+.signature img { width: 100%; height: auto; display: block; }
+.signature-night { position: absolute; inset: 0; opacity: 0; }
 
 @media (prefers-reduced-motion: no-preference) {
   main.negative::before { opacity: 1; }
   main.negative .field, main.negative .oil { opacity: 1; }
   main.negative .glass { opacity: 0; }
   main.negative::after { opacity: 0; }
+  main.negative .signature img:first-child { opacity: 0; }
+  main.negative .signature-night { opacity: 1; }
 }
 
 .email {
   --fringe: #708637;
-  position: absolute;
-  left: 50%;
-  top: max(calc(25% - .44 * var(--unit)), calc(env(safe-area-inset-top) + 28px));
-  transform: translate(-50%, -50%);
+  position: relative;
   display: grid;
   place-items: center;
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   color: #343c33;
   border-radius: 50%;
+  pointer-events: auto;
   touch-action: manipulation;
   text-decoration: none;
 }
-.email svg { width: clamp(25px, 1.92vw, 32px); overflow: visible; }
+.email svg { width: clamp(22px, 1.72vw, 27px); transform: translateY(2px); overflow: visible; }
 .mail-fringe { stroke: var(--fringe); }
 .email-address {
   position: absolute;
-  left: 50%;
-  top: calc(100% - 2px);
-  transform: translate(-50%, -2px);
+  left: calc(100% + 2px);
+  top: 50%;
+  transform: translate(-3px, calc(-50% + 2px));
   font: 400 11px/1.5 'JetBrains Mono', monospace;
   letter-spacing: .03em;
   font-feature-settings: "zero" 1;
@@ -103,9 +122,9 @@ main::after {
   visibility: hidden;
   opacity: 0;
 }
-.email:focus-visible .email-address { visibility: visible; opacity: 1; transform: translate(-50%, 0); }
+.email:focus-visible .email-address { visibility: visible; opacity: 1; transform: translate(0, calc(-50% + 2px)); }
 @media (hover: hover) {
-  .email:hover .email-address { visibility: visible; opacity: 1; transform: translate(-50%, 0); }
+  .email:hover .email-address { visibility: visible; opacity: 1; transform: translate(0, calc(-50% + 2px)); }
 }
 .email:hover, .email:focus-visible { color: #1f201d; --fringe: #7f993b; }
 .email:focus-visible { outline: 1px solid currentColor; outline-offset: -5px; }
@@ -114,13 +133,6 @@ main::after {
 @media (prefers-reduced-motion: no-preference) {
   .email-address { transition: opacity .18s cubic-bezier(.22, 1, .36, 1), transform .18s cubic-bezier(.22, 1, .36, 1); }
   .email:hover .mail-tear, .email:focus-visible .mail-tear { animation: tear .38s steps(1) 1; }
-}
-@media (max-height: 500px) and (orientation: landscape) {
-  .email-address { left: calc(100% + 4px); top: 50%; transform: translate(-3px, -50%); }
-  .email:focus-visible .email-address { transform: translate(0, -50%); }
-  @media (hover: hover) {
-    .email:hover .email-address { transform: translate(0, -50%); }
-  }
 }
 @keyframes tear {
   0% { transform: translateX(0); }

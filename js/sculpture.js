@@ -1,6 +1,6 @@
 import { createField } from './field.js';
 import { createGlass } from './glass.js';
-import { makeGround, makeHalo, makeEtchMap, HALO_PAD } from './glass-ground.js';
+import { makeGround, makeHalo, HALO_PAD } from './glass-ground.js';
 import { prepareOil } from './oil-volume.js';
 import { exposureTear } from './negative.js';
 
@@ -164,7 +164,6 @@ const BACK = -.272, FRONT = .2805;
 const groundMap = makeGround(plates, FLUTE);
 const filamentLine = [[.09, KERF - .27875 * .09], [filamentEnd, KERF - .27875 * filamentEnd]];
 const haloMap = makeHalo(plates, filamentLine);
-const etchMap = makeEtchMap();
 
 // Without WebGL the glass is drawn on the stage canvas instead. Its faces are
 // composed off screen from bitmaps that stay resident between frames.
@@ -263,7 +262,7 @@ let w, h, size, centre, pixelRatio, time = 0, last = 0, frame = 0, lastTap = -1;
 const field = createField(canvas);
 const glass = createGlass(canvas, {
   outlines: halves.map(half => half.points), flute: FLUTE, back: BACK, front: FRONT, groundMap,
-  halo: haloMap, haloPad: HALO_PAD, etchMap, filament: filamentLine,
+  halo: haloMap, haloPad: HALO_PAD, filament: filamentLine,
 });
 if (!glass) behindTiles().forEach((tile, part) => window.createImageBitmap?.(tile).then(bitmap => {
   behind[part] = bitmap;
@@ -743,7 +742,7 @@ function fitCanvas() {
   pixelRatio = Math.min(devicePixelRatio || 1, 2);
   field?.resize(w, h, pixelRatio);
   size = Math.min(h * .31, w * .49);
-  centre = h * .50;
+  centre = h * .48;
   glass?.resize(pixelRatio, reachOf());
   // Keep the underlying 2D stage canvas at 1x1 while WebGL draws calm frames
   // so the browser avoids compositing an empty full-viewport 2D bitmap.

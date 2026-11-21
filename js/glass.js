@@ -16,10 +16,7 @@
 //      ground caustics, halo/kerf light-shafts, and filament.
 //   5. Optical features: true Fe2+ architectural float-glass emerald-teal edge
 //      absorption, diamond-ground & satin-buffed perimeter edges with twin 45-deg
-//      polished arris bevels, crisp laser-etched/sandblasted 3D BennieTech
-//      wordmark stamped along BOTH top and bottom flat ends (with anisotropic
-//      filtering, carved bevel normals, edge-lit TIR glow, and internal glass
-//      refraction visibility), 5-wavelength CIE-normalized Cauchy spectral
+//      polished arris bevels, 5-wavelength CIE-normalized Cauchy spectral
 //      dispersion, sweeping solar crystal-harp prism beam, internal 3D caustic
 //      interference ribbons, volumetric diagonal kerf light shafts, interactive
 //      cursor kicker light, Michels-Levy photoelastic shockwaves, and live
@@ -66,13 +63,13 @@ const STUDIO_LIGHTS = [
   [[2.30, .70, -3.08], [.12, 1.80], .040, [3.55, 3.76, 4.05], [.4, -.2], 0],
   // 3. Bright cool-daylight rim strip behind-right sweeping the curved barrels
   [[3.10, -.36, 2.30], [.19, 2.50], .055, [4.30, 4.65, 5.00], [.5, -.3], 0],
-  // 4. Overhead clerestory bar catching the flat top ledge, etched wordmark & upper bevels
+  // 4. Overhead clerestory bar catching the flat top ledge & upper bevels
   [[-1.35, -3.22, -1.05], [1.72, .20], .050, [3.95, 4.05, 3.92], [0, -.6], 0],
   // 5. Rear-left precision backlight kicker (ignites left-reed spectral fire)
   [[-1.20, -.26, 2.70], [.065, 2.45], .030, [4.35, 4.32, 4.15], [-.3, 0], 0],
   // 6. Rear-right precision backlight kicker (ignites right-bowl prism edge)
   [[1.40, -.26, 2.70], [.055, 2.45], .028, [3.05, 3.20, 3.40], [.3, 0], 0],
-  // 7. Rear-overhead crown bar illuminating back chamfers & top flat-end etching
+  // 7. Rear-overhead crown bar illuminating back chamfers & top flat edge
   [[-.10, -1.78, 2.88], [1.74, .10], .042, [3.85, 3.88, 3.78], [0, -.5], 0],
   // 8. Pinpoint HDR diamond catchlight strobe (front-upper-left, sparks bevel glints)
   [[-2.10, -1.50, -2.80], [.11, .16], .030, [21.5, 21.0, 19.6], [-.2, -.4], 0],
@@ -154,7 +151,7 @@ uniform float size, lift, shift, time, quality;
 uniform vec2 lightRot, filamentRange, centre, view, pointer;
 uniform vec3 row1, row2, row3;
 uniform vec4 shadow, shockA, shockB;
-uniform sampler2D groundMap, etchMap;
+uniform sampler2D groundMap;
 uniform samplerCube envCube;
 varying vec3 plate;
 varying float side;
@@ -188,32 +185,6 @@ float vnoise(vec2 x) {
     mix(hash21(i + vec2(0., 1.)), hash21(i + vec2(1., 1.)), f.x),
     f.y
   );
-}
-
-// Fast 1-tap wordmark lookup (used for internal glass refraction rays inside shade()).
-vec3 sampleEtchMask(vec2 xz, bool isTop) {
-  float x0 = isTop ? .046 : .064;
-  float xW = isTop ? .490 : .582;
-  float u = (xz.x - x0) / xW;
-  float v = isTop ? (xz.y + .170) / .355 : (.185 - xz.y) / .355;
-  if (u <= 0. || u >= 1. || v <= 0. || v >= 1.) return vec3(0.);
-  return texture2D(etchMap, vec2(u, 1. - v)).rgb;
-}
-
-// Full 3-tap carved-bevel lookup (ONLY evaluated on direct flat-end wall fragments).
-vec3 sampleEtch(vec2 xz, bool isTop, out vec2 grad) {
-  grad = vec2(0.);
-  float x0 = isTop ? .046 : .064;
-  float xW = isTop ? .490 : .582;
-  float u = (xz.x - x0) / xW;
-  float v = isTop ? (xz.y + .170) / .355 : (.185 - xz.y) / .355;
-  if (u <= 0. || u >= 1. || v <= 0. || v >= 1.) return vec3(0.);
-  vec2 uv = vec2(u, 1. - v);
-  vec3 c = texture2D(etchMap, uv).rgb;
-  float gx = texture2D(etchMap, uv + vec2(.0035, 0.)).g - c.g;
-  float gy = texture2D(etchMap, uv + vec2(0., .012)).g - c.g;
-  grad = vec2(gx, isTop ? -gy : gy);
-  return c;
 }
 
 float halfRound(vec2 p, float cx, float cy, float r) {
@@ -570,16 +541,6 @@ vec3 shade(vec3 o, vec3 n, float isFace, float edgeFactor, float bias, float wal
         internalEmit += satin(x) * (1.12 * kerfVis) + cutDiff + SEA_TEAL * .10;
       }
     } else {
-      // INTERNAL REFRACTED VIEW OF THE ETCHED BENNIETECH WORDMARK ON BOTH FLAT ENDS!
-      // Single fast tap (no gradient overhead inside shade) creates an authentic subtle
-      // frosted-crystal internal ghost refracted through the vertical flutes.
-      if (abs(nw.y) > .95 && quality > .5) {
-        vec3 eSample = sampleEtchMask(x.xz, nw.y < 0.);
-        if (eSample.r > .01) {
-          vec3 etchTint = mix(vec3(.56, .92, .88), vec3(.72, 1., .26), eSample.b);
-          internalEmit += etchTint * eSample.r * (.36 + .20 * glow);
-        }
-      }
       vec3 eCheck = refract(T, -wn, ETA);
       if (dot(eCheck, eCheck) > .5) {
         hasExit = true;
@@ -761,21 +722,12 @@ void main() {
              + softSheen * fresnel * .30;
     } else if (cut < .5) {
       // PRECISION MACHINE-GROUND & POLISHED ARCHITECTURAL FLOAT-GLASS OUTER EDGE
-      // + LASER-ETCHED / SANDBLASTED 3D BENNIETECH STAMP ON BOTH FLAT ENDS!
       float perim = wallArc(p, nw);
       float groundMask = 1. - smoothstep(.04, .60, edgeLit);
       float fineGate = smoothstep(.0090, .0026, pixel);
       float microGate = smoothstep(.0052, .0016, pixel);
 
-      // Evaluate stamped/etched wordmark on top flat end (nw.y < -0.95) & bottom flat end (nw.y > 0.95).
-      vec2 eGrad = vec2(0.);
-      vec3 etch = abs(nw.y) > .95 ? sampleEtch(plate.xz, nw.y < 0., eGrad) : vec3(0.);
-      float etchMask = etch.r * groundMask;
-      float etchBevel = etch.g * groundMask;
-      float etchDot = etch.b * groundMask;
-
-      // Optically flat macro normal + crisp 3D V-carved groove slope on etched letter lips!
-      vec3 n = normalize(vec3(nw.x - eGrad.x * 2.4 * groundMask, nw.y, (ef - eb) * .96 - eGrad.y * 2.4 * groundMask));
+      vec3 n = normalize(vec3(nw, (ef - eb) * .96));
 
       float streakBroad = vnoise(vec2(perim * .45, tz * 16.));
       float streakFine = vnoise(vec2(perim * .85 + 4.1, tz * 52.));
@@ -784,8 +736,7 @@ void main() {
       float cloud = vnoise(vec2(perim * 1.35 + 2.7, tz * 4.2));
       float centerBand = smoothstep(0., .18, tz) * smoothstep(1., .82, tz);
 
-      // Frosted etched glyphs raise surface roughness locally into luminous sandblasted glass!
-      float wallRough = clamp(groundMask * (.24 + .22 * centerBand * (.45 + .55 * cloud)) + etchMask * .65, 0., 1.);
+      float wallRough = groundMask * (.24 + .22 * centerBand * (.45 + .55 * cloud));
       colour = shade(vec3(p - nw * .0004, plate.z), n, 0., edgeLit, mipBias * .50, wallRough);
 
       // 1. Crisp dark viridian-teal internal refraction crease behind BOTH 45-deg arris bevels.
@@ -810,40 +761,13 @@ void main() {
       float backRibbon = exp(-pow((dBack - WALL_BEVEL * 1.85) / .015, 2.));
       colour += SEA_AQUA * (innerRibbon * .16 + backRibbon * .09) * (.35 + .65 * envEnergy);
 
-      // 3. STAMPED / LASER-ETCHED BENNIETECH WORDMARK OPTICAL SHADING ON TOP & BOTTOM FLAT ENDS!
-      //    Breaks Total Internal Reflection so every etched stroke glows with luminous frosted
-      //    sea-glass crystal clarity, framed by a carved dark recess lip & specular rim catchlight!
-      if (etchMask > .005 || etchBevel > .01) {
-        // Subtle fine sandblasted crystalline frost grain inside the carved glyphs.
-        float etchFrost = .88 + .24 * hash21(floor(plate.xz * 1200.));
-        // Directional carved-lip shading: bright catchlight on the studio-facing groove wall,
-        // crisp deep viridian shadow on the opposite carved wall for unmistakable tactile depth!
-        vec2 key2D = normalize(vec2(-.65 + lightAngle * .45 + pointer.x * .35, -.75));
-        float lipLight = dot(eGrad, key2D) * 4.5;
-        float darkRecess = clamp(-lipLight, 0., 1.) * (1. - etchMask * .35);
-        float brightLip = clamp(lipLight, 0., 1.);
-
-        // Deepen the recessed pocket immediately around the carved glyph for genuine carved depth.
-        colour *= (1. - darkRecess * .64 - etchBevel * (1. - etchMask) * .42);
-
-        // Translucent sandblasted / laser-etched crystal fill (frosted aquamarine-ivory glass,
-        // NOT flat white paint, with signature lime-tinted 'i' dot and sweeping light response).
-        float sweepLift = 1. + .48 * beam + .24 * pulse;
-        vec3 frostFill = mix(vec3(.68, .92, .90), vec3(.58, 1., .08), etchDot);
-        vec3 etchedCol = (colour * .26 + frostFill * (.58 + .26 * glow)) * etchFrost * sweepLift;
-        colour = mix(colour, etchedCol, clamp(etchMask * .86, 0., .90));
-        // Razor-crisp diamond specular catchlight along the carved upper groove lip!
-        vec3 lipTint = mix(vec3(.94, 1., .98), vec3(.82, 1., .42), etchDot);
-        colour += lipTint * brightLip * (.88 + .50 * beam) * (.65 + .35 * glow);
-      }
-
-      // 4. Razor-clean glossy icy-aqua translucent highlight on the twin 45-degree polished arris bevels.
+      // 3. Razor-clean glossy icy-aqua translucent highlight on the twin 45-degree polished arris bevels.
       vec3 bevelLight = mix(vec3(.14, .58, .58), vec3(.86, 1., .98), smoothstep(.26, 1.55, envEnergy));
       colour += bevelLight * edgeLit * (.19 + .28 * envEnergy + .22 * beam);
       float arrisCorner = exp(-pow((dFront - WALL_BEVEL * .45) / .0045, 2.));
       colour += vec3(.74, .98, .96) * arrisCorner * (.15 + .30 * envEnergy + .20 * beam);
 
-      // 5. Delicate pinpoint micro-crystalline wheel-grind flecks strictly where light hits.
+      // 4. Delicate pinpoint micro-crystalline wheel-grind flecks strictly where light hits.
       if (microGate > .15) {
         float fleck = smoothstep(.976, .998, hash21(floor(vec2(perim * 280., tz * 130.))));
         float seamFleck = smoothstep(.966, .997, hash21(floor(vec2(perim * 380., dFront * 190.))));
@@ -851,7 +775,7 @@ void main() {
         colour += vec3(.84, .99, .97) * (fleck * groundMask * .34 + seamFleck * (creaseF + ef * .65) * .45) * fVis;
       }
 
-      // 6. Electric lime kerf glow bleeding organically into the deep sea-glass teal walls near the cut.
+      // 5. Electric lime kerf glow bleeding organically into the deep sea-glass teal walls near the cut.
       float hot = exp(-cutDist * 14.) * .24 + exp(-cutDist * 5.0) * .18 + exp(-cutDist * 1.5) * .026;
       colour += LIME * glow * flow(p.x) * hot;
     } else {
@@ -1080,24 +1004,15 @@ void main() {
   }
 }`;
 
-function texture(gl, source, mipmap = false) {
+function texture(gl, source) {
   const tex = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, tex);
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, mipmap ? gl.LINEAR_MIPMAP_LINEAR : gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  if (mipmap) {
-    gl.generateMipmap(gl.TEXTURE_2D);
-    const aniso = gl.getExtension('EXT_texture_filter_anisotropic')
-      || gl.getExtension('WEBKIT_EXT_texture_filter_anisotropic');
-    if (aniso) {
-      const max = gl.getParameter(aniso.MAX_TEXTURE_MAX_ANISOTROPY_EXT);
-      gl.texParameterf(gl.TEXTURE_2D, aniso.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(8, max));
-    }
-  }
   return tex;
 }
 
@@ -1181,7 +1096,7 @@ function filamentBars([[x0, y0], [x1, y1]], near, far) {
   return { data: data.concat(card), barCount: box.length, glowCount: 6 };
 }
 
-export function createGlass(stage, { outlines, flute, filament, back, front, groundMap, halo, haloPad = 0, etchMap }) {
+export function createGlass(stage, { outlines, flute, filament, back, front, groundMap, halo, haloPad = 0 }) {
   const canvas = document.createElement('canvas');
   canvas.className = 'glass';
   canvas.setAttribute('aria-hidden', 'true');
@@ -1233,12 +1148,10 @@ export function createGlass(stage, { outlines, flute, filament, back, front, gro
 
   const groundTexture = texture(gl, groundMap);
   const haloTexture = halo ? texture(gl, halo) : null;
-  const etchTexture = etchMap ? texture(gl, etchMap, true) : null;
 
   gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_CUBE_MAP, envCube);
   gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, groundTexture);
   gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, haloTexture);
-  if (etchTexture) { gl.activeTexture(gl.TEXTURE5); gl.bindTexture(gl.TEXTURE_2D, etchTexture); }
 
   gl.useProgram(glassProg);
   gl.uniform1f(ug('flute'), flute);
@@ -1248,7 +1161,6 @@ export function createGlass(stage, { outlines, flute, filament, back, front, gro
   gl.uniform2f(ug('filamentRange'), filament[0][0], filament[1][0]);
   gl.uniform1i(ug('envCube'), 2);
   gl.uniform1i(ug('groundMap'), 3);
-  gl.uniform1i(ug('etchMap'), 5);
 
   gl.useProgram(fxProg);
   gl.uniform1f(uf('flute'), flute);

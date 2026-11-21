@@ -37,11 +37,19 @@ float bayer(vec2 c) {
   return 4. * bayer2(mod(m, 2.)) + bayer2(floor(m / 2.));
 }
 
-// Quiet around the re-aligned torn envelope so it stays legible.
+// Quiet around the top-left wordmark and torn envelope lockup so both stay legible.
 float quiet(vec2 q) {
-  float mailY = max(.25 * res.y - .44 * size, 28. * dpr);
-  vec2 top = (q - vec2(.5 * res.x, mailY)) / res.y;
-  return 1. - .92 * exp(-dot(top, top) / .013);
+  vec2 p = q / dpr;
+  vec2 v = res / dpr;
+  float mx = clamp(v.x * .030, 22., 44.);
+  float my = clamp(v.y * .028, 16., 36.) + 22.;
+  float sigW = clamp(v.x * .092, 110., 144.);
+  vec2 a = vec2(mx + 14., my);
+  vec2 b = vec2(mx + sigW + 38., my);
+  vec2 pa = p - a, ba = b - a;
+  float h = clamp(dot(pa, ba) / max(dot(ba, ba), 1.), 0., 1.);
+  vec2 d = (pa - ba * h) / vec2(44., 32.);
+  return 1. - .94 * exp(-dot(d, d));
 }
 
 // Light in the scene: the sheet thrown along the cut, its glow, the rings,

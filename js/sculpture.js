@@ -236,8 +236,9 @@ const ctx = canvas.getContext('2d');
 const stage = canvas.closest('main');
 const wash = stage.querySelector('.studio-wash');
 const chrome = document.querySelector('meta[name="theme-color"]');
-const PAPER_TONE = '#e5e1d8', SPACE_TONE = '#03060b', LOUVER_TONE = '#c8c7f3', QUANTUM_TONE = '#0d1026';
-const STAGE_TONES = [PAPER_TONE, SPACE_TONE, LOUVER_TONE, QUANTUM_TONE];
+const PAPER_TONE = '#e5e1d8', SPACE_TONE = '#03060b', LOUVER_TONE = '#c8c7f3', QUANTUM_TONE = '#06071a';
+const ATELIER_TONE = '#1c2627';
+const STAGE_TONES = [PAPER_TONE, SPACE_TONE, LOUVER_TONE, QUANTUM_TONE, PAPER_TONE, ATELIER_TONE];
 let chromeDark = false;
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 
@@ -374,7 +375,7 @@ let lastExposureEnd = -Infinity, tearBeat = 0, nextTear = 0, lastWashKey = '';
 //   2 = Plush Fur B (Copper-Orange Fur + Violet Streaks, PBD Physics & Light Breeze)
 //   3 = Architectural Terrazzo & Emerald Louver B (Kinetic Concentric Fins + Violet Grid Studio)
 //   4 = Quantum Glass Voxel Core B (Micro-Grid Containment + 3D Neural Voxels + PCB Studio)
-const GLASS_VARIANTS = 5, STARSHIP = 0, LOUVER = 3, VOXEL = 4;
+const GLASS_VARIANTS = 5, STARSHIP = 0, FUR = 2, LOUVER = 3, VOXEL = 4;
 // Featured themed worlds hold the stage long enough to explore unless a
 // double-tap calls the glitch sooner.
 const STARSHIP_STAY = 10.5, FEATURE_STAY = 10.0;
@@ -386,7 +387,8 @@ function stageModeFor(variant) {
   if (variant === STARSHIP) return 1;
   if (variant === LOUVER) return 2;
   if (variant === VOXEL) return 3;
-  return 0;
+  if (variant === FUR) return 5;
+  return 4;
 }
 
 function setStage(mode) {
@@ -394,6 +396,8 @@ function setStage(mode) {
   stage.classList.toggle('space', mode === 1);
   stage.classList.toggle('louver', mode === 2);
   stage.classList.toggle('quantum', mode === 3);
+  stage.classList.toggle('paper', mode === 4);
+  stage.classList.toggle('atelier', mode === 5);
   if (mode === stageMode) return;
   stageMode = mode;
   space?.activate(mode);
@@ -460,7 +464,8 @@ function exposureAge() {
   if (age >= exposure.finish) {
     // Waits average about thirteen seconds but range from six to twenty-six.
     // The starship and new themed works get a full stay with no premature aftershock.
-    const featured = stageMode > 0;
+    // The paper gallery and the atelier keep the original, quicker rhythm.
+    const featured = stageMode > 0 && stageMode < 4;
     const minStay = glassVariant === STARSHIP ? STARSHIP_STAY : FEATURE_STAY;
     const shock = !featured && !exposure.aftershock && Math.random() < .14;
     let wait = shock ? 1.2 + Math.random() * 2.2 : 6 + Math.min(20, -Math.log(1 - Math.random()) * 7);

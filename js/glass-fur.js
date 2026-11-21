@@ -882,7 +882,8 @@ void main() {
   vec4 softTap = texture2D(groundMap, guv + vec2(breezeShift * 1.1, .012));
   vec3 col = mix(base.rgb, softTap.rgb, .38);
   float aOut = alpha * heightMod * (1. + .06 * pulse);
-  gl_FragColor = vec4(col * aOut, aOut);
+  // On the dark atelier canvas the cast shade is a deep umber, not a warm print.
+  gl_FragColor = vec4(col * vec3(.3, .26, .24) * aOut, aOut);
 }`;
 
 const halves = `
@@ -1228,7 +1229,8 @@ void main() {
   float pocket = (1. - .33 * valley * (1. - .68 * exposed)) * vOcclusion.y;
   float roots = mix(.50, 1., smoothstep(.02, .72, u));
   float hemi = .5 + .5 * dot(n, fill);
-  vec3 sky = mix(vec3(.115, .108, .151), vec3(.25, .28, .38), hemi);
+  // Fill from the teal canvas atelier around the sculpture.
+  vec3 sky = mix(vec3(.07, .105, .11), vec3(.19, .29, .29), hemi);
   vec3 bounce = vec3(.095, .061, .032) * (.32 + .68 * max(0., dot(n, fill)));
   vec3 indirect = (sky + bounce) * pigment + .09 * pigment * pigment;
   vec3 diffuse = pigment * vec3(1.76, 1.59, 1.37) * (.10 + .90 * wrap) * (.40 + .60 * cylinder);
@@ -1259,7 +1261,8 @@ void main() {
   float edge = pow(1. - clamp(dot(n, view), 0., 1.), 1.75);
   float rimLobe = sheen(t, normalize(rim + view), -.04, 52.);
   float back = rimFace * (.06 + .94 * edge) * (.20 + .80 * exposed);
-  vec3 scatter = (sqrt(pigment) * vec3(1.22, .86, .66) + (.33 + .38 * guard) * rimLobe) * back;
+  // A warm spotlight behind the sculpture sets the whole coat's outline alight.
+  vec3 scatter = (sqrt(pigment) * vec3(1.55, 1.02, .66) + (.42 + .5 * guard) * rimLobe * vec3(1.15, .95, .78)) * back * 1.35;
   vec3 col = (indirect * roots + diffuse * roots * (.07 + .93 * vis)
     + spec * (.09 + .91 * sqrt(vis))) * pocket + scatter;
   col += .06 * (1. - recovery) * exposed * sqrt(pigment);

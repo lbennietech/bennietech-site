@@ -129,7 +129,12 @@ vec4 heldGlass(vec2 screen) {
 // paper that follows the page's own gradient, studio wash, and grain.
 vec3 paperAt(vec2 s) {
   // Behind themed stages (space, architectural louver studio, quantum PCB) the print matches that stage.
-  if (spaceOn > .5) return stageColor(s / dpr - spaceShift, spaceOn);
+  if (spaceOn > .5) {
+    vec3 st = stageColor(s / dpr - spaceShift, spaceOn);
+    // The paper gallery still carries the light the glass was throwing.
+    if (spaceOn > 3.5 && spaceOn < 4.5) st = litPaper(st, spectralLight(s / dpr));
+    return st;
+  }
   vec2 uv = s / res;
   float t = length((uv - vec2(.36, .26)) / vec2(.64, .74)) * .7071;
   vec3 c = mix(vec3(.984, .976, .945), vec3(.937, .925, .886), clamp(t / .43, 0., 1.));

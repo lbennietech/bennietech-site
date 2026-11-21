@@ -1616,7 +1616,7 @@ void main() {
       cavity *= 1. - (detail > 1.5 ? .35 : .6) * groove;
       float lip = (1. - smoothstep(w, w + .0032, e)) * (1. - groove);
       dn += toEdge * lip * .5;
-      albedo *= .8 + .4 * hash12(vec2(id, 3.7));
+      albedo *= .62 + .7 * hash12(vec2(id, 3.7));
       if (hash12(vec2(id, 9.1)) > .84) albedo *= vec3(.84, .9, 1.04);
       if (quality > .5) {
         // Rivets along some seams.
@@ -1649,6 +1649,17 @@ void main() {
           float edgeT = smoothstep(.34, .46, tile);
           dn += sign(g) * step(abs(g.yx), abs(g)) * edgeT * .45;
           cavity *= 1. - .25 * edgeT;
+        } else if (pick < .4 && min(dims.x, dims.y) > .01) {
+          // Rows of tiny lit portholes: the station is inhabited.
+          vec2 wg = local / vec2(.0085, .011);
+          vec2 wc = floor(wg);
+          vec2 wf = fract(wg) - .5;
+          float inset = min(min(local.x, dims.x - local.x), min(local.y, dims.y - local.y));
+          float lit = step(.4, hash12(wc + id * 41.)) * smoothstep(.003, .005, inset);
+          float port = smoothstep(.3, .2, max(abs(wf.x), abs(wf.y) * 1.5));
+          cavity *= 1. - .3 * port;
+          vec3 wcol = hash12(wc + 7.7) < .82 ? vec3(1., .62, .3) : vec3(.62, .85, 1.);
+          emit += wcol * port * lit * on * 1.6 * (.85 + .15 * sin(time * 1.7 + hash12(wc) * 30.));
         } else if (pick > .965) {
           // Faded stencil stripe.
           float st = step(.5, fract((local.x + local.y) / .009));
@@ -1713,13 +1724,18 @@ void main() {
   vec3 diff = albedo * (1. - metal);
   vec3 F0 = mix(vec3(.045), albedo * 2.4 + .03, metal);
   float sh = shadowAt(vShadow, .0016 + .0035 * (1. - clamp(dot(N, keyV), 0., 1.)));
-  float direct = mix(1., cavity, .55);
+  float direct = mix(1., cavity, .72);
 
-  vec3 col = shade(Nd, V, keyV, keyCol * sh, diff, F0, a) * direct;
+  // Cinematic falloff: the key pools on the upper left of the station and
+  // the lower right sinks toward the warm bounce of the sunrise below.
+  float across = (vObj.x - .3) * .75 + (vObj.y - .55) * .62;
+  float pool = mix(1.3, .5, smoothstep(-.55, .85, across));
+  vec3 col = shade(Nd, V, keyV, keyCol * sh * pool, diff, F0, a) * direct;
+  col += diff * vec3(.42, .2, .07) * smoothstep(.1, 1.1, across) * max(Nd.y * .6 + .5, 0.) * cavity * .9;
   col += shade(Nd, V, sunV, sunCol, diff, F0, a) * direct;
   col += shade(Nd, V, kickV, kickCol, diff, F0, a) * direct;
   // A soft fill from beside the camera keeps the plating legible face-on.
-  col += shade(Nd, V, normalize(vec3(-.22, -.3, -1.)), vec3(.17, .19, .23), diff, F0, max(a, .35)) * cavity;
+  col += shade(Nd, V, normalize(vec3(-.22, -.3, -1.)), vec3(.11, .13, .17), diff, F0, max(a, .35)) * cavity;
   // Hemispheric fill: cold space above, the planet's glow below.
   col += diff * mix(vec3(.006, .008, .013), vec3(.016, .026, .042), Nd.y * .5 + .5) * cavity;
   vec3 R = reflect(-V, Nd);
@@ -1738,6 +1754,12 @@ void main() {
   float facing = max(dot(normalize(Nd.xy + vec2(1e-4)), normalize(sunV.xy)), 0.);
   float rim = pow(1. - NdV, 3.5) * facing * smoothstep(-.35, .25, Nd.z);
   col += sunCol * .42 * rim * (1. - .3 * metal) * mix(.5, 1., cavity);
+  // Grade the reflected light too, so the falloff reads on polished metal.
+  col *= mix(1.22, .58, smoothstep(-.55, .85, across));
+  // Cool the shadows, warm the highlights.
+  float lum = dot(col, vec3(.3, .55, .15));
+  col = mix(col, col * vec3(.82, .95, 1.25), smoothstep(.12, .0, lum) * .6);
+  col = mix(col, col * vec3(1.12, 1., .86), smoothstep(.25, .9, lum) * .5);
   // A click sends a power surge across the hull.
   col += vec3(.1, .45, .7) * wave * .35 * (1. - metal * .5);
   col += emit;
@@ -2116,8 +2138,8 @@ export function initStarshipGlass(gl, { software, outlines, filament }) {
       gl.uniform3fv(ul('keyV'), key);
       gl.uniform3fv(ul('sunV'), sun);
       gl.uniform3fv(ul('kickV'), kick);
-      gl.uniform3f(ul('keyCol'), 2.5, 2.48, 2.42);
-      gl.uniform3f(ul('sunCol'), 3.4, 2.05, 1.05);
+      gl.uniform3f(ul('keyCol'), 1.85, 1.95, 2.2);
+      gl.uniform3f(ul('sunCol'), 4.4, 2.5, 1.12);
       gl.uniform3f(ul('kickCol'), .38, 1.0, 1.5);
       gl.uniform3fv(ul('kerfA'), beamA);
       gl.uniform3fv(ul('kerfB'), beamB);

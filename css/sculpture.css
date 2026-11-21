@@ -183,7 +183,9 @@ canvas.space {
 }
 main.space.ready canvas.space,
 main.louver.ready canvas.space,
-main.quantum.ready canvas.space { opacity: 1; transition: opacity .9s ease; }
+main.quantum.ready canvas.space,
+main.paper.ready canvas.space,
+main.atelier.ready canvas.space { opacity: 1; transition: opacity .9s ease; }
 main.space {
   background-color: #020308;
   background-image:
@@ -199,15 +201,20 @@ main.louver::after,
 main.quantum::after { opacity: 0; }
 main.space .studio-wash,
 main.louver .studio-wash,
-main.quantum .studio-wash { opacity: 0; }
+main.quantum .studio-wash,
+main.atelier .studio-wash { opacity: 0; }
 main.space .signature img:first-child,
-main.quantum .signature img:first-child { opacity: 0; }
+main.quantum .signature img:first-child,
+main.atelier .signature img:first-child { opacity: 0; }
 main.space .signature-night,
-main.quantum .signature-night { opacity: 1; }
+main.quantum .signature-night,
+main.atelier .signature-night { opacity: 1; }
 main.space .email,
-main.quantum .email { color: #b7bcb2; --fringe: #8fb02a; }
+main.quantum .email,
+main.atelier .email { color: #b7bcb2; --fringe: #8fb02a; }
 main.space .email:hover, main.space .email:focus-visible,
-main.quantum .email:hover, main.quantum .email:focus-visible { color: #eef0ea; --fringe: #c6ec5a; }
+main.quantum .email:hover, main.quantum .email:focus-visible,
+main.atelier .email:hover, main.atelier .email:focus-visible { color: #eef0ea; --fringe: #c6ec5a; }
 
 /* Architectural Terrazzo & Emerald Louver studio stage (light lavender wall + violet-magenta grid). */
 main.louver {
@@ -219,10 +226,18 @@ main.louver .email:hover, main.louver .email:focus-visible { color: #12112a; --f
 
 /* Quantum Glass Voxel PCB studio stage (deep cyber-indigo circuit plane). */
 main.quantum {
-  background-color: #0d1026;
+  background-color: #06071a;
   background-image:
-    radial-gradient(ellipse 52% 46% at 50% 48%, rgba(160, 44, 210, .28), rgba(34, 88, 220, .14) 55%, transparent 82%),
-    linear-gradient(180deg, #0b0d20, #121536);
+    linear-gradient(180deg, transparent 61.6%, rgba(150, 90, 255, .5) 62%, transparent 62.4%),
+    radial-gradient(ellipse 50% 40% at 55% 46%, rgba(120, 30, 150, .32), rgba(30, 50, 150, .14) 60%, transparent 85%),
+    linear-gradient(180deg, #07081c, #0c0d26 62%, #08081a);
 }
 main.quantum .email { color: #c5cbe8; --fringe: #ff48cc; }
 main.quantum .email:hover, main.quantum .email:focus-visible { color: #ffffff; --fringe: #68d8ff; }
+
+/* Painted canvas atelier behind the fur B (mottled slate teal, spotlit). */
+main.atelier {
+  background-color: #1c2627;
+  background-image:
+    radial-gradient(ellipse 46% 52% at 51% 44%, #44544f, #263434 55%, #141c1d 100%);
+}

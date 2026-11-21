@@ -30,6 +30,8 @@ const CUTS = [.9125, 1.0475];
 const KERF_MID = (CUTS[0] + CUTS[1]) / 2;
 const SHADOW_EXTENT = 1.28;
 const STRIDE = 16;
+// The lacquered floor plane the monolith floats above (plate units).
+const FLOOR_Y = 1.83;
 
 // Material IDs encoded into aUv.z:
 //   0 = Speckled white architectural terrazzo shell
@@ -770,7 +772,7 @@ function buildLouverHalf(mesh, rawOutline, part) {
 // ---------------------------------------------------------------------------
 const PLACE = `
 uniform vec4 halfMotion, shockA, shockB;
-uniform float spread, time;
+uniform float spread, time, mirror;
 mat2 rot2(float a) { float c = cos(a), s = sin(a); return mat2(c, -s, s, c); }
 
 float clickRipple(vec2 p, vec4 s) {
@@ -797,6 +799,8 @@ void place(vec3 p, vec3 n, vec3 t, float part, float kinPhase, out vec3 wp, out 
   wp = vec3(R * (lp.xy - piv) + piv + off, lp.z);
   wn = vec3(R * n.xy, n.z);
   wt = vec3(R * t.xy, t.z);
+  // The lacquered floor reflection mirrors the world about the floor plane.
+  if (mirror > 0.) { wp.y = 2. * mirror - wp.y; wn.y = -wn.y; wt.y = -wt.y; }
 }
 vec3 tRule(vec3 n) {
   return abs(n.z) > .7 ? normalize(vec3(1., 0., 0.) - n * n.x) : normalize(vec3(-n.y, n.x, 0.));
@@ -861,7 +865,7 @@ const litFrag = `precision highp float;
 uniform vec3 row1, row2, row3;
 uniform vec3 keyV, fillV, floorV, rimV;
 uniform vec3 kerfA, kerfB;
-uniform float time, pixel, pulse, glow, quality, shadowOn, shadowTexel;
+uniform float time, pixel, pulse, glow, quality, shadowOn, shadowTexel, mirror;
 uniform sampler2D shadowMap;
 varying vec3 vObj, vView, vN, vT, vShadow;
 varying vec4 vUv, vExt;
@@ -884,49 +888,50 @@ float vnoise(vec2 x) {
 }
 
 // Multi-scale speckled architectural mineral terrazzo aggregate (Image 1 signature!).
+// One layer of terrazzo aggregate: irregular chips on a jittered grid.
+float chipLayer(vec2 p, float scale, float density, float size, out vec2 dir, out float pick) {
+  vec2 g = p * scale;
+  vec2 c = floor(g), f = fract(g);
+  pick = hash12(c + scale * .37);
+  dir = vec2(0.);
+  if (hash12(c + 3.3 + scale) > density) return 0.;
+  vec2 j = .25 + .5 * hash22(c + 13.7 + scale);
+  vec2 d = f - j;
+  float ang = atan(d.y, d.x) + hash12(c + 1.9) * 6.28;
+  // Fractured stone: a rounded polygon with a few flat facets.
+  float r = size * (.7 + .5 * hash12(c + 7.1)) * (.84 + .12 * cos(ang * 3.) + .07 * cos(ang * 5. + 1.3));
+  float l = length(d);
+  dir = d / max(l, 1e-4);
+  return 1. - smoothstep(r * .9, r, l);
+}
+
+// Polished architectural terrazzo: a warm white cement matrix carrying large
+// emerald, periwinkle, violet and graphite chips, medium chips and fine grit.
 void terrazzo(vec2 p, out vec3 col, out float rough, out vec2 dn) {
-  col = vec3(.95, .95, .97);
-  rough = .76;
+  float cloud = vnoise(p * 5.) * .6 + vnoise(p * 13. + 3.1) * .4;
+  col = mix(vec3(.93, .925, .935), vec3(.975, .97, .985), cloud);
+  rough = .2;
   dn = vec2(0.);
-  float plaster = vnoise(p * 14.) * .5 + vnoise(p * 34. + 3.1) * .5;
-  col *= .955 + .055 * plaster;
+  vec2 dir; float pick;
 
-  // Layer 1: Crisp dense salt-and-pepper mineral speckle grain (higher contrast, readable at hero distance!)
-  vec2 g1 = p * 82.;
-  vec2 c1 = floor(g1), f1 = fract(g1);
-  vec2 j1 = .16 + .68 * hash22(c1 + 1.3);
-  float d1 = length(f1 - j1);
-  float r1 = .16 + .24 * hash12(c1 + 4.7);
-  float m1 = 1. - smoothstep(r1 * .52, r1, d1);
-  float pick1 = hash12(c1 + 9.2);
-  if (pick1 < .52) {
-    vec3 chip = pick1 < .18 ? vec3(.24, .27, .64) : (pick1 < .36 ? vec3(.44, .34, .76) : vec3(.14, .17, .26));
-    col = mix(col, chip, m1 * .82);
-    rough = mix(rough, .46, m1 * .65);
-    dn += normalize(f1 - j1 + 1e-4) * m1 * .16;
+  float m = chipLayer(p, 11., .55, .34, dir, pick);
+  if (m > 0.) {
+    vec3 chip = pick < .3 ? vec3(.03, .44, .27) : pick < .52 ? vec3(.36, .40, .86) : pick < .7 ? vec3(.50, .34, .80)
+      : pick < .86 ? vec3(.11, .11, .16) : vec3(.97, .96, .99);
+    chip *= .86 + .28 * vnoise(p * 60. + pick * 9.);
+    col = mix(col, chip, m);
+    dn += dir * m * (1. - m) * .5;
   }
-
-  // Layer 2: Medium architectural terrazzo aggregate chips (slate-indigo, periwinkle, charcoal & emerald flecks)
-  vec2 g2 = p * 38.;
-  vec2 c2 = floor(g2), f2 = fract(g2);
-  vec2 j2 = .20 + .60 * hash22(c2 + 13.7);
-  vec2 dv2 = f2 - j2;
-  float ang2 = atan(dv2.y, dv2.x);
-  float r2 = (.15 + .17 * hash12(c2 + 7.1)) * (.80 + .26 * sin(ang2 * 3. + hash12(c2) * 6.28));
-  float m2 = 1. - smoothstep(r2 * .62, r2, length(dv2));
-  float pick2 = hash12(c2 + 19.4);
-  if (pick2 < .44) {
-    vec3 chip2 = pick2 < .16 ? vec3(.26, .30, .78)
-      : (pick2 < .28 ? vec3(.48, .28, .80)
-      : (pick2 < .37 ? vec3(.13, .14, .22) : vec3(.08, .58, .44)));
-    col = mix(col, chip2, m2 * .88);
-    rough = mix(rough, .36, m2 * .75);
-    dn += normalize(dv2 + 1e-4) * m2 * .22;
+  m = chipLayer(p + 4.1, 23., .5, .33, dir, pick);
+  if (m > 0.) {
+    vec3 chip = pick < .28 ? vec3(.05, .52, .34) : pick < .55 ? vec3(.40, .44, .9) : pick < .75 ? vec3(.15, .15, .22) : vec3(.62, .44, .86);
+    col = mix(col, chip, m * .92);
   }
-
-  // Layer 3: Ultra-fine mineral micro-pores for grazing studio light realism
-  float pore = vnoise(p * 240.);
-  dn += vec2(vnoise(p * 180. + vec2(1., 0.)) - pore, vnoise(p * 180. + vec2(0., 1.)) - pore) * .24;
+  m = chipLayer(p + 9.7, 58., .55, .3, dir, pick);
+  col = mix(col, pick < .5 ? vec3(.38, .4, .62) : vec3(.62, .6, .7), m * .55);
+  // Fine pores catch grazing light.
+  float pore = vnoise(p * 220.);
+  dn += vec2(vnoise(p * 180. + vec2(1., 0.)) - pore, vnoise(p * 180. + vec2(0., 1.)) - pore) * .08;
 }
 
 float unpackDepth(vec4 c) { return dot(c, vec4(1., 1. / 255., 1. / 65025., 1. / 16581375.)); }
@@ -1013,12 +1018,12 @@ void main() {
     cavity = pow(clamp(vAo, 0., 1.), 1.9);
     albedo = mix(richEm, abyssEm, smoothstep(.04, .90, depthT));
     if (isCrest) {
-      albedo = mix(aquaEdge, richEm, smoothstep(.0, .82, depthT));
+      albedo = mix(aquaEdge, richEm * .55, smoothstep(.0, .6, depthT));
       rough = .26 + .16 * depthT;
       metal = .04;
       emit += mix(vec3(.010, .18, .085), vec3(.001, .032, .010), depthT) * (.28 + .72 * vWave);
     } else {
-      albedo = mix(abyssEm, deepEm, smoothstep(.08, .82, cavity)) + mintLip * smoothstep(.78, 1., vAo) * (1. - depthT * .72) * .36;
+      albedo = mix(abyssEm, deepEm, smoothstep(.08, .82, cavity)) * (1. - .6 * smoothstep(.15, .8, depthT)) + mintLip * smoothstep(.8, 1., vAo) * (1. - depthT) * .3;
       rough = .36 + .20 * depthT;
       metal = .03;
     }
@@ -1070,7 +1075,7 @@ void main() {
   vec3 diff = albedo * (1. - metal);
   vec3 F0 = mix(vec3(.042), albedo * .85 + .15, metal);
 
-  float sh = shadowAt(vShadow, .0018 + .0038 * (1. - clamp(dot(N, keyV), 0., 1.)));
+  float sh = mirror > 0. ? 1. : shadowAt(vShadow, .0018 + .0038 * (1. - clamp(dot(N, keyV), 0., 1.)));
   // Rich Octane shadow depth: deeper shadows inside louver canyons, luminous bounce on open stone!
   float isLouver = (kind > .5 && kind < 3.5) || kind > 5.5 ? 1. : 0.;
   float directShadow = mix(isLouver > .5 ? .07 : .24, 1., sh);
@@ -1079,7 +1084,7 @@ void main() {
   // 1. Overhead-right warm architectural studio key light (carves crisp deep louver shadows!)
   vec3 col = shadeGGX(Nd, V, keyV, vec3(2.45, 2.40, 2.26) * directShadow, diff, F0, a) * cavDirect;
   // 2. Cool periwinkle-violet left gallery fill (creates Image 1's iconic warm-top vs cool-lavender-left stone contrast!)
-  col += shadeGGX(Nd, V, fillV, vec3(.42, .45, 1.38), diff, F0, max(a, .24)) * mix(.38, 1., cavity);
+  col += shadeGGX(Nd, V, fillV, vec3(.42, .45, 1.38) * mix(1., .45, isLouver), diff, F0, max(a, .24)) * mix(.38, 1., cavity);
   // 3. Vibrant ultraviolet-magenta upward bounce from the drafting grid floor!
   col += shadeGGX(Nd, V, floorV, vec3(.68, .18, 1.18), diff, F0, max(a, .28)) * mix(.32, 1., cavity);
   // 4. Crisp overhead-rear architectural skylight rim (highlights terrazzo edges & louver crests!)
@@ -1092,7 +1097,7 @@ void main() {
   // 6. Fake-GI Saturated Emerald Cavity Radiosity (rich lush botanical green inter-bounce!)
   float inCavity = bounceW * (1. - cavity * .55);
   vec3 emBounce = mix(vec3(.003, .36, .095), vec3(.045, .74, .32), smoothstep(.0, .85, 1. - depthT));
-  col += diff * emBounce * inCavity * (.44 + .38 * sh);
+  col += diff * emBounce * inCavity * (.22 + .26 * sh);
 
   // 7. Diagonal kerf mint-lime line light illuminating nearby terrazzo & louver faces
   vec3 ab = kerfB - kerfA;
@@ -1108,11 +1113,21 @@ void main() {
   float NdV = max(dot(Nd, V), 0.);
   vec3 Fe = F0 + (max(vec3(1. - a), F0) - F0) * pow(1. - NdV, 5.);
   col += studioEnv(R, rough) * Fe * mix(.22, 1., cavity) * .56;
+  // Polished terrazzo carries a clear lacquer coat.
+  if (kind < .5) {
+    float Fc = .04 + .96 * pow(1. - NdV, 5.);
+    col += studioEnv(reflect(-V, N), .06) * Fc * mix(.3, 1., cavity) * .9;
+  }
 
   // 9. Tactile click shimmer along louver crests
   col += vec3(.12, .92, .68) * vWave * .32 * (kind > .5 && kind < 3.5 ? 1. : .35);
   col += emit;
 
+  if (mirror > 0.) {
+    float fade = .34 * exp(-max(vObj.y - mirror, 0.) / .26);
+    gl_FragColor = vec4(toneACES(col) * fade, fade);
+    return;
+  }
   gl_FragColor = vec4(toneACES(col), 1.);
 }`;
 
@@ -1389,6 +1404,16 @@ export function initLouverGlass(gl, { software, outlines, filament }) {
       gl.activeTexture(gl.TEXTURE3);
       gl.bindTexture(gl.TEXTURE_2D, shadowTex);
       gl.uniform1i(ul('shadowMap'), 3);
+      // The monolith mirrored in the lacquered floor, then the monolith itself.
+      if (ground && effQ >= 1) {
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+        gl.uniform1f(ul('mirror'), FLOOR_Y);
+        drawChunks(litA);
+        gl.uniform1f(ul('mirror'), 0);
+        gl.clear(gl.DEPTH_BUFFER_BIT);
+        gl.disable(gl.BLEND);
+      }
       drawChunks(litA);
 
       // Pass 4: Delicate luminous mint-lime architectural light blade nestled inside the diagonal kerf

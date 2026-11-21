@@ -27,6 +27,8 @@ const FRONT = .2805, BACK = -.272, CHAMFER = .018;
 const CUTS = [.9125, 1.0475];
 const KERF_MID = (CUTS[0] + CUTS[1]) / 2;
 const STRIDE = 16;
+// The polished floor plane the core floats above (plate units).
+const FLOOR_Y = 1.83;
 
 // Voxel / hardware material kinds:
 //   0 = Sapphire-cobalt translucent crystal voxel
@@ -93,7 +95,7 @@ class Mesh {
       p[0], p[1], p[2], m.part || 0,
       n[0], n[1], n[2], ao,
       uv[0], uv[1], m.kind || 0, m.seed || 0,
-      m.bounce || 0, m.pathT ?? -1, m.scale || 1, m.extra || 0
+      m.bounce || 0, m.pathT ?? -1, m.scale ?? 1, m.extra || 0
     );
     return c.count++;
   }
@@ -238,247 +240,149 @@ function buildHardwareCradle(mesh, outline, part) {
 // (Neighbor-culled beveled cubes with baked 3D AO & emissive pink radiosity!)
 // ---------------------------------------------------------------------------
 function buildVoxelCore(mesh, bloomSprites, part, rng) {
-  const VP = .043; // Crisp architectural voxel pitch
-  const X0 = .02, Y0 = part ? .74 : .02, Z0 = BACK + .118;
-  const NX = 28, NY = part ? 22 : 21, NZ = 9;
-  const grid = new Uint8Array(NX * NY * NZ); // 0=empty, 1=BLUE, 2=HOT, 3=PINK
-  const pathMap = new Float32Array(NX * NY * NZ).fill(-1);
+  // A crystal city of micro-voxels grown as a sculpted heightfield toward the
+  // viewer: districts of shared-height towers separated by avenues, a deep
+  // diagonal canyon running parallel to the kerf, a dome that rises toward the
+  // middle of each bowl, and a handful of spires crowned by magenta beacons.
+  const VP = .0335;
+  const X0 = .018, Y0 = part ? .742 : .018, Z0 = BACK + .112;
+  const NX = 36, NY = part ? 29 : 28, NZ = 12;
+  const grid = new Uint8Array(NX * NY * NZ); // 0 empty, 1 city, 2 beacon, 3 accent
   const idx = (x, y, z) => (z * NY + y) * NX + x;
   const inBounds = (x, y, z) => x >= 0 && x < NX && y >= 0 && y < NY && z >= 0 && z < NZ;
   const cellCenter = (x, y, z) => [X0 + (x + .5) * VP, Y0 + (y + .5) * VP, Z0 + (z + .5) * VP];
-
-  // Valid mask: strictly inside the B half with clean transparent optical glass margin!
-  const valid = new Uint8Array(NX * NY * NZ);
-  for (let z = 0; z < NZ; z++) {
-    for (let y = 0; y < NY; y++) {
-      for (let x = 0; x < NX; x++) {
-        const [px, py, pz] = cellCenter(x, y, z);
-        if (pz < FRONT - .032 && sdHalf2D(px, py, part) < -.038) valid[idx(x, y, z)] = 1;
-      }
-    }
-  }
-
-  // Step 1: Sculpt bold architectural 3D skyscraper clusters & deep hollow glass atriums!
-  // Base occupancy using structured stepped heights + carved cubic showcase chambers.
-  for (let z = 0; z < NZ; z++) {
-    for (let y = 0; y < NY; y++) {
-      for (let x = 0; x < NX; x++) {
-        const i = idx(x, y, z);
-        if (!valid[i]) continue;
-        // Architectural stepped skyline height in Z from macro 3x3 column blocks!
-        const bx = Math.floor(x / 3), by = Math.floor(y / 3);
-        const hSeed = Math.abs(Math.sin(bx * 12.9898 + by * 78.233 + part * 43.17) * 43758.5453) % 1;
-        // Carve open showcase glass galleries around the upper-right and outer corners (Image 2 airy glass depth!)
-        const [px, py] = cellCenter(x, y, z);
-        const frontCarve = (part === 0 && px > .66 && py < .34 && z >= 4)
-          || (part === 0 && px < .26 && py < .28 && z >= 5)
-          || (part === 1 && px > .84 && py > 1.30 && z >= 4)
-          || (part === 1 && px < .28 && py > 1.36 && z >= 5);
-        if (frontCarve) continue;
-        // Keep central architectural canyons recessed so glowing pink buses bridge across them!
-        const canyon = Math.sin(x * .52 + y * .38 + part * 2.1) * Math.cos(y * .46 - x * .24);
-        const maxZ = Math.floor(3 + hSeed * 5.6 + (canyon > .18 ? 1.5 : -1.2));
-        if (z <= maxZ && (z < 2 || canyon > -.48)) {
-          grid[i] = 1; // Sapphire-cobalt crystal tower
-        }
-      }
-    }
-  }
-
-  // Carve 3 dramatic rectangular 3D showcase notches in front faces so viewers
-  // peer deep through the micro-grid glass into layered voxel towers!
-  const notches = part === 0
-    ? [[13, 3, 5, 6, 4, 4], [4, 9, 6, 5, 4, 3], [16, 11, 5, 5, 4, 4]]
-    : [[16, 5, 5, 6, 5, 4], [5, 11, 6, 5, 5, 3], [14, 14, 5, 6, 4, 4]];
-  for (const [nx0, ny0, nz0, nw, nh, nd] of notches) {
-    for (let z = nz0; z < nz0 + nd; z++)
-      for (let y = ny0; y < ny0 + nh; y++)
-        for (let x = nx0; x < nx0 + nw; x++)
-          if (inBounds(x, y, z)) grid[idx(x, y, z)] = 0;
-  }
-
-  // Step 2: Route bold connected 3D Manhattan white-hot / neon-pink neural data buses!
-  // These form Image 2's iconic blazing white-pink stepped pixel staircases wrapping around & through the core.
-  const routes = part === 0 ? [
-    // Sweeping diagonal-staircase hero bus across the upper B front face!
-    [[2, 13, 6], [6, 13, 6], [6, 9, 7], [11, 9, 7], [11, 5, 6], [16, 5, 6], [16, 8, 5], [19, 8, 5]],
-    // Upper crown arterial bus diving deep in Z and surfacing at the upper-right bowl!
-    [[3, 4, 5], [9, 4, 5], [9, 4, 2], [14, 4, 2], [14, 7, 6], [14, 12, 6]],
-    // Lower kerf feeder bus glowing right beside the BennieTech diagonal cut!
-    [[3, 16, 5], [9, 15, 6], [14, 13, 6], [18, 11, 5]],
-  ] : [
-    // Grand sweeping lower-bowl blazing neural staircase (Image 2 hero centerpiece!)
-    [[3, 7, 6], [8, 7, 6], [8, 11, 7], [14, 11, 7], [14, 8, 6], [20, 8, 6], [20, 12, 5], [22, 12, 5]],
-    // Deep lower arch circuit wrapping around the curved belly and diving into depth!
-    [[5, 16, 5], [11, 16, 6], [11, 13, 6], [17, 13, 5], [17, 16, 3], [21, 15, 4]],
-    // Spine-to-kerf quantum uplink bus!
-    [[3, 12, 5], [3, 6, 5], [9, 5, 6], [15, 4, 6]],
-  ];
-
-  const hotList = [];
-  let stepCursor = 0;
-  const stampHot = (x, y, z, tVal, thick = false) => {
-    // Leaner, sharper 1-voxel-crisp glowing ribbons (thick only at key bends) so rich
-    // jewel-sapphire crystal voxel towers dominate 60% of the core just like Image 2!
-    const span = thick ? 1 : 0;
-    for (let dy = 0; dy <= span; dy++) {
-      const cx = x, cy = y + dy, cz = clamp(z, 0, NZ - 1);
-      if (!inBounds(cx, cy, cz) || !valid[idx(cx, cy, cz)]) continue;
-      const ii = idx(cx, cy, cz);
-      grid[ii] = 2; // HOT white-pink bus
-      pathMap[ii] = tVal;
-      hotList.push([cx, cy, cz, tVal]);
-    }
+  const hash = (a, b) => {
+    const s = Math.sin(a * 127.1 + b * 311.7 + part * 74.7) * 43758.5453;
+    return s - Math.floor(s);
   };
 
-  for (const route of routes) {
-    const totalSegs = route.length - 1;
-    for (let s = 0; s < totalSegs; s++) {
-      let [x, y, z] = route[s];
-      const [tx, ty, tz] = route[s + 1];
-      let guard = 0;
-      while ((x !== tx || y !== ty || z !== tz) && guard++ < 80) {
-        const tVal = ((stepCursor++) * .038) % 1;
-        stampHot(x, y, z, tVal, false);
-        if (x !== tx) x += Math.sign(tx - x);
-        else if (y !== ty) y += Math.sign(ty - y);
-        else if (z !== tz) z += Math.sign(tz - z);
-      }
-      stampHot(tx, ty, tz, ((stepCursor++) * .038) % 1, s % 2 === 0);
+  const height = new Int8Array(NX * NY).fill(-1);
+  const tint = new Float32Array(NX * NY);
+  const spires = [];
+  for (let y = 0; y < NY; y++) {
+    for (let x = 0; x < NX; x++) {
+      const [px, py] = cellCenter(x, y, 0);
+      const d = -sdHalf2D(px, py, part);
+      if (d < .036) continue;
+      // Districts of 3x3 columns share a height; every fourth row/column is an avenue.
+      const bx = Math.floor(x / 4), by = Math.floor(y / 4);
+      const street = x % 4 === 3 || y % 4 === 3;
+      const dome = Math.min(1, (d - .036) / .3);
+      const district = hash(bx, by);
+      // A canyon running parallel to the kerf through the middle of each half.
+      const canyon = Math.abs((py + SLOPE * px) - (part ? 1.36 : .5)) * NORM;
+      const inCanyon = canyon < .028;
+      const t = Math.min(1, .42 * dome + .62 * district);
+      let hgt = 1 + Math.round(Math.pow(t, 1.45) * 8.6 + (hash(x, y) - .5) * .8);
+      if (street) hgt = Math.round(dome * 1.4 + hash(x * 3, y) * .8);
+      if (inCanyon) hgt = 1;
+      // Plazas: a few districts are carved down to reveal depth.
+      if (!street && district < .09) hgt = 2;
+      hgt = Math.max(0, Math.min(NZ - 2, hgt));
+      height[y * NX + x] = hgt;
+      tint[y * NX + x] = hash(bx + 9, by + 3);
+    }
+  }
+  // Spires: the tallest district centres reach right up to the glass.
+  const order = [];
+  for (let y = 1; y < NY - 1; y++) for (let x = 1; x < NX - 1; x++) {
+    const h = height[y * NX + x];
+    if (h >= 6 && x % 4 === 1 && y % 4 === 1) order.push([hash(x + 17, y + 5), x, y]);
+  }
+  order.sort((a, b) => b[0] - a[0]);
+  for (const [, x, y] of order.slice(0, 7)) {
+    height[y * NX + x] = NZ - 1;
+    spires.push([x, y]);
+  }
+
+  for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) {
+    const h = height[y * NX + x];
+    for (let z = 0; z <= h; z++) grid[idx(x, y, z)] = 1;
+  }
+  for (const [x, y] of spires) {
+    grid[idx(x, y, NZ - 1)] = 2;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const hx = x + dx, hy = y + dy;
+      const h = height[hy * NX + hx];
+      if (h >= 0 && rng() < .7) grid[idx(hx, hy, Math.max(0, h))] = 3;
     }
   }
 
-  // Step 3: Turn select bordering voxels into vivid electric-magenta transition crystals!
-  const DIRS = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
-  for (const [hx, hy, hz, ht] of hotList) {
-    for (const [dx, dy, dz] of DIRS) {
-      const nx = hx + dx, ny = hy + dy, nz = hz + dz;
-      if (!inBounds(nx, ny, nz)) continue;
-      const ii = idx(nx, ny, nz);
-      if (grid[ii] === 1 && rng() < .42) {
-        grid[ii] = 3; // Glowing magenta-violet transition crystal
-        pathMap[ii] = ht;
-      }
-    }
-  }
-
-  // Step 4: Precompute 3D emissive neon-pink proximity radiosity field for every cell!
-  const bounceField = new Float32Array(NX * NY * NZ);
-  for (const [hx, hy, hz] of hotList) {
-    for (let dz = -2; dz <= 2; dz++) {
-      for (let dy = -2; dy <= 2; dy++) {
-        for (let dx = -2; dx <= 2; dx++) {
-          const nx = hx + dx, ny = hy + dy, nz = hz + dz;
-          if (!inBounds(nx, ny, nz)) continue;
-          const d2 = dx * dx + dy * dy + dz * dz;
-          if (d2 > 6) continue;
-          const ii = idx(nx, ny, nz);
-          bounceField[ii] = Math.min(1, bounceField[ii] + 1 / (1 + d2 * .85) * .68);
-        }
-      }
-    }
-  }
-
-  // Step 5: Emit neighbor-culled 3D beveled voxel faces with exact per-vertex 3D AO!
   const occupied = (x, y, z) => inBounds(x, y, z) && grid[idx(x, y, z)] > 0;
-  // Face definitions: normal, tangent U, tangent V, 4 corners in (-1,+1)
+  // Face definitions: normal, tangent U, tangent V. `dir` 0 = top (toward the viewer), 1 = side, 2 = back.
   const FACES = [
-    { n: [0, 0, 1], u: [1, 0, 0], v: [0, 1, 0], d: [0, 0, 1] },
-    { n: [0, 0, -1], u: [-1, 0, 0], v: [0, 1, 0], d: [0, 0, -1] },
-    { n: [1, 0, 0], u: [0, 0, -1], v: [0, 1, 0], d: [1, 0, 0] },
-    { n: [-1, 0, 0], u: [0, 0, 1], v: [0, 1, 0], d: [-1, 0, 0] },
-    { n: [0, 1, 0], u: [1, 0, 0], v: [0, 0, -1], d: [0, 1, 0] },
-    { n: [0, -1, 0], u: [1, 0, 0], v: [0, 0, 1], d: [0, -1, 0] },
+    { n: [0, 0, 1], u: [1, 0, 0], v: [0, 1, 0], dir: 0 },
+    { n: [1, 0, 0], u: [0, 0, -1], v: [0, 1, 0], dir: 1 },
+    { n: [-1, 0, 0], u: [0, 0, 1], v: [0, 1, 0], dir: 1 },
+    { n: [0, 1, 0], u: [1, 0, 0], v: [0, 0, -1], dir: 1 },
+    { n: [0, -1, 0], u: [1, 0, 0], v: [0, 0, 1], dir: 1 },
   ];
   const CORNERS = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
   const CUVS = [[0, 0], [1, 0], [1, 1], [0, 1]];
+  const half = VP * .484;
+  const beaconAt = new Set(spires.map(([x, y]) => x + y * NX));
 
-  const half = VP * .488; // Tiny crisp hairline gap between micro-voxels!
-  for (let z = 0; z < NZ; z++) {
-    for (let y = 0; y < NY; y++) {
-      for (let x = 0; x < NX; x++) {
-        const ii = idx(x, y, z);
-        const type = grid[ii];
-        if (!type) continue;
-        const [cx, cy, cz] = cellCenter(x, y, z);
-        const seed = (x * .137 + y * .291 + z * .419 + part * .33) % 1;
-        const kind = type === 2 ? K.HOT : type === 3 ? K.PINK : K.BLUE;
-        const m = {
-          kind, part, seed,
-          bounce: type === 2 ? 1 : bounceField[ii],
-          pathT: pathMap[ii] >= 0 ? pathMap[ii] : ((x + y) * .045) % 1,
-          scale: 1,
-          extra: z / (NZ - 1), // Depth inside the glass chamber
-        };
-
-        let exposed = 0;
-        for (const f of FACES) {
-          const nx = x + f.d[0], ny = y + f.d[1], nz = z + f.d[2];
-          // Cull interior shared faces between solid neighbors (but let HOT faces shine against blue!)
-          if (occupied(nx, ny, nz) && !(type === 2 && grid[idx(nx, ny, nz)] === 1)) continue;
-          exposed++;
-          const pts = [];
-          const aos = [];
-          for (let k = 0; k < 4; k++) {
-            const [su, sv] = CORNERS[k];
-            pts.push([
-              cx + (f.n[0] + f.u[0] * su + f.v[0] * sv) * half,
-              cy + (f.n[1] + f.u[1] * su + f.v[1] * sv) * half,
-              cz + (f.n[2] + f.u[2] * su + f.v[2] * sv) * half,
-            ]);
-            // Classic 3D voxel vertex AO: check side1, side2, and diagonal corner in neighbor plane!
-            const s1 = occupied(nx + f.u[0] * su, ny + f.u[1] * su, nz + f.u[2] * su) ? 1 : 0;
-            const s2 = occupied(nx + f.v[0] * sv, ny + f.v[1] * sv, nz + f.v[2] * sv) ? 1 : 0;
-            const cr = occupied(nx + f.u[0] * su + f.v[0] * sv, ny + f.u[1] * su + f.v[1] * sv, nz + f.u[2] * su + f.v[2] * sv) ? 1 : 0;
-            const occ = (s1 && s2) ? 3 : (s1 + s2 + cr);
-            aos.push(type === 2 ? 1 : (1 - occ * .22));
-          }
-          mesh.poly(pts, f.n, m, aos, CUVS);
-        }
-
-        // Seed tight optical bloom sprites on key exposed front-facing HOT bus junctions!
-        if (type === 2 && exposed >= 2 && z >= 4 && ((x + y * 3 + z) % 5 === 0)) {
-          bloomSprites.push({
-            p: [cx, cy, cz + .018],
-            part,
-            size: .088 + .035 * rng(),
-            color: rng() < .65 ? [1.0, .20, .86] : [.65, .32, 1.0],
-            intensity: .28 + .14 * rng(),
-            phase: m.pathT * 6.283,
-            speed: 2.1,
-          });
-        }
+  for (let z = 0; z < NZ; z++) for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) {
+    const type = grid[idx(x, y, z)];
+    if (!type) continue;
+    const [cx, cy, cz] = cellCenter(x, y, z);
+    const col = y * NX + x;
+    const top = height[col];
+    const seed = hash(x * 7.1 + z * 1.3, y * 3.7 - z * 2.9);
+    const kind = type === 2 ? K.HOT : type === 3 ? K.PINK : K.BLUE;
+    for (const f of FACES) {
+      const nx = x + f.n[0], ny = y + f.n[1], nz = z + f.n[2];
+      if (occupied(nx, ny, nz)) continue;
+      const pts = [], aos = [];
+      for (let k = 0; k < 4; k++) {
+        const [su, sv] = CORNERS[k];
+        pts.push([
+          cx + (f.n[0] + f.u[0] * su + f.v[0] * sv) * half,
+          cy + (f.n[1] + f.u[1] * su + f.v[1] * sv) * half,
+          cz + (f.n[2] + f.u[2] * su + f.v[2] * sv) * half,
+        ]);
+        const s1 = occupied(nx + f.u[0] * su, ny + f.u[1] * su, nz + f.u[2] * su) ? 1 : 0;
+        const s2 = occupied(nx + f.v[0] * sv, ny + f.v[1] * sv, nz + f.v[2] * sv) ? 1 : 0;
+        const cr = occupied(nx + f.u[0] * su + f.v[0] * sv, ny + f.u[1] * su + f.v[1] * sv, nz + f.u[2] * su + f.v[2] * sv) ? 1 : 0;
+        const occ = (s1 && s2) ? 3 : (s1 + s2 + cr);
+        aos.push(1 - occ * .2);
       }
+      mesh.poly(pts, f.n, {
+        kind, part, seed,
+        // x: district tint, y: how close this column's top reaches the glass,
+        // z: face direction, w: this voxel's depth in the chamber.
+        bounce: tint[col],
+        pathT: top / (NZ - 1),
+        scale: f.dir,
+        extra: z / (NZ - 1),
+      }, aos, CUVS);
+    }
+    if (type === 2 && beaconAt.has(col)) {
+      bloomSprites.push({
+        p: [cx, cy, cz + VP * .7], part,
+        size: .11 + .04 * rng(),
+        color: rng() < .6 ? [1.0, .26, .82] : [.55, .78, 1.0],
+        intensity: .5 + .2 * rng(),
+        phase: rng() * 6.283, speed: 1.3 + rng(),
+      });
     }
   }
 
-  // Step 6: Scatter ~68 delicate micro-voxel quantum sparks inside the carved hollow glass atriums!
+  // Quantum motes drifting in the air between the skyline and the glass.
   let motes = 0;
-  for (let tries = 0; tries < 900 && motes < 68; tries++) {
-    const x = Math.floor(rng() * NX);
-    const y = Math.floor(rng() * NY);
-    const z = Math.floor(2 + rng() * (NZ - 2));
-    const ii = idx(x, y, z);
-    if (!valid[ii] || grid[ii] !== 0) continue;
-    let near = false;
-    for (const [dx, dy, dz] of DIRS) {
-      if (occupied(x + dx, y + dy, z + dz) || occupied(x + dx * 2, y + dy * 2, z + dz * 2)) { near = true; break; }
-    }
-    if (!near && rng() > .22) continue;
+  for (let tries = 0; tries < 2000 && motes < 90; tries++) {
+    const x = Math.floor(rng() * NX), y = Math.floor(rng() * NY);
+    const top = height[y * NX + x];
+    if (top < 0) continue;
+    const z = top + 1 + Math.floor(rng() * 3);
+    if (z >= NZ) continue;
     const [cx, cy, cz] = cellCenter(x, y, z);
-    const jx = cx + (rng() - .5) * VP * .55;
-    const jy = cy + (rng() - .5) * VP * .55;
-    const jz = cz + (rng() - .5) * VP * .55;
-    const sz = VP * (rng() < .32 ? .18 : .115);
-    const hotMote = rng() < .46;
-    const m = {
-      kind: K.MOTE, part, seed: rng(),
-      bounce: hotMote ? 1 : .45,
-      pathT: rng(),
-      scale: hotMote ? 1 : 0, // 1 = glowing pearl-pink mote, 0 = sapphire crystal mote
-      extra: .5 + .5 * rng(),
-    };
-    for (const f of FACES) {
+    const jx = cx + (rng() - .5) * VP * .6, jy = cy + (rng() - .5) * VP * .6, jz = cz + (rng() - .5) * VP * .6;
+    if (jz > FRONT - .03) continue;
+    const sz = VP * (rng() < .25 ? .14 : .085);
+    const hot = rng() < .4;
+    const m = { kind: K.MOTE, part, seed: rng(), bounce: 0, pathT: rng(), scale: hot ? 1 : 0, extra: .5 + .5 * rng() };
+    for (const f of [...FACES, { n: [0, 0, -1], u: [-1, 0, 0], v: [0, 1, 0] }]) {
       const pts = CORNERS.map(([su, sv]) => [
         jx + (f.n[0] + f.u[0] * su + f.v[0] * sv) * sz,
         jy + (f.n[1] + f.u[1] * su + f.v[1] * sv) * sz,
@@ -504,7 +408,6 @@ function buildGlassEnclosure(glassMesh, outline, part) {
   const frontM = { kind: 0, part, seed: .1 + part * .2, bounce: .5 };
   const bevM = { kind: 1, part, seed: .3 + part * .2, bounce: 1 };
   const wallM = { kind: 2, part, seed: .5 + part * .2, bounce: .7 };
-  const divM = { kind: 3, part, seed: .7 + part * .2, bounce: .6 };
 
   // Front face glass sheet
   glassMesh.poly(inner.map(p => [p[0], p[1], zf]), [0, 0, 1], frontM, null, inner.map(p => [p[0], p[1]]));
@@ -530,20 +433,6 @@ function buildGlassEnclosure(glassMesh, outline, part) {
     ], [n3a, n3b, n3b, n3a], wallM, [1, 1, 1, 1], [[s0, zb], [s1, zb], [s1, zf0], [s0, zf0]]);
   });
 
-  // Thin internal architectural glass partition plane slicing cleanly inside the chamber (Image 2 signature!)
-  const splitX = part ? .52 : .44;
-  let yMin = 9, yMax = -9;
-  for (let y = 0; y <= 1.69; y += .01) {
-    if (sdHalf2D(splitX, y, part) < -.018) {
-      yMin = Math.min(yMin, y);
-      yMax = Math.max(yMax, y);
-    }
-  }
-  if (yMax > yMin + .08) {
-    glassMesh.poly([
-      [splitX, yMin, zb], [splitX, yMax, zb], [splitX, yMax, zf - .005], [splitX, yMin, zf - .005],
-    ], [1, 0, 0], divM, [.8, .8, 1, 1], [[yMin, zb], [yMax, zb], [yMax, zf], [yMin, zf]]);
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -551,7 +440,7 @@ function buildGlassEnclosure(glassMesh, outline, part) {
 // ---------------------------------------------------------------------------
 const PLACE = `
 uniform vec4 halfMotion, shockA, shockB;
-uniform float spread, time;
+uniform float spread, time, mirror;
 mat2 rot2(float a) { float c = cos(a), s = sin(a); return mat2(c, -s, s, c); }
 
 float surgeAt(vec2 p, vec4 s) {
@@ -578,6 +467,8 @@ void place(vec3 p, vec3 n, float part, float isMote, float seed, out vec3 wp, ou
   vec2 off = upper ? vec2(halfMotion.x, -spread) : vec2(halfMotion.y, spread);
   wp = vec3(R * (lp.xy - piv) + piv + off, lp.z);
   wn = vec3(R * n.xy, n.z);
+  // The glossy floor reflection mirrors the world about the floor plane.
+  if (mirror > 0.) { wp.y = 2. * mirror - wp.y; wn.y = -wn.y; }
 }
 `;
 
@@ -612,7 +503,7 @@ void main() {
 
 const voxelFrag = `precision highp float;
 uniform vec3 keyV, rimV, pinkV;
-uniform float time, pulse, glow;
+uniform float time, pulse, glow, mirror;
 varying vec3 vObj, vView, vN;
 varying vec4 vUv, vExt;
 varying float vAo, vWave;
@@ -670,54 +561,69 @@ void main() {
   float rough = .14, metal = .10;
   vec3 emit = vec3(0.);
 
-  // Animated light-speed quantum data wave travelling along the 3D neural pathways!
-  float pkt1 = pow(.5 + .5 * sin(pathT * 12.566 - time * 3.8), 6.);
-  float pkt2 = pow(.5 + .5 * sin(pathT * 25.132 + time * 2.4 + seed * 6.28), 7.);
-  float dataPulse = clamp(pkt1 * .90 + pkt2 * .45 + vWave * 1.6 + pulse * .45, 0., 2.4);
+  // A scan front sweeps through the city parallel to the kerf, leaving a
+  // cooling magenta wake behind it.
+  float kc = (vObj.y + ${SLOPE} * vObj.x) * ${NORM.toFixed(5)};
+  float sweep = mod(time * .27, 2.75) - .35;
+  float lead = exp(-pow((kc - sweep) / .022, 2.));
+  float wake = step(kc, sweep) * exp(-(sweep - kc) / .2);
+  float dataPulse = clamp(lead * 1.4 + wake * .55 + vWave * 1.6 + pulse * .4, 0., 2.4);
+  float isTop = 1. - step(.5, vExt.z);
 
   if (kind < .5) {
-    // 0: Deep Jewel Translucent Sapphire-Cobalt Crystal Voxel Tower (EXACT Image 2 faceted sapphire cubes!)
-    vec3 abyssCob = vec3(.006, .014, .22);
-    vec3 royalSap = vec3(.024, .090, .82);
-    vec3 elecInd = vec3(.14, .055, .76);
-    // Directional facet variation per axis (top brighter electric sapphire, sides richer royal indigo!)
-    float facet = .68 + .32 * clamp(-N.y * .7 + N.z * -.3 + .35, 0., 1.);
-    albedo = mix(abyssCob, royalSap, .25 + .48 * seed + .27 * depthZ) * facet;
-    albedo = mix(albedo, elecInd, bevelLip * .38);
-    albedo *= 1. - groove * .86;
-    rough = .09 + .12 * groove;
-    metal = .18;
-    // Internal glassy sapphire refraction glow + directional neon-magenta radiosity bounce from nearby HOT buses!
-    vec3 pinkRad = vec3(1.14, .09, .80) * bounce * bounce * (.58 + .42 * dataPulse);
-    vec3 blueSub = vec3(.024, .11, .70) * (.18 + .44 * centerGlow) * (.35 + .65 * depthZ) * facet;
-    emit += (blueSub + pinkRad * (.45 + .55 * bevelLip)) * (.30 + .70 * ao) * (1. - groove * .74);
-    emit += vec3(.14, .56, 1.42) * bevelLip * (1. - groove) * .26 * pow(1. - NdV, 1.35);
+    // 0: Crystal city voxel. Colour climbs from abyssal indigo in the deep
+    // canyons through sapphire to ice-cyan on the tallest roofs.
+    float hz = depthZ;
+    vec3 c0 = vec3(.006, .003, .03), c1 = vec3(.04, .02, .26), c2 = vec3(.015, .16, .95), c3 = vec3(.35, .85, 1.3);
+    vec3 base = mix(c0, c1, smoothstep(0., .4, hz));
+    base = mix(base, c2, smoothstep(.4, .8, hz));
+    base = mix(base, c3, smoothstep(.78, 1., hz) * .8);
+    // Some districts lean violet, some lean teal.
+    base *= mix(vec3(1.), vec3(1.5, .62, 1.12), smoothstep(.8, .97, bounce) * .6);
+    base *= mix(vec3(1.), vec3(.55, 1.2, 1.05), smoothstep(.25, .02, bounce) * .55);
+    float facet = isTop > .5 ? 1. : .26;
+    albedo = base * facet;
+    albedo = mix(albedo, albedo * 1.7 + vec3(.02, .04, .1), bevelLip * .55);
+    albedo *= 1. - groove * .8;
+    rough = .1 + .1 * groove;
+    metal = .25;
+    // Crystal glow from within, strongest on roofs close to the glass.
+    emit += base * (.1 + 1.5 * isTop) * (.22 + 1.5 * hz * hz) * (.6 + .4 * centerGlow) * (1. - groove * .7);
+    // Lit windows on the tower walls.
+    float lit = step(.9, fract(seed * 13.7)) * (1. - isTop) * step(.25, hz);
+    vec2 wq = abs(vUv.xy - .5);
+    float win = step(wq.x, .26) * step(wq.y, .16);
+    float flick = .75 + .25 * sin(time * (.6 + 2. * fract(seed * 7.3)) + seed * 40.);
+    vec3 wc = fract(seed * 29.1) < .8 ? vec3(.35, .85, 1.6) : vec3(1.6, .35, 1.2);
+    emit += wc * win * lit * flick * (.55 + .6 * hz);
+    // Scan front: white-hot edge on the roofs, magenta embers in its wake.
+    emit += vec3(1.1, 1.5, 2.2) * lead * (.35 + 1.1 * isTop) * (.4 + .6 * hz);
+    emit += vec3(1.2, .16, .9) * wake * isTop * (.25 + .5 * hz) * (.6 + .4 * centerGlow);
+    emit *= ao * .7 + .3;
   } else if (kind < 1.5) {
-    // 1: Blazing Pure White-Hot / Hyper-Saturated Neon-Pink Emissive Neural Bus Voxel!
+    // 1: Spire beacon: a white-hot core with magenta edges.
     albedo = vec3(.98, .72, .94);
     rough = .16;
-    vec3 hotPink = vec3(1.55, .18, 1.05);
-    vec3 pureWhite = vec3(2.85, 2.55, 2.88);
-    // Blazing pearl-white core with crisp electric hot-magenta cube edges!
-    vec3 busCol = mix(hotPink, pureWhite, smoothstep(.24, .88, centerGlow) * .88 + .12 * clamp(dataPulse, 0., 1.));
+    float beat = .75 + .25 * sin(time * 2.2 + seed * 20.);
+    vec3 busCol = mix(vec3(1.55, .18, 1.05), vec3(2.9, 2.6, 2.95), smoothstep(.2, .9, centerGlow) * .9);
     busCol = mix(busCol, vec3(1.25, .12, .88), groove * .78);
-    emit = busCol * (1.12 + .65 * dataPulse) * (.88 + .22 * glow);
+    emit = busCol * (1. + .5 * dataPulse) * beat * (.88 + .22 * glow);
   } else if (kind < 2.5) {
-    // 2: Hyper-Saturated Electric-Magenta / Deep Violet Crystal Voxel bordering the white-hot bus!
+    // 2: Magenta accent crystals at the foot of each spire.
     albedo = vec3(.34, .035, .64);
     rough = .12;
     metal = .14;
     vec3 mag = mix(vec3(.38, .04, .92), vec3(1.38, .16, .88), .35 + .45 * centerGlow + .2 * seed);
-    emit = mag * (.42 + .48 * bounce + .52 * dataPulse) * (.38 + .62 * ao) * (1. - groove * .72);
+    emit = mag * (.55 + .5 * dataPulse) * (.38 + .62 * ao) * (1. - groove * .72);
   } else if (kind < 3.5) {
-    // 3: Floating Quantum Micro-Voxel Mote suspended in empty glass atriums!
+    // 3: Quantum mote drifting above the skyline.
     bool isHotMote = vExt.z > .5;
     albedo = isHotMote ? vec3(1., .76, .96) : vec3(.08, .28, .96);
     rough = .08;
     float twink = .62 + .38 * sin(time * 3.2 + seed * 31.4);
     emit = isHotMote
-      ? mix(vec3(1.45, .24, 1.02), vec3(2.5, 2.2, 2.55), twink * .65) * (1. + vWave)
-      : vec3(.10, .42, 1.65) * (.75 + .55 * twink + vWave);
+      ? mix(vec3(1.45, .24, 1.02), vec3(2.5, 2.2, 2.55), twink * .65) * (1. + vWave + lead)
+      : vec3(.10, .42, 1.65) * (.75 + .55 * twink + vWave + lead);
   } else if (kind < 4.5) {
     // 4: Mirror-Gloss Electric-Sky-Blue Anodized Hardware Cradle Lip (EXACT Image 2 glossy blue pad!)
     albedo = mix(vec3(.04, .22, .86), vec3(.14, .62, 1.0), smoothstep(-.35, .65, -N.y));
@@ -744,19 +650,26 @@ void main() {
   vec3 F0 = mix(vec3(.055), albedo * .75 + .25, metal);
 
   // Sculpted high-contrast cybernetic studio rig (keeps shadows deep sapphire, highlights crisp!)
-  vec3 col = shadeGGX(N, V, keyV, vec3(1.25, 1.48, 2.05), diff, F0, a) * ao;
-  col += shadeGGX(N, V, pinkV, vec3(1.75, .20, 1.25), diff, F0, a) * mix(.32, 1., ao);
+  float litK = kind < .5 ? .55 : 1.;
+  float pinkK = kind < .5 ? .08 : 1.;
+  vec3 col = shadeGGX(N, V, keyV, vec3(1.25, 1.48, 2.05) * litK, diff, F0, a) * ao;
+  col += shadeGGX(N, V, pinkV, vec3(1.75, .20, 1.25) * pinkK, diff, F0, a) * mix(.32, 1., ao);
   col += shadeGGX(N, V, rimV, vec3(.28, .72, 1.65), diff, F0, a) * mix(.32, 1., ao);
 
   // Studio environment reflections
   vec3 R = reflect(-V, N);
   vec3 Fe = F0 + (max(vec3(1. - a), F0) - F0) * pow(1. - NdV, 5.);
-  col += cyberEnv(R, rough) * Fe * mix(.28, 1., ao) * .78;
+  col += cyberEnv(R, rough) * (kind < .5 ? vec3(.3, .55, 1.) : vec3(1.)) * Fe * mix(.28, 1., ao) * (kind < .5 ? .3 + .4 * isTop : .78);
 
   // Tactile click quantum surge wave rippling across the entire 3D lattice!
   col += mix(vec3(.18, .82, 1.45), vec3(1.55, .24, 1.15), seed) * vWave * 1.05;
   col += emit;
 
+  if (mirror > 0.) {
+    float fade = .42 * exp(-max(vObj.y - mirror, 0.) / .3);
+    gl_FragColor = vec4(toneACES(col) * fade, fade);
+    return;
+  }
   gl_FragColor = vec4(toneACES(col), 1.);
 }`;
 
@@ -849,7 +762,7 @@ void main() {
   vec3 col = irid * (rimF * .92 + .018);
   // Keep front center 97% optically crystal-clear so every deep sapphire & white-pink voxel pops!
   float meshVis = kind < .5 ? (.09 + .82 * rimF + .5 * vWave) : (.34 + .66 * rimF + .4 * vWave);
-  col += mix(vec3(.65, .86, 1.2), vec3(1.25, .42, 1.05), .50 + .35 * sin(guv.y * 9.)) * microMesh * meshVis * .52;
+  col += mix(vec3(.65, .86, 1.2), vec3(1.25, .42, 1.05), .50 + .35 * sin(guv.y * 9.)) * microMesh * meshVis * .2;
   col += vec3(.98, .78, 1.15) * mullion * (kind > 2.5 ? .34 : .58);
   col += vec3(.75, .28, 1.15) * vStri * (.38 + .62 * rimF);
 
@@ -857,6 +770,12 @@ void main() {
   if (abs(kind - 1.) < .5) {
     col += mix(vec3(.55, .90, 1.45), vec3(1.55, .36, 1.25), .5 + .5 * N.x) * (.68 + .62 * rimF);
   }
+  // A studio softbox reflected across the front pane as a long diagonal
+  // streak that slides over the glass as the B turns.
+  float sc = vObj.x * .82 - vObj.y * .52 + rawN.x * 1.9 + rawN.y * .9;
+  float streak = kind < .5 && passSide > .5
+    ? exp(-pow((sc + .08) / .085, 2.)) * .8 + exp(-pow((sc - .16) / .018, 2.)) * .9 : 0.;
+  col += vec3(.78, .86, 1.2) * streak * .6;
   col += vec3(1.55, 1.62, 1.80) * specK * 1.05;
   col += vec3(1.45, .28, 1.15) * specP * .72;
   col += vec3(.32, .88, 1.65) * specR * .72;
@@ -871,7 +790,7 @@ void main() {
     col *= .38;
     baseAlpha *= .32;
   }
-  float a = clamp(baseAlpha + (specK + specP * .55) * .42 + vWave * .16, 0., .84);
+  float a = clamp(baseAlpha + (specK + specP * .55) * .42 + vWave * .16 + streak * .16, 0., .84);
   vec3 outC = col / (1. + max(col.r, max(col.g, col.b)) * .30);
   gl_FragColor = vec4(outC * (a + .14), a);
 }`;
@@ -1102,6 +1021,7 @@ export function initVoxelGlass(gl, { software, outlines, filament }) {
     gl.uniform1f(u('size'), p.size);
     gl.uniform1f(u('lift'), p.lift);
     gl.uniform1f(u('spread'), p.spread);
+    gl.uniform1f(u('mirror'), 0);
     gl.uniform1f(u('time'), p.time);
     gl.uniform4f(u('halfMotion'), p.halfMotion[0], p.halfMotion[1], p.halfMotion[2], p.halfMotion[3]);
     gl.uniform4fv(u('shockA'), p.shocks[0]);
@@ -1123,6 +1043,27 @@ export function initVoxelGlass(gl, { software, outlines, filament }) {
       gl.clearDepth(1);
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
       gl.disable(gl.CULL_FACE);
+
+      // Pass 0: the core mirrored in the polished floor beneath it.
+      // Weak GPUs (quality governor below 1) skip the mirrored pass.
+      if (ground && !software && (params.quality ?? 2) >= 1) {
+        gl.enable(gl.DEPTH_TEST);
+        gl.depthFunc(gl.LEQUAL);
+        gl.depthMask(true);
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+        gl.useProgram(voxelProg);
+        setCommon(uv, common);
+        gl.uniform1f(uv('mirror'), FLOOR_Y);
+        gl.uniform3fv(uv('keyV'), key);
+        gl.uniform3fv(uv('pinkV'), pink);
+        gl.uniform3fv(uv('rimV'), rim);
+        gl.uniform1f(uv('pulse'), pulse);
+        gl.uniform1f(uv('glow'), Math.min(1.5, glow));
+        drawChunks(solidChunks, voxA);
+        gl.uniform1f(uv('mirror'), 0);
+        gl.clear(gl.DEPTH_BUFFER_BIT);
+      }
 
       // Pass 1: Radiant sapphire + hot-pink reflection pool & shadow on the dark PCB floor
       if (ground) {

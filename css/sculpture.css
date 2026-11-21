@@ -57,6 +57,8 @@ main::after {
 }
 /* The glass B is drawn on its own layer above the stage and hides in the glitch. */
 .glass { will-change: opacity; pointer-events: none; }
+/* The light the glass throws across the paper lies just beneath it. */
+.spectrum { will-change: opacity; pointer-events: none; }
 .silhouette {
   position: absolute;
   left: calc(50% - .98 * var(--unit));
@@ -88,7 +90,7 @@ main::after {
 @media (prefers-reduced-motion: no-preference) {
   main.negative::before { opacity: 1; }
   main.negative .field, main.negative .oil { opacity: 1; }
-  main.negative .glass { opacity: 0; }
+  main.negative .glass, main.negative .spectrum { opacity: 0; }
   main.negative::after { opacity: 0; }
   main.negative .signature img:first-child { opacity: 0; }
   main.negative .signature-night { opacity: 1; }

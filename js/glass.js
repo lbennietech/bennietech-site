@@ -155,6 +155,9 @@ uniform sampler2D groundMap;
 uniform samplerCube envCube;
 varying vec3 plate;
 varying float side;
+// Sunlight crossing the block: where it enters and which way it runs in the
+// plate, its half-width, length and strength, and where it leaves the walls.
+uniform vec4 sunPath, sunLook, exitA, exitB;
 
 const float ETA = 1.52;
 const float INV_ETA = 1. / 1.52;
@@ -356,6 +359,13 @@ vec3 studioWithPaper(vec3 o, vec3 d, float paperGain, float bias, out float pool
 
 float flow(float x) {
   return 1. + .19 * sin(x * 8.5 - time * 1.10) + .11 * sin(x * 3.7 + time * .62);
+}
+
+// Sunlight's spectrum across t in [-1, 1], red to violet.
+vec3 prism(float t) {
+  return vec3(exp(-pow((t + .56) / .40, 2.)) + .22 * exp(-pow((t - .94) / .20, 2.)),
+              exp(-pow((t + .02) / .34, 2.)) * .92,
+              exp(-pow((t - .54) / .38, 2.)) * .95);
 }
 
 // Smooth collimated gallery solar-prism beam coordinate sweeping gracefully across the crystal.
@@ -778,6 +788,21 @@ void main() {
       // 5. Electric lime kerf glow bleeding organically into the deep sea-glass teal walls near the cut.
       float hot = exp(-cutDist * 14.) * .24 + exp(-cutDist * 5.0) * .18 + exp(-cutDist * 1.5) * .026;
       colour += LIME * glow * flow(p.x) * hot;
+
+      // 6. Where the split sunlight leaves the barrel, a line of fire runs
+      //    through the depth of the wall, fringed with its spectrum.
+      vec2 tangent = vec2(-nw.y, nw.x);
+      vec2 ea = p - exitA.xy, eo = p - exitB.xy;
+      float sa = dot(ea, tangent) / exitA.w, sb = dot(eo, tangent) / exitB.w;
+      float nearA = exitA.z * exp(-dot(ea, ea) / (9. * exitA.w * exitA.w));
+      float nearB = exitB.z * exp(-dot(eo, eo) / (9. * exitB.w * exitB.w));
+      if (nearA + nearB > .002) {
+        float depthFade = smoothstep(0., .14, tz) * smoothstep(1., .86, tz);
+        vec3 fire = ((vec3(1., .97, .9) * exp(-sa * sa * 6.) + prism(sa * .7) * .8) * nearA
+                   + (vec3(1., .97, .9) * exp(-sb * sb * 6.) + prism(-sb * .7) * .8) * nearB) * depthFade;
+        float peak = max(fire.r, max(fire.g, fire.b));
+        if (peak > .002) colour = colour * mix(vec3(1.), fire / peak, .62 * peak / (peak + .25)) + fire * .7;
+      }
     } else {
       vec3 n = normalize(vec3(nw, ef - eb));
       colour = shade(vec3(p - nw * .0004, plate.z), n, 0., edgeLit, mipBias * .55, 0.);
@@ -832,6 +857,28 @@ void main() {
     float alongFil = smoothstep(filamentRange.x - .12, filamentRange.x + .08, p.x)
                    * (1. - smoothstep(filamentRange.y - .08, filamentRange.y + .14, p.x));
     colour += LIME * glow * flow(p.x) * kerfPipe * (1. + .55 * pulse) * (.35 + .65 * alongFil);
+
+    // 4b. Sunlight crossing the block. Every reed is a small cylindrical prism:
+    //     it gathers the sheet into a bright line and splits it into a short spectrum.
+    if (sunLook.z > .001) {
+      vec2 sp = p - sunPath.xy;
+      float sAlong = dot(sp, sunPath.zw);
+      float sAcross = dot(sp, vec2(-sunPath.w, sunPath.z));
+      float sheet = exp(-sAcross * sAcross / (sunLook.x * sunLook.x))
+        * smoothstep(-.02, .10, sAlong) * (1. - smoothstep(sunLook.y - .16, sunLook.y + .02, sAlong));
+      if (sheet > .002) {
+        float focusAt = sunLook.w + .06 * sin(fluteIndex * 1.7) + sAcross * 1.6;
+        float split = (uReed - focusAt) / .27;
+        float core = exp(-split * split * 9.);
+        float travel = .78 + .22 * sin(sAlong * 10. - time * 1.4);
+        // A haze of the sheet scattered in the glass, and the reed's own spectrum.
+        vec3 fire = (prism(split) * .95 + vec3(1., .97, .9) * (core * .75 + .16))
+          * (sheet * sunLook.z * travel * (1. - edgeLit));
+        // Coloured light on bright glass shows by its hue as much as its brightness.
+        float peak = max(fire.r, max(fire.g, fire.b));
+        if (peak > .002) colour = colour * mix(vec3(1.), fire / peak, .72 * peak / (peak + .22)) + fire * .5;
+      }
+    }
 
     // 5. Outer perimeter float-glass sea-teal arris crease & glowing translucent bevel framing the face.
     float faceCrease = exp(-pow((inside - CHAMFER * 1.18) / .0058, 2.)) * (1. - cut);
@@ -1199,7 +1246,7 @@ export function createGlass(stage, { outlines, flute, filament, back, front, gro
     },
     render({ rows, centre, size, view, lift, shift, glint, sway, ground, recovery, pulse = 0,
       lightAngle = 0, intro = 1, glow = 1, time = 0, quality = 2, detail = 1,
-      pointer = [0, 0], shocks = [[0, 0, 9, 0], [0, 0, 9, 0]] }) {
+      pointer = [0, 0], shocks = [[0, 0, 9, 0], [0, 0, 9, 0]], sun = null }) {
       if (gl.isContextLost()) return false;
       if (Math.abs(detail - activeScale) > .01) {
         activeScale = detail;
@@ -1276,6 +1323,16 @@ export function createGlass(stage, { outlines, flute, filament, back, front, gro
       gl.uniform4f(ug('shockB'), sB[0], sB[1], sB[2], sB[3]);
       gl.uniform1f(ug('pixel'), 1 / (size * ratio));
       gl.uniform4f(ug('shadow'), gx, gy, gw, gh);
+      if (sun) {
+        gl.uniform4fv(ug('sunPath'), sun.path);
+        gl.uniform4fv(ug('sunLook'), sun.look);
+        gl.uniform4fv(ug('exitA'), sun.exitA);
+        gl.uniform4fv(ug('exitB'), sun.exitB);
+      } else {
+        gl.uniform4f(ug('sunLook'), 1, 1, 0, 0);
+        gl.uniform4f(ug('exitA'), 0, 0, 0, 1);
+        gl.uniform4f(ug('exitB'), 0, 0, 0, 1);
+      }
 
       gl.enable(gl.DEPTH_TEST);
       gl.disable(gl.BLEND);

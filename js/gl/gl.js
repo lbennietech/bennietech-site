@@ -41,6 +41,7 @@ export function createRenderer(canvas, frag, { alpha = true, preserve = false } 
         else if (v.length === 2) gl.uniform2fv(l, v);
         else if (v.length === 3) gl.uniform3fv(l, v);
         else if (v.length === 4) gl.uniform4fv(l, v);
+        else if (v.length % 4 === 0) gl.uniform4fv(l, v);
       }
     },
     draw(uniforms = {}, viewport) {

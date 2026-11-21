@@ -10,9 +10,11 @@
 // print interleave with the negative.
 import { createRenderer } from './gl/gl.js';
 import { TEAR } from './negative.js';
+import { SPECTRUM, makeBeams } from './spectrum.js';
 
 const fragment = `precision highp float;
 ${TEAR}
+${SPECTRUM}
 uniform vec2 res, origin, dir, pointer, trail;
 uniform vec4 ghostBox, tear;
 uniform float cell, time, age, hold, end, size, ghostReady, pulse, dpr, wake, lightAngle;
@@ -131,6 +133,8 @@ vec3 paperAt(vec2 s) {
   float diag = uv.x * .899 + uv.y * .438 - lightAngle * .18;
   float lightWash = smoothstep(.16, .26, diag) * (1. - smoothstep(.26, .45, diag));
   c = mix(c, vec3(1., .996, .953), lightWash * .24);
+  // The light the glass was throwing when the picture was held.
+  c = litPaper(c, spectralLight(s / dpr));
   return c * (1. - .05 * hash(floor(s)));
 }
 vec3 printAt(vec2 s, float split) {
@@ -242,6 +246,7 @@ export function createField(stage) {
   const info = gl.getExtension('WEBGL_debug_renderer_info');
   const software = !!info && /swiftshader|llvmpipe|software/i.test(gl.getParameter(info.UNMASKED_RENDERER_WEBGL));
   let ghost = null, scale = 1;
+  const held = makeBeams();
   let ghostBox = [0, 0, 1, 1];
 
   return {
@@ -253,8 +258,15 @@ export function createField(stage) {
       canvas.height = Math.max(1, Math.round(h * scale));
     },
     // Upload just the glass layer when available, before it is hidden.
-    capture(source, [x, y, width, height], w, h) {
+    capture(source, [x, y, width, height], w, h, beams = null) {
       ghostBox = [x / w, y / h, width / w, height / h];
+      held.tone.fill(0);
+      if (beams?.lit) {
+        held.ref = beams.ref;
+        held.ray.set(beams.ray);
+        held.fan.set(beams.fan);
+        held.tone.set(beams.tone);
+      }
       try { ghost = renderer.texture(source, ghost ?? undefined); } catch { ghost = null; }
     },
     render({ time, age, hold, end, rings, origin, dir, size, pointer, trail = pointer, wake = 0, pulse = 0, tear = [0, 0, 0, 0], lightAngle = 0 }) {
@@ -268,6 +280,7 @@ export function createField(stage) {
         trail: [trail[0] * scale, trail[1] * scale],
         wake, lightAngle,
         ghostReady: ghost ? 1 : 0, ghostBox, pulse, tear, dpr: scale,
+        beamRef: held.ref, beamRay: held.ray, beamFan: held.fan, beamTone: held.tone,
       };
       if (ghost) uniforms.ghost = ghost;
       renderer.draw(uniforms);

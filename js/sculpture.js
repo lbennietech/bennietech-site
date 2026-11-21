@@ -3,6 +3,7 @@ import { createGlass } from './glass.js';
 import { makeGround, makeHalo, HALO_PAD } from './glass-ground.js';
 import { prepareOil } from './oil-volume.js';
 import { exposureTear } from './negative.js';
+import { createSpectrum, aimBeams, makeBeams } from './spectrum.js';
 
 // The two radii, baseline and diagonal kerf come from the production B mark.
 // Both glass halves and their projected light share this exact silhouette.
@@ -264,6 +265,9 @@ const glass = createGlass(canvas, {
   outlines: halves.map(half => half.points), flute: FLUTE, back: BACK, front: FRONT, groundMap,
   halo: haloMap, haloPad: HALO_PAD, filament: filamentLine,
 });
+// Sunlight split by the glass, thrown across the paper behind it.
+const spectrum = glass ? createSpectrum(glass.canvas, { software: glass.software }) : null;
+const beams = makeBeams();
 if (!glass) behindTiles().forEach((tile, part) => window.createImageBitmap?.(tile).then(bitmap => {
   behind[part] = bitmap;
   faceSway = NaN;
@@ -443,7 +447,7 @@ function draw() {
   const isNeg = age >= 0;
   // The held print can come straight from the last presented glass frame.
   if (isNeg && !glitchShowing && field) {
-    if (glassDrawn) field.capture(glass.canvas, glass.box, w, h);
+    if (glassDrawn) field.capture(glass.canvas, glass.box, w, h, spectrum ? beams : null);
     else field.capture(canvas, [0, 0, w, h], w, h);
   }
   glassDrawn = false;
@@ -551,6 +555,13 @@ function draw() {
   const glow = 1 + .1 * Math.sin(time * .9) * intro + .3 * pulse + .45 * afterglow;
   centreArr[0] = w * .5; centreArr[1] = centre;
   viewArr[0] = w; viewArr[1] = h;
+  // Sunlight reaches the glass just after the arrival sweep, and again,
+  // a little quicker, as the glass returns from each glitch.
+  const dawn = reduced.matches ? 9 : Math.min(time - .85, (time - lastExposureEnd - .12) * 1.5);
+  aimBeams(beams, {
+    rows, centre: centreArr, size, lift, yaw, pitch, lightAngle: rig.lightRad, time, dawn, pulse,
+    tall: Math.min(1, Math.max(0, (1.05 - w / h) / .55)),
+  });
   shiftArr[0] = -spread; shiftArr[1] = spread;
   pointerNormArr[0] = pointer.x; pointerNormArr[1] = pointer.y;
   // The GPU layer hides during a glitch, so a glitch without its liquid B
@@ -558,11 +569,16 @@ function draw() {
   if (!isNeg && glass?.render({
     rows, centre: centreArr, size, view: viewArr, lift, shift: shiftArr, glint, sway, pulse, ground,
     recovery, lightAngle: rig.lightRad, intro, glow, time, quality: glassQuality, detail: glassDetail,
-    pointer: pointerNormArr, shocks: ripples,
+    pointer: pointerNormArr, shocks: ripples, sun: spectrum ? beams.sun : null,
   })) {
     glassDrawn = glassShown = true;
+    if (spectrum) {
+      if (beams.lit) spectrum.render(beams, rig.lightRad);
+      else spectrum.clear();
+    }
     return;
   }
+  spectrum?.clear();
 
   ensureStageBuffer();
   stageDrawn = true;
@@ -744,6 +760,7 @@ function fitCanvas() {
   size = Math.min(h * .31, w * .49);
   centre = h * .48;
   glass?.resize(pixelRatio, reachOf());
+  spectrum?.resize(w, h, pixelRatio);
   // Keep the underlying 2D stage canvas at 1x1 while WebGL draws calm frames
   // so the browser avoids compositing an empty full-viewport 2D bitmap.
   if (!glass) ensureStageBuffer();

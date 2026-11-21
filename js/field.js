@@ -11,18 +11,16 @@
 import { createRenderer } from './gl/gl.js';
 import { TEAR } from './negative.js';
 import { SPECTRUM, makeBeams } from './spectrum.js';
-import { SPACE } from './space.js';
 
 const fragment = `precision highp float;
 ${TEAR}
 ${SPECTRUM}
-${SPACE}
-uniform vec2 res, origin, dir, pointer, trail, spaceShift;
-uniform float spaceOn;
+uniform vec2 res, origin, dir, pointer, trail, spaceView, spaceShift;
+uniform float spaceOn, spacePad, stageReady;
 uniform vec4 ghostBox, tear;
 uniform float cell, time, age, hold, end, size, ghostReady, pulse, dpr, wake, lightAngle;
 uniform vec3 rings;
-uniform sampler2D ghost;
+uniform sampler2D ghost, stageTex;
 
 float hash(vec2 p) { p = fract(p * vec2(233.34, 851.73)); p += dot(p, p + 23.45); return fract(p.x * p.y); }
 float noise(vec2 x) {
@@ -126,11 +124,13 @@ vec4 heldGlass(vec2 screen) {
 }
 
 // The calm print as it stood before the exposure: the captured glass over
-// paper that follows the page's own gradient, studio wash, and grain.
+// the sampled stage backdrop (or fallback paper gradient, studio wash, and grain).
 vec3 paperAt(vec2 s) {
-  // Behind themed stages (space, architectural louver studio, quantum PCB) the print matches that stage.
-  if (spaceOn > .5) {
-    vec3 st = stageColor(s / dpr - spaceShift, spaceOn);
+  if (spaceOn > .5 && stageReady > .5) {
+    vec2 suv = (s / dpr - spaceShift + spacePad) / max(spaceView + 2. * spacePad, vec2(1.));
+    float mx = mod(suv.x, 2.);
+    if (mx > 1.) mx = 2. - mx;
+    vec3 st = texture2D(stageTex, vec2(clamp(mx, 0., 1.), 1. - clamp(suv.y, 0., 1.))).rgb;
     // The paper gallery still carries the light the glass was throwing.
     if (spaceOn > 3.5 && spaceOn < 4.5) st = litPaper(st, spectralLight(s / dpr));
     return st;
@@ -249,7 +249,7 @@ void main() {
 }
 `;
 
-export function createField(stage) {
+export function createField(stage, { lowSpec = false } = {}) {
   const canvas = document.createElement('canvas');
   canvas.className = 'field';
   canvas.setAttribute('aria-hidden', 'true');
@@ -258,27 +258,49 @@ export function createField(stage) {
   if (!renderer) { canvas.remove(); return null; }
   const { gl } = renderer;
   const info = gl.getExtension('WEBGL_debug_renderer_info');
-  const software = !!info && /swiftshader|llvmpipe|software/i.test(gl.getParameter(info.UNMASKED_RENDERER_WEBGL));
-  let ghost = null, scale = 1;
+  const software = !!info && /swiftshader|llvmpipe|softpipe|lavapipe|software|microsoft basic render/i.test(gl.getParameter(info.UNMASKED_RENDERER_WEBGL));
+  let ghost = null, stageTex = null, stagePaintId = -1, scale = 1;
   const held = makeBeams();
-  let ghostBox = [0, 0, 1, 1];
-  let spaceHeld = 0, spaceView = [1, 1], spaceShift = [0, 0];
+  const ghostBox = [0, 0, 1, 1];
+  const spaceView = [1, 1], spaceShift = [0, 0];
+  let spaceHeld = 0, spacePad = 28;
+  const resArr = [1, 1], originArr = [0, 0], pointerArr = [0, 0], trailArr = [0, 0];
+
+  canvas.addEventListener('webglcontextlost', e => {
+    e.preventDefault();
+    ghost = null;
+    stageTex = null;
+    stagePaintId = -1;
+  });
+  canvas.addEventListener('webglcontextrestored', () => {
+    renderer.restore();
+    ghost = null;
+    stageTex = null;
+    stagePaintId = -1;
+  });
 
   return {
     canvas,
     resize(w, h, ratio) {
-      // Software rasterisers draw the panel at CSS resolution.
-      scale = software ? 1 : ratio;
+      // Dot-matrix cells are 3-5.5 CSS px; moderate DPR keeps them razor sharp at far lower fill cost.
+      scale = software ? 1 : lowSpec ? Math.min(1.25, ratio) : Math.min(1.5, ratio);
       canvas.width = Math.max(1, Math.round(w * scale));
       canvas.height = Math.max(1, Math.round(h * scale));
     },
-    // Upload just the glass layer when available, before it is hidden.
+    // Upload the glass layer (and changed stage backdrop) before the negative takes over.
     capture(source, [x, y, width, height], w, h, beams = null, space = null) {
-      ghostBox = [x / w, y / h, width / w, height / h];
+      ghostBox[0] = x / w; ghostBox[1] = y / h; ghostBox[2] = width / w; ghostBox[3] = height / h;
       spaceHeld = space ? (space.mode ?? 1) : 0;
       if (space) {
-        spaceView = space.view.slice();
-        spaceShift = space.shift.slice();
+        spaceView[0] = space.view[0]; spaceView[1] = space.view[1];
+        spaceShift[0] = space.shift[0]; spaceShift[1] = space.shift[1];
+        spacePad = space.pad ?? 28;
+        if (space.canvas && space.ready && space.paintId !== stagePaintId && !gl.isContextLost()) {
+          try {
+            stageTex = renderer.texture(space.canvas, stageTex ?? undefined);
+            stagePaintId = space.paintId;
+          } catch { stageTex = null; stagePaintId = -1; }
+        }
       }
       held.tone.fill(0);
       if (beams?.lit) {
@@ -287,23 +309,29 @@ export function createField(stage) {
         held.fan.set(beams.fan);
         held.tone.set(beams.tone);
       }
-      try { ghost = renderer.texture(source, ghost ?? undefined); } catch { ghost = null; }
+      if (!gl.isContextLost()) {
+        try { ghost = renderer.texture(source, ghost ?? undefined); } catch { ghost = null; }
+      }
     },
     render({ time, age, hold, end, rings, origin, dir, size, pointer, trail = pointer, wake = 0, pulse = 0, tear = [0, 0, 0, 0], lightAngle = 0 }) {
       if (gl.isContextLost()) return;
+      resArr[0] = canvas.width; resArr[1] = canvas.height;
+      originArr[0] = origin[0] * scale; originArr[1] = origin[1] * scale;
+      pointerArr[0] = pointer[0] * scale; pointerArr[1] = pointer[1] * scale;
+      trailArr[0] = trail[0] * scale; trailArr[1] = trail[1] * scale;
       const uniforms = {
-        res: [canvas.width, canvas.height],
+        res: resArr,
         cell: Math.max(3, Math.round(Math.min(5.5, Math.max(3, size * .018)) * scale)),
         time, age, hold, end, rings, size: size * scale, dir,
-        origin: [origin[0] * scale, origin[1] * scale],
-        pointer: [pointer[0] * scale, pointer[1] * scale],
-        trail: [trail[0] * scale, trail[1] * scale],
+        origin: originArr, pointer: pointerArr, trail: trailArr,
         wake, lightAngle,
         ghostReady: ghost ? 1 : 0, ghostBox, pulse, tear, dpr: scale,
         beamRef: held.ref, beamRay: held.ray, beamFan: held.fan, beamTone: held.tone,
-        spaceOn: spaceHeld, spaceView, spaceShift,
+        spaceOn: spaceHeld, spaceView, spaceShift, spacePad,
+        stageReady: stageTex ? 1 : 0,
       };
       if (ghost) uniforms.ghost = ghost;
+      if (stageTex) uniforms.stageTex = stageTex;
       renderer.draw(uniforms);
     },
   };

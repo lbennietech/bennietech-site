@@ -10,10 +10,9 @@ uniform vec4 beamFan[${BEAM_COUNT}];
 uniform vec4 beamTone[${BEAM_COUNT}];
 uniform float beamRef;
 
-float spectralLine(float x, float spread, float blur, float at) {
-  float s = sqrt(.044 * spread * spread + blur * blur);
-  float d = (x - at * spread) / s;
-  return exp(-d * d) * inversesqrt(max(s / beamRef, .052));
+float spectralLine(float x, float spread, float invS, float at) {
+  float d = (x - at * spread) * invS;
+  return exp(-d * d);
 }
 
 vec3 spectralLight(vec2 s) {
@@ -28,12 +27,15 @@ vec3 spectralLight(vec2 s) {
     float blur = fan.y + a * fan.z;
     float x = (ray.z * r.y - ray.w * r.x) * tone.y;
     if (abs(x) > 1.45 * spread + 3.4 * blur + 2.) continue;
-    vec3 c = vec3(.262, .019, .012) * spectralLine(x, spread, blur, -.85)
-      + vec3(.328, .132, .000) * spectralLine(x, spread, blur, -.51)
-      + vec3(.318, .322, .034) * spectralLine(x, spread, blur, -.17)
-      + vec3(.044, .344, .128) * spectralLine(x, spread, blur, .17)
-      + vec3(.000, .148, .488) * spectralLine(x, spread, blur, .52)
-      + vec3(.048, .016, .254) * spectralLine(x, spread, blur, .87);
+    float wLine = sqrt(.044 * spread * spread + blur * blur);
+    float invS = 1. / wLine;
+    float lineNorm = inversesqrt(max(wLine / beamRef, .052));
+    vec3 c = (vec3(.262, .019, .012) * spectralLine(x, spread, invS, -.85)
+      + vec3(.328, .132, .000) * spectralLine(x, spread, invS, -.51)
+      + vec3(.318, .322, .034) * spectralLine(x, spread, invS, -.17)
+      + vec3(.044, .344, .128) * spectralLine(x, spread, invS, .17)
+      + vec3(.000, .148, .488) * spectralLine(x, spread, invS, .52)
+      + vec3(.048, .016, .254) * spectralLine(x, spread, invS, .87)) * lineNorm;
     // Gentle organic optical wave striation matching the broad sculpted lenses.
     float stria = 1. + tone.w * .10 * sin((x / max(spread + blur, 1.)) * 8.5 - a / max(beamRef * 7., 1.));
     float wide = 2.8 * (spread + blur);
@@ -109,7 +111,7 @@ const BLADES = [
   { at: ENTRY, sun: true, lever: [0, 0, .22], spread: 0, source: .034, diverge: .008, reach: 1.5, power: .19, side: 1, wobble: 2.2, stria: 0 },
 ];
 
-export function createSpectrum(before, { software = false } = {}) {
+export function createSpectrum(before, { software = false, lowSpec = false } = {}) {
   if (software) return null;
   const canvas = document.createElement('canvas');
   canvas.className = 'spectrum';
@@ -119,35 +121,57 @@ export function createSpectrum(before, { software = false } = {}) {
     preserveDrawingBuffer: false, powerPreference: 'high-performance',
   });
   if (!gl) return null;
-  const prog = program(gl, vertex, fragment);
-  if (!prog) return null;
+
+  let prog = null, uniforms = null;
+  function setup() {
+    prog = program(gl, vertex, fragment);
+    if (!prog) return false;
+    const buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(prog, 'p');
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    gl.useProgram(prog);
+    gl.disable(gl.BLEND);
+    const at = name => gl.getUniformLocation(prog, name);
+    uniforms = {
+      res: at('res'), scale: at('scale'), lightAngle: at('lightAngle'), ref: at('beamRef'),
+      ray: at('beamRay'), fan: at('beamFan'), tone: at('beamTone'),
+    };
+    return true;
+  }
+  if (!setup()) return null;
   before.before(canvas);
 
-  const buf = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
-  const loc = gl.getAttribLocation(prog, 'p');
-  gl.enableVertexAttribArray(loc);
-  gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-  gl.useProgram(prog);
-  gl.disable(gl.BLEND);
-  const at = name => gl.getUniformLocation(prog, name);
-  const uniforms = {
-    res: at('res'), scale: at('scale'), lightAngle: at('lightAngle'), ref: at('beamRef'),
-    ray: at('beamRay'), fan: at('beamFan'), tone: at('beamTone'),
-  };
-  let scale = 1, blank = true;
+  let viewW = 1, viewH = 1, scale = 1, blank = true;
+  canvas.width = canvas.height = 1;
+
+  function ensureSize() {
+    const cw = Math.max(1, Math.round(viewW * scale));
+    const ch = Math.max(1, Math.round(viewH * scale));
+    if (canvas.width !== cw || canvas.height !== ch) {
+      canvas.width = cw;
+      canvas.height = ch;
+    }
+  }
+
+  canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); prog = null; });
+  canvas.addEventListener('webglcontextrestored', () => {
+    if (setup()) blank = true;
+  });
 
   return {
     canvas,
     resize(w, h, ratio) {
-      scale = Math.min(ratio, 1);
-      canvas.width = Math.max(1, Math.round(w * scale));
-      canvas.height = Math.max(1, Math.round(h * scale));
-      blank = false;
+      viewW = w;
+      viewH = h;
+      scale = Math.min(ratio, lowSpec ? .65 : 1);
+      if (!blank) ensureSize();
     },
     render(beams, lightAngle) {
-      if (gl.isContextLost()) return;
+      if (!prog || gl.isContextLost()) return;
+      ensureSize();
       gl.viewport(0, 0, canvas.width, canvas.height);
       gl.uniform2f(uniforms.res, canvas.width, canvas.height);
       gl.uniform1f(uniforms.scale, scale);
@@ -161,8 +185,13 @@ export function createSpectrum(before, { software = false } = {}) {
     },
     clear() {
       if (blank || gl.isContextLost()) return;
-      gl.clearColor(0, 0, 0, 0);
-      gl.clear(gl.COLOR_BUFFER_BIT);
+      if (canvas.width !== 1 || canvas.height !== 1) {
+        canvas.width = 1;
+        canvas.height = 1;
+      } else {
+        gl.clearColor(0, 0, 0, 0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+      }
       blank = true;
     },
   };

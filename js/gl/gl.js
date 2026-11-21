@@ -15,22 +15,29 @@ const VERT = `attribute vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }`
 export function createRenderer(canvas, frag, { alpha = true, preserve = false } = {}) {
   const gl = canvas.getContext('webgl', { alpha, premultipliedAlpha: true, antialias: false, preserveDrawingBuffer: preserve || !!window.__btCapture, powerPreference: 'high-performance' });
   if (!gl) { log.warn('WebGL unavailable'); return null; }
-  const prog = program(gl, VERT, frag);
-  if (!prog) return null;
 
-  const buf = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
-  const loc = gl.getAttribLocation(prog, 'p');
-  gl.enableVertexAttribArray(loc);
-  gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-  gl.useProgram(prog);
-
-  const cache = {};
+  let prog = null, buf = null, cache = {};
   const uni = name => (name in cache ? cache[name] : (cache[name] = gl.getUniformLocation(prog, name)));
 
+  function init() {
+    prog = program(gl, VERT, frag);
+    if (!prog) return false;
+    buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(prog, 'p');
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    gl.useProgram(prog);
+    cache = {};
+    return true;
+  }
+  if (!init()) return null;
+
   return {
-    gl, prog,
+    gl,
+    get prog() { return prog; },
+    restore: init,
     set(uniforms) {
       let unit = 0;
       for (const [k, v] of Object.entries(uniforms)) {
@@ -45,6 +52,7 @@ export function createRenderer(canvas, frag, { alpha = true, preserve = false } 
       }
     },
     draw(uniforms = {}, viewport) {
+      if (!prog || gl.isContextLost()) return;
       const [x, y, w, h] = viewport || [0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight];
       gl.viewport(x, y, w, h);
       this.set(uniforms);
@@ -71,15 +79,25 @@ export function program(gl, vs, fs) {
     if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
       const numbered = src.split('\n').map((l, i) => `${String(i + 1).padStart(3)}  ${l}`).join('\n');
       log.error('shader compile failed:\n' + gl.getShaderInfoLog(s) + '\n' + numbered);
+      gl.deleteShader(s);
       return null;
     }
     return s;
   };
   const v = sh(gl.VERTEX_SHADER, vs), f = sh(gl.FRAGMENT_SHADER, fs);
-  if (!v || !f) return null;
+  if (!v || !f) {
+    if (v) gl.deleteShader(v);
+    if (f) gl.deleteShader(f);
+    return null;
+  }
   const p = gl.createProgram();
   gl.attachShader(p, v); gl.attachShader(p, f); gl.linkProgram(p);
-  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) { log.error('program link failed: ' + gl.getProgramInfoLog(p)); return null; }
+  gl.deleteShader(v); gl.deleteShader(f);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+    log.error('program link failed: ' + gl.getProgramInfoLog(p));
+    gl.deleteProgram(p);
+    return null;
+  }
   return p;
 }
 

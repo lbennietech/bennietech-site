@@ -284,7 +284,6 @@ vec3 envLookup(vec3 d, float bias) {
 }
 
 vec3 dynamicLights(vec3 d) {
-  vec3 rd = vec3(lightRot.x * d.x + lightRot.y * d.z, d.y, -lightRot.y * d.x + lightRot.x * d.z);
   vec3 add = vec3(0.);
   float pMag = dot(pointer, pointer);
   if (pMag > .002) {
@@ -302,6 +301,7 @@ vec3 dynamicLights(vec3 d) {
 
   float sweep = sin(intro * 3.14159265);
   if (sweep > .002) {
+    vec3 rd = vec3(lightRot.x * d.x + lightRot.y * d.z, d.y, -lightRot.y * d.x + lightRot.x * d.z);
     vec3 at = vec3(-5.5 + 10. * intro, -.6, -2.6);
     vec3 n = normalize(-at);
     float facing = dot(rd, n);
@@ -1143,8 +1143,9 @@ function filamentBars([[x0, y0], [x1, y1]], near, far) {
   return { data: data.concat(card), barCount: box.length, glowCount: 6 };
 }
 
-export function initReededGlass(gl, { software, outlines, flute, filament, back, front, groundMap, halo, haloPad = 0 }) {
-  const envCube = bakeStudioCube(gl, software ? 96 : 256);
+export function initReededGlass(gl, { software, lowSpec = false, outlines, flute, filament, back, front, groundMap, halo, haloPad = 0 }) {
+  // Power-of-two cubemap sizes satisfy WebGL 1 generateMipmap without GL_INVALID_OPERATION (1282).
+  const envCube = bakeStudioCube(gl, software ? 64 : lowSpec ? 128 : 256);
   const glassProg = program(gl, vertex, glassFrag);
   const fxProg = program(gl, vertex, fxFrag);
   if (!envCube || !glassProg || !fxProg) return null;
@@ -1167,7 +1168,7 @@ export function initReededGlass(gl, { software, outlines, flute, filament, back,
   const gAttr = bindAttribs(glassProg);
   const fAttr = bindAttribs(fxProg);
   const setAttribs = ({ pos, acr }) => {
-    for (let i = 0; i < 4; i++) gl.disableVertexAttribArray(i);
+    for (let i = 0; i < 8; i++) gl.disableVertexAttribArray(i);
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
     if (pos >= 0) { gl.enableVertexAttribArray(pos); gl.vertexAttribPointer(pos, 3, gl.FLOAT, false, 16, 0); }
     if (acr >= 0) { gl.enableVertexAttribArray(acr); gl.vertexAttribPointer(acr, 1, gl.FLOAT, false, 16, 12); }
@@ -1218,7 +1219,7 @@ export function initReededGlass(gl, { software, outlines, flute, filament, back,
       const cx = centre[0], cy = centre[1];
       const gx = ground[0], gy = ground[1], gw = ground[2], gh = ground[3];
       const px = pointer[0], py = pointer[1];
-      const effQuality = software ? Math.min(quality, 1) : quality;
+      const effQuality = software ? 0 : quality;
 
       // Pass 1: Ground caustics + volumetric kerf shafts / halo using lightweight fxProg.
       gl.useProgram(fxProg);
@@ -1315,6 +1316,7 @@ export function initReededGlass(gl, { software, outlines, flute, filament, back,
       gl.uniform1f(uf('kind'), 3);
       gl.drawArrays(gl.TRIANGLES, first + bars.barCount, bars.glowCount);
       gl.depthMask(true);
+      for (let i = 0; i < 8; i++) gl.disableVertexAttribArray(i);
       return true;
     },
   };

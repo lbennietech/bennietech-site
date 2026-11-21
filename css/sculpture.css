@@ -198,10 +198,13 @@ main.space {
 }
 main.space::after,
 main.louver::after,
-main.quantum::after { opacity: 0; }
+main.quantum::after,
+main.paper::after,
+main.atelier::after { opacity: 0; }
 main.space .studio-wash,
 main.louver .studio-wash,
 main.quantum .studio-wash,
+main.paper .studio-wash,
 main.atelier .studio-wash { opacity: 0; }
 main.space .signature img:first-child,
 main.quantum .signature img:first-child,
@@ -241,3 +244,6 @@ main.atelier {
   background-image:
     radial-gradient(ellipse 46% 52% at 51% 44%, #44544f, #263434 55%, #141c1d 100%);
 }
+/* Negative glitch always takes precedence over stage-specific email colours. */
+main.negative .email { color: #b7bcb2; --fringe: #8fb02a; }
+main.negative .email:hover, main.negative .email:focus-visible { color: #eef0ea; --fringe: #c6ec5a; }

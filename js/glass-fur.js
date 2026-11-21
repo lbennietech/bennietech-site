@@ -11,9 +11,13 @@ const NUM_GUIDES = 480;
 const GUIDE_TEX_W = 512;
 const GUIDE_TEX_H = 2; // Midpoint and tip displacement from the combed pose.
 const PACK_RANGE = 0.32;
-const COUNTS = [10240, 49152, 90112];
+const COUNTS = [10240, 32768, 90112];
 const SHADOW_SIZE = 512;
 const SHADOW_RADIUS = 1.28;
+const FLEX_LUT = Float32Array.from({ length: SEGMENTS + 1 }, (_, k) => Math.pow(k / SEGMENTS, 1.38));
+const STIFF_LUT = Float32Array.from({ length: SEGMENTS + 1 }, (_, k) => 94 * Math.pow(1 - .61 * (k / SEGMENTS), 1.4));
+const FLUT_LUT = Float32Array.from({ length: SEGMENTS + 1 }, (_, k) => (k / SEGMENTS) ** 3);
+const CLEAR_LUT = Float32Array.from({ length: SEGMENTS + 1 }, (_, k) => 0.014 + 0.012 * (k / SEGMENTS));
 
 // The pillowed skin supplies surface samples, collision distances and brush hits.
 function smoothstep(e0, e1, x) {
@@ -547,11 +551,10 @@ function createHairPhysics(mesh, rng) {
 
       for (let k = 1; k <= SEGMENTS; k++) {
         const o = base + k * 3;
-        const frac = k / SEGMENTS;
-        const flex = Math.pow(frac, 1.38);
+        const flex = FLEX_LUT[k];
 
         // Only the tips pick up the higher-frequency flutter.
-        const flutter = frac * frac * frac * (0.55 + 0.45 * macroBreath);
+        const flutter = FLUT_LUT[k] * (0.55 + 0.45 * macroBreath);
         const flY = Math.sin(time * 5.2 + seed * 14.0 + k * 0.7) * 0.28 * flutter;
         const flZ = Math.cos(time * 4.4 + seed * 11.3 + k * 0.9) * 0.32 * flutter;
 
@@ -560,7 +563,7 @@ function createHairPhysics(mesh, rng) {
         const fz = (breezeBaseZ * waveGust * exposure + eddyZ * exposure + accelZ + brushZ + puffZ + nz * pressLift + flZ) * flex;
 
         // The restoring force falls along the shaft.
-        const stiff = 94 * Math.pow(1 - .61 * frac, 1.4);
+        const stiff = STIFF_LUT[k];
         const cx = pos[o], cy = pos[o + 1], cz = pos[o + 2];
         const vx = (cx - prev[o]) * damp;
         const vy = (cy - prev[o + 1]) * damp;
@@ -585,7 +588,7 @@ function createHairPhysics(mesh, rng) {
         pos[oCur + 1] = pos[oPrev + 1] + dy * corr;
         pos[oCur + 2] = pos[oPrev + 2] + dz * corr;
 
-        const minClear = 0.014 + 0.012 * (k / SEGMENTS);
+        const minClear = CLEAR_LUT[k];
         const sd = sdBHalf(pos[oCur], pos[oCur + 1], pos[oCur + 2], part);
         if (sd < minClear) {
           gradBHalf(pos[oCur], pos[oCur + 1], pos[oCur + 2], part, colGrad);
@@ -812,10 +815,10 @@ function strandGeometry(gl, instancing, mesh, physics, rng, limit) {
     for (let layer = 0; layer < layers.length; layer++) {
       const end = Math.floor(budget * LAYER_ENDS[layer]);
       let remaining = end - first;
-      const short = pass === 'tufts' && layer < 2;
+      const short = (pass === 'tufts' && layer < 2) || pass === 'shadow';
       // On large, dense screens a guard can span well over 100 pixels.
       // Subdivide those arcs before their joints become visible in silhouette.
-      const longArc = (layer === 2 && pixelsPerUnit > 350) || (layer === 1 && pixelsPerUnit > 640);
+      const longArc = !short && ((layer === 2 && pixelsPerUnit > 350) || (layer === 1 && pixelsPerUnit > 640));
       const segments = short ? 3 : longArc ? steps : 6;
       const indexCount = segments * 6;
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, elements[segments]);
@@ -829,13 +832,14 @@ function strandGeometry(gl, instancing, mesh, physics, rng, limit) {
         if (instancing) {
           // Blend from roots towards tips across the whole coat. Otherwise a
           // distant subpixel root can be composited on top of a nearby tip.
-          if (short) {
+          if (pass === 'shadow' || pass === 'depth') {
+            instancing.drawElementsInstancedANGLE(gl.TRIANGLES, indexCount, gl.UNSIGNED_SHORT, 0, remaining);
+          } else if (short) {
             instancing.drawElementsInstancedANGLE(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0, remaining);
             instancing.drawElementsInstancedANGLE(gl.TRIANGLES, indexCount - 6, gl.UNSIGNED_SHORT, 12, remaining);
           } else {
-            const groups = pass === 'depth' ? 1 : 3;
-            const n = indexCount / groups;
-            for (let k = 0; k < groups; k++) {
+            const n = indexCount / 3;
+            for (let k = 0; k < 3; k++) {
               instancing.drawElementsInstancedANGLE(gl.TRIANGLES, n, gl.UNSIGNED_SHORT, 2 * k * n, remaining);
             }
           }
@@ -1017,7 +1021,10 @@ void main() {
   w /= dot(w, vec3(1.));
   vec3 flow = normalize(vFlow);
   vec3 p = vRest - flow * shellFrac * .022;
-  float fiber = w.x * nap(p.zy, flow.zy) + w.y * nap(p.xz, flow.xz) + w.z * nap(p.xy, flow.xy);
+  float fiber = 0.;
+  if (w.x > .02) fiber += w.x * nap(p.zy, flow.zy);
+  if (w.y > .02) fiber += w.y * nap(p.xz, flow.xz);
+  if (w.z > .02) fiber += w.z * nap(p.xy, flow.xy);
   if (shellFrac > .01 && fiber < .22 + .42 * shellFrac) discard;
   n.xy = halfTurn(vCoat.y) * n.xy;
   float incident = clamp((dot(n, key) + .30) / 1.30, 0., 1.);
@@ -1242,19 +1249,23 @@ void main() {
   // On a resolved shaft the window catches one side of the cylindrical
   // cuticle. Integrate that response across the width of subpixel fibers.
   float resolved = bundled ? 0. : smoothstep(.80, 2.3, radius / filterWidth);
-  vec3 widthAxis = cross(t, view);
-  widthAxis /= max(.001, length(widthAxis));
-  float crossPos = clamp(vMeta.y * (radius + filterWidth) / max(radius, .01), -.96, .96);
-  vec3 fiberNormal = widthAxis * crossPos + cross(widthAxis, t) * sqrt(1. - crossPos * crossPos);
-  float azimuth = clamp(dot(fiberNormal, hk), 0., 1.);
   float cuticle = sheen(t, hk, -.085 + .045 * seed, 82. + 98. * smoothCoat);
   float internal = sheen(t, hk, .17, 20. + 20. * smoothCoat);
-  cuticle *= mix(1., .16 + 1.44 * azimuth * azimuth * azimuth, resolved);
-  diffuse *= mix(1., .69 + .41 * max(0., dot(fiberNormal, key)), resolved);
+  if (resolved > .001) {
+    vec3 widthAxis = cross(t, view);
+    widthAxis /= max(.001, length(widthAxis));
+    float crossPos = clamp(vMeta.y * (radius + filterWidth) / max(radius, .01), -.96, .96);
+    vec3 fiberNormal = widthAxis * crossPos + cross(widthAxis, t) * sqrt(1. - crossPos * crossPos);
+    float azimuth = clamp(dot(fiberNormal, hk), 0., 1.);
+    cuticle *= mix(1., .16 + 1.44 * azimuth * azimuth * azimuth, resolved);
+    diffuse *= mix(1., .69 + .41 * max(0., dot(fiberNormal, key)), resolved);
+  }
   float gloss = (.26 + .74 * exposed) * smoothCoat * (.21 + .79 * wrap);
   vec3 spec = (vec3(.58, .51, .44) * cuticle + (.045 + .64 * pigment) * internal) * gloss;
-  float brush = sheen(t, normalize(brushLight + view), -.07, 85.);
-  spec += vec3(.085, .077, .083) * brush * pulse * exposed;
+  if (pulse > .002) {
+    float brush = sheen(t, normalize(brushLight + view), -.07, 85.);
+    spec += vec3(.085, .077, .083) * brush * pulse * exposed;
+  }
 
   // Backlight travels through the thinner tips and catches the guard cuticle.
   float rimFace = smoothstep(-.38, .78, dot(n, rim));
@@ -1400,7 +1411,7 @@ function locations(gl, prog, attributes) {
   return loc;
 }
 
-export function initFurGlass(gl, { software, groundMap }) {
+export function initFurGlass(gl, { software, lowSpec = false, groundMap }) {
   const vertexTextures = gl.getParameter(gl.MAX_VERTEX_TEXTURE_IMAGE_UNITS) > 0;
   const instancing = gl.getExtension('ANGLE_instanced_arrays');
   const shape = strandShape(vertexTextures);
@@ -1413,14 +1424,14 @@ export function initFurGlass(gl, { software, groundMap }) {
   const floor = locations(gl, groundProg, ['p']);
   const shell = locations(gl, shellProg, coreAttrs);
   const hair = locations(gl, strandProg, strandAttrs);
-  const tierLimit = software || !instancing ? 0 : 2;
+  const tierLimit = software || !instancing ? 0 : lowSpec ? 1 : 2;
   const shadow = tierLimit > 0 && makeShadowMap(gl);
   const skinDepth = shadow && program(gl, coreShadowVert, shadowFrag);
   const pileDepth = shadow && program(gl, furShadowVert(shape), shadowFrag);
   const skinCaster = skinDepth && locations(gl, skinDepth, coreAttrs);
   const pileCaster = pileDepth && locations(gl, pileDepth, strandAttrs);
   const rng = makeRng(0xB3441E89);
-  const mesh = buildCoreMesh(software ? 18 : 24);
+  const mesh = buildCoreMesh(software ? 12 : lowSpec ? 16 : 24);
   const physics = createHairPhysics(mesh, rng);
   const contact = coatContact();
   const drawStrands = strandGeometry(gl, instancing, mesh, physics, rng, COUNTS[tierLimit]);
@@ -1537,7 +1548,7 @@ export function initFurGlass(gl, { software, groundMap }) {
         gl.colorMask(false, false, true, true);
         pose(pileCaster);
         motion(pileCaster);
-        drawStrands(pileCaster, tier === 2 ? 12288 : 8192);
+        drawStrands(pileCaster, tier === 2 ? 12288 : 8192, 'shadow');
         gl.colorMask(true, true, true, true);
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
@@ -1589,7 +1600,7 @@ export function initFurGlass(gl, { software, groundMap }) {
       gl.bindTexture(gl.TEXTURE_2D, tuftMap);
       gl.uniform1i(hair.tuftMap, 4);
       gl.uniform1f(hair.tuftMode, tier === 0 ? 1 : 0);
-      gl.uniform1f(hair.widthBoost, tier === 0 ? 1.48 : tier === 1 ? 1.24 : 1);
+      gl.uniform1f(hair.widthBoost, tier === 0 ? 1.48 : tier === 1 ? 1.28 : 1);
       gl.uniform1f(hair.pulse, pulse);
       gl.uniform1f(hair.recovery, recovery);
       const curveScale = tier === 2 ? size * ratio : 0;

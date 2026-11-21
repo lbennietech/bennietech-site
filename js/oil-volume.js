@@ -101,6 +101,10 @@ float contour(vec2 p) {
 // wrapping smoothly over the top dome and curved right barrels.
 float solid(vec3 p, float border, float line) {
   float cutWall = .065 + separation - abs(line);
+  // Exact conservative lower bound: skip 15 trig/exp fluid-wave terms while marching
+  // through empty AABB air or lower pendant-drop space (beyond maximum weld radius 0.088).
+  float bound = max(max(border, cutWall) - .030, abs(p.z) - .410);
+  if (bound > .12) return bound;
   float wt = OMEGA * age;
 
   // Smooth interior taper keeps perimeter bevels pristine and liquid-smooth.
@@ -321,21 +325,21 @@ float surface(vec3 p) {
   }
 
   // Bottom baseline & lower-bowl drips — clean sculptural spacing with zero accidental webbing.
-  if (p.y > 1.24) {
+  if (p.y > 1.24 && p.z > -.36 && p.z < .48) {
     // 1. Hero center-left primary release + gleaming satellite bead (snaps ~t=2.00s).
-    if (abs(p.x - .445) < .36)
+    if (abs(p.x - .445) < .36 && abs(p.z - .148) < .32)
       body = weld(body, viscousDrop(p, vec3(.445, 1.662, .148), .061, .36, .08, 1., sway), .088);
     // 2. Right-curve medium release + satellite (snaps ~t=0.68s).
-    if (abs(p.x - .865) < .36)
+    if (abs(p.x - .865) < .36 && abs(p.z - .115) < .32)
       body = weld(body, viscousDrop(p, vec3(.865, 1.638, .115), .048, .31, .41, 1., sway), .076);
     // 3. Left-corner slender release (snaps ~t=3.36s).
-    if (abs(p.x - .175) < .32)
+    if (abs(p.x - .175) < .32 && abs(p.z - .128) < .32)
       body = weld(body, viscousDrop(p, vec3(.175, 1.658, .128), .042, .27, .74, 1., sway), .072);
     // 4. Mid-right deeper underside pendant (peaks ~t=2.55s, rich 3D depth parallax).
     if (abs(p.x - .675) < .28 && p.z < .20)
       body = weld(body, viscousDrop(p, vec3(.675, 1.656, -.045), .039, .195, .62, 0., sway), .066);
     // 5. Outer lower-right bowl hanging tear cleanly separated along the sweeping curve.
-    if (abs(p.x - 1.048) < .24 && p.y < 1.92)
+    if (abs(p.x - 1.048) < .24 && p.y < 1.92 && abs(p.z - .072) < .28)
       body = weld(body, viscousDrop(p, vec3(1.048, 1.525, .072), .031, .145, .20, 0., sway), .056);
   }
   return body;
@@ -616,7 +620,7 @@ function bakeOilCube(gl, size, broad) {
   return cube;
 }
 
-export function createOilVolume(hardwareOnly = false, stage) {
+export function createOilVolume(hardwareOnly = false, stage, { lowSpec = false } = {}) {
   const image = document.createElement('canvas');
   if (hardwareOnly) {
     const gl = image.getContext('webgl', {
@@ -625,7 +629,7 @@ export function createOilVolume(hardwareOnly = false, stage) {
     });
     if (!gl) return null;
     const info = gl.getExtension('WEBGL_debug_renderer_info');
-    if (info && /swiftshader|llvmpipe|software rasterizer/i.test(gl.getParameter(info.UNMASKED_RENDERER_WEBGL))) {
+    if (info && /swiftshader|llvmpipe|softpipe|lavapipe|software rasterizer|microsoft basic render/i.test(gl.getParameter(info.UNMASKED_RENDERER_WEBGL))) {
       gl.getExtension('WEBGL_lose_context')?.loseContext();
       return null;
     }
@@ -633,7 +637,7 @@ export function createOilVolume(hardwareOnly = false, stage) {
   const renderer = createRenderer(image, fragment, { alpha: true });
   if (!renderer) return null;
   const { gl, prog } = renderer;
-  const sharpCube = bakeOilCube(gl, 256, 0);
+  const sharpCube = bakeOilCube(gl, lowSpec ? 128 : 256, 0);
   const softCube = bakeOilCube(gl, 64, 1);
   if (!sharpCube || !softCube) return null;
   gl.useProgram(prog);
@@ -704,8 +708,8 @@ function bakedTake() {
     return image;
   });
   return (ctx, { w, h, size, centre = h * .45, pixelRatio = 1, lift, age, tear }) => {
-    const frame = Math.floor((age % 4) * 16);
-    const sheet = sheets[Math.floor(frame / 16)];
+    const frame = Math.floor((((age % 4) + 4) % 4) * 16) & 63;
+    const sheet = sheets[frame >> 4];
     if (!sheet.complete || !sheet.naturalWidth) return false;
     const cw = Math.max(1, Math.round(w * pixelRatio)), ch = Math.max(1, Math.round(h * pixelRatio));
     if (ctx.canvas.width !== cw || ctx.canvas.height !== ch) {
@@ -734,8 +738,8 @@ function bakedTake() {
   };
 }
 
-export function prepareOil(stage) {
-  const live = createOilVolume(true, stage);
+export function prepareOil(stage, opts = {}) {
+  const live = createOilVolume(true, stage, opts);
   let fallback = live ? null : bakedTake();
   return (ctx, scene) => {
     if (live?.(ctx, scene)) return stage ? 'layer' : 'stage';

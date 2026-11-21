@@ -164,10 +164,12 @@ const SIDE_STOPS = [
 ];
 const ARRIS_STOPS = [[0, '#fcfff2'], [.38, '#f1f6df'], [.63, '#9fae94'], [.78, '#e1e9d9'], [1, '#fefff0']];
 const BACK = -.272, FRONT = .2805;
-const reededGroundMap = makeReededGround(plates, FLUTE);
-const furGroundMap = makeFurGround(plates);
 const filamentLine = [[.09, KERF - .27875 * .09], [filamentEnd, KERF - .27875 * filamentEnd]];
-const haloMap = makeHalo(plates, filamentLine);
+// Build 2D offscreen blur maps lazily only when Reeded, Fur, or 2D fallback actually needs them.
+let _reededGround = null, _furGround = null, _haloMap = null;
+const getReededGround = () => _reededGround ??= makeReededGround(plates, FLUTE);
+const getFurGround = () => _furGround ??= makeFurGround(plates);
+const getHalo = () => _haloMap ??= makeHalo(plates, filamentLine);
 
 // Without WebGL the glass is drawn on the stage canvas instead. Its faces are
 // composed off screen from bitmaps that stay resident between frames.
@@ -274,15 +276,16 @@ let w = canvas.clientWidth || innerWidth || 1, h = canvas.clientHeight || innerH
 let size = Math.min(h * .31, w * .49), centre = h * .48, pixelRatio = Math.min(devicePixelRatio || 1, 2);
 let time = 0, last = 0, frame = 0, lastTap = -1;
 
-const field = createField(canvas);
 const glass = createGlass(canvas, {
   outlines: halves.map(half => half.points), flute: FLUTE, back: BACK, front: FRONT,
-  reededGroundMap, furGroundMap, halo: haloMap, haloPad: HALO_PAD, filament: filamentLine,
+  getReededGround, getFurGround, getHalo, haloPad: HALO_PAD, filament: filamentLine,
 });
+const lowSpec = Boolean(glass?.lowSpec);
+const field = createField(canvas, { lowSpec });
 // Deep space behind the starship B; the paper returns for the other works.
-const space = glass ? createSpace(canvas.closest('.exhibit').firstElementChild, { software: glass.software }) : null;
+const space = glass ? createSpace(canvas.closest('.exhibit').firstElementChild, { software: glass.software, lowSpec }) : null;
 // Sunlight split by the glass, thrown across the paper behind it.
-const spectrum = glass ? createSpectrum(glass.canvas, { software: glass.software }) : null;
+const spectrum = glass ? createSpectrum(glass.canvas, { software: glass.software, lowSpec }) : null;
 const beams = makeBeams();
 if (!glass) behindTiles().forEach((tile, part) => window.createImageBitmap?.(tile).then(bitmap => {
   behind[part] = bitmap;
@@ -337,26 +340,35 @@ for (let i = 0; i < 14; i++) for (let j = 0; j < 7; j++) {
   flightPoints.push([.56 + Math.cos(a) * Math.cos(b) * (FLIGHT[0] + .07), .845 + Math.sin(b) * (FLIGHT[1] + .07),
     Math.sin(a) * Math.cos(b) * (FLIGHT[2] + .07)]);
 }
-function reachOf(variant = glassVariant) {
-  const box = [Infinity, Infinity, -Infinity, -Infinity];
-  const points = variant === STARSHIP && glass ? [...reachPoints, ...flightPoints] : reachPoints;
+const reachBoundsCache = [null, null];
+function unitReachBounds(withFlight) {
+  const key = withFlight ? 1 : 0;
+  if (reachBoundsCache[key]) return reachBoundsCache[key];
+  const bounds = [Infinity, Infinity, -Infinity, -Infinity];
+  const points = withFlight ? [...reachPoints, ...flightPoints] : reachPoints;
   const steps = n => Array.from({ length: n }, (_, i) => i / (n - 1) * 2 - 1);
   for (const y of steps(5)) for (const p of steps(5)) for (const t of [-1, 1]) for (const offset of [-.06, .06]) {
     const yaw = -.46 + y * .95, pitch = -.16 + (p > 0 ? p * .58 : p * .48), tilt = -.115 + t * .045;
     const c = Math.cos(tilt), s = Math.sin(tilt);
-    const ax = c * Math.cos(yaw) - s * Math.sin(yaw) * Math.sin(pitch);
-    const ay = s * Math.cos(yaw) + c * Math.sin(yaw) * Math.sin(pitch);
-    const bx = -s * Math.cos(pitch), by = c * Math.cos(pitch);
-    const zx = c * Math.sin(yaw) + s * Math.cos(yaw) * Math.sin(pitch);
-    const zy = s * Math.sin(yaw) - c * Math.cos(yaw) * Math.sin(pitch);
+    const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+    const ax = c * cy - s * sy * sp, ay = s * cy + c * sy * sp;
+    const bx = -s * cp, by = c * cp;
+    const zx = c * sy + s * cy * sp, zy = s * sy - c * cy * sp;
     for (const [u, v, z] of points) {
       const dv = v - .845 + offset;
-      const x = w / 2 + size * (ax * (u - .56) + bx * dv + zx * z);
-      const yy = centre + size * (ay * (u - .56) + by * dv + zy * z);
-      box[0] = Math.min(box[0], x); box[1] = Math.min(box[1], yy);
-      box[2] = Math.max(box[2], x); box[3] = Math.max(box[3], yy);
+      const x = ax * (u - .56) + bx * dv + zx * z;
+      const yy = ay * (u - .56) + by * dv + zy * z;
+      if (x < bounds[0]) bounds[0] = x;
+      if (yy < bounds[1]) bounds[1] = yy;
+      if (x > bounds[2]) bounds[2] = x;
+      if (yy > bounds[3]) bounds[3] = yy;
     }
   }
+  return (reachBoundsCache[key] = bounds);
+}
+function reachOf(variant = glassVariant) {
+  const b = unitReachBounds(variant === STARSHIP && Boolean(glass));
+  const box = [w / 2 + size * b[0], centre + size * b[1], w / 2 + size * b[2], centre + size * b[3]];
   // The shadow and caustic lie on the ground beneath it.
   for (const sway of [-.58, .58]) {
     const [x, y, rx, ry] = groundCard(sway, .016, sway * .5);
@@ -376,9 +388,6 @@ let lastExposureEnd = -Infinity, tearBeat = 0, nextTear = 0, lastWashKey = '';
 //   3 = Architectural Terrazzo & Emerald Louver B (Kinetic Concentric Fins + Violet Grid Studio)
 //   4 = Quantum Glass Voxel Core B (Micro-Grid Containment + 3D Neural Voxels + PCB Studio)
 const GLASS_VARIANTS = 5, STARSHIP = 0, FUR = 2, LOUVER = 3, VOXEL = 4;
-// Featured themed worlds hold the stage long enough to explore unless a
-// double-tap calls the glitch sooner.
-const STARSHIP_STAY = 10.5, FEATURE_STAY = 10.0;
 let glassVariant = 0, swappedExposure = null;
 let stageMode = 0, spaceShiftX = 0, spaceShiftY = 0;
 
@@ -437,7 +446,7 @@ function planExposure(start, aftershock = false) {
   }
   const second = t > 0 ? t : .14 + Math.random() * .14;
   return {
-    start, flashes, tail, aftershock, holdStart: t, end, finish: tail.length ? tail.at(-1)[1] : end,
+    start, flashes, tail, aftershock, holdStart: t, end, finish: tail.length ? tail[tail.length - 1][1] : end,
     tearIn: Math.min(hold * .38, (aftershock ? .13 : .16) + Math.random() * .13),
     tearOut: Math.min(hold * .35, .14 + Math.random() * .13),
     entryCalm: count ? .36 : .58,
@@ -447,7 +456,7 @@ function planExposure(start, aftershock = false) {
 }
 if (!glass) glassVariant = 1;
 setStage(stageModeFor(glassVariant));
-let exposure = planExposure(stageMode === 1 ? STARSHIP_STAY + Math.random() * 3 : 3 + Math.random() * 3);
+let exposure = planExposure(3 + Math.random() * 3);
 
 function exposureAge() {
   if (reduced.matches) return -1;
@@ -462,14 +471,10 @@ function exposureAge() {
     }
   }
   if (age >= exposure.finish) {
-    // Waits average about thirteen seconds but range from six to twenty-six.
-    // The starship and new themed works get a full stay with no premature aftershock.
-    // The paper gallery and the atelier keep the original, quicker rhythm.
-    const featured = stageMode > 0 && stageMode < 4;
-    const minStay = glassVariant === STARSHIP ? STARSHIP_STAY : FEATURE_STAY;
-    const shock = !featured && !exposure.aftershock && Math.random() < .14;
-    let wait = shock ? 1.2 + Math.random() * 2.2 : 6 + Math.min(20, -Math.log(1 - Math.random()) * 7);
-    if (featured) wait = Math.max(wait, minStay + Math.random() * 3.5);
+    // All phases share the same organic cadence: ~6-26 s waits (avg ~13 s)
+    // with a 14% aftershock chance shortening the next gap to 1.2-3.4 s.
+    const shock = !exposure.aftershock && Math.random() < .14;
+    const wait = shock ? 1.2 + Math.random() * 2.2 : 6 + Math.min(20, -Math.log(1 - Math.random()) * 7);
     exposure = planExposure(time + wait, shock);
     return -1;
   }
@@ -480,9 +485,12 @@ function exposureAge() {
   return age;
 }
 
-// What the glitch's torn print rows need to rebuild the active themed backdrop behind the B.
+// What the glitch's torn print rows need to sample the active stage backdrop behind the B.
 function spaceStill() {
-  return stageMode > 0 ? { mode: stageMode, view: [w, h], shift: [spaceShiftX, spaceShiftY] } : null;
+  return stageMode > 0 && space ? {
+    mode: stageMode, view: [w, h], shift: [spaceShiftX, spaceShiftY],
+    canvas: space.canvas, paintId: space.paintId, ready: space.ready, pad: space.pad,
+  } : null;
 }
 
 function glassRamp(x, y, dx, dy, stops) {
@@ -627,12 +635,14 @@ function draw() {
     if (age >= swapAt) {
       swappedExposure = exposure;
       advanceVariant();
+      const gv = variantBudget(glassVariant);
       if (field && glass?.render({
         rows, centre: centreArr, size, view: viewArr, lift, shift: shiftArr, glint, sway, pulse, ground,
-        recovery: 0, lightAngle: rig.lightRad, intro: 1, glow: glow + .45, time, quality: glassQuality, detail: glassDetail,
+        recovery: 0, lightAngle: rig.lightRad, intro: 1, glow: glow + .45, time, quality: gv.quality, detail: gv.detail,
         pointer: pointerNormArr, shocks: ripples, sun: null,
         halfMotion: halfMotionArr, shardMotion: shardMotionArr, variant: glassVariant,
       })) {
+        if (glass.consumeInitFlag()) skipPaceFrames = Math.max(skipPaceFrames, 2);
         field.capture(glass.canvas, glass.box, w, h, null, spaceStill());
       }
     }
@@ -673,20 +683,24 @@ function draw() {
   }
   // Sunlight reaches the glass just after the arrival sweep, and again,
   // a little quicker, as the glass returns from each glitch.
-  const dawn = reduced.matches ? 9 : Math.min(time - .85, (time - lastExposureEnd - .12) * 1.5);
-  aimBeams(beams, {
-    rows, centre: centreArr, size, lift, yaw, pitch, lightAngle: rig.lightRad, time, dawn, pulse,
-    tall: Math.min(1, Math.max(0, (1.05 - w / h) / .55)),
-  });
+  const useSpectrum = Boolean(spectrum && glassVariant === 1);
+  if (useSpectrum) {
+    const dawn = reduced.matches ? 9 : Math.min(time - .85, (time - lastExposureEnd - .12) * 1.5);
+    aimBeams(beams, {
+      rows, centre: centreArr, size, lift, yaw, pitch, lightAngle: rig.lightRad, time, dawn, pulse,
+      tall: Math.min(1, Math.max(0, (1.05 - w / h) / .55)),
+    });
+  }
   // The GPU layer hides during a glitch, so a glitch without its liquid B
   // falls back to drawing the glass here.
-  const useSpectrum = Boolean(spectrum && glassVariant === 1);
+  const gv = variantBudget(glassVariant);
   if (!isNeg && glass?.render({
     rows, centre: centreArr, size, view: viewArr, lift, shift: shiftArr, glint, sway, pulse, ground,
-    recovery, lightAngle: rig.lightRad, intro, glow, time, quality: glassQuality, detail: glassDetail,
+    recovery, lightAngle: rig.lightRad, intro, glow, time, quality: gv.quality, detail: gv.detail,
     pointer: pointerNormArr, shocks: ripples, sun: useSpectrum ? beams.sun : null,
     halfMotion: halfMotionArr, shardMotion: shardMotionArr, variant: glassVariant,
   })) {
+    if (glass.consumeInitFlag()) skipPaceFrames = Math.max(skipPaceFrames, 2);
     glassDrawn = glassShown = true;
     if (spectrum) {
       if (useSpectrum && beams.lit) spectrum.render(beams, rig.lightRad);
@@ -700,7 +714,7 @@ function draw() {
   stageDrawn = true;
   if (!isNeg) {
     const [x, y, rx, ry] = ground;
-    ctx.drawImage(reededGroundMap, x - rx, y - ry, rx * 2, ry * 2);
+    ctx.drawImage(getReededGround(), x - rx, y - ry, rx * 2, ry * 2);
   }
 
   function plane(z, part) {
@@ -714,7 +728,7 @@ function draw() {
   if (!isNeg) {
     plane(0, .5);
     ctx.globalAlpha = Math.min(1, .62 * glow + .24 * pulse);
-    ctx.drawImage(haloMap, -HALO_PAD, -HALO_PAD, 1.21 + HALO_PAD * 2, 1.69 + HALO_PAD * 2);
+    ctx.drawImage(getHalo(), -HALO_PAD, -HALO_PAD, 1.21 + HALO_PAD * 2, 1.69 + HALO_PAD * 2);
     ctx.globalAlpha = 1;
   }
   const sides = reflectedWalls(glint + rig.lightRad * .22);
@@ -764,10 +778,10 @@ function draw() {
 // Slow glitch frames step it down, a long run of quick ones steps it back up,
 // and the rest of the page always renders at full sharpness. Steps are coarse
 // so the liquid's buffer is rarely reallocated.
-let oilDetail = (devicePixelRatio || 1) > 1.5 ? .8 : 1;
+let oilDetail = lowSpec ? .7 : (devicePixelRatio || 1) > 1.5 ? .8 : 1;
 let oilPace = 1 / 60, quickRun = 0, glitchShown = false;
 function paceOil(elapsed) {
-  oilPace += (Math.min(elapsed, .1) - oilPace) * .1;
+  oilPace += (Math.min(elapsed, .1) - oilPace) * .12;
   if (oilPace > 1 / 42 && oilDetail > .4) {
     oilDetail = Math.round(oilDetail * 10 - 1) / 10;
     oilPace = 1 / 60;
@@ -778,33 +792,39 @@ function paceOil(elapsed) {
   }
 }
 
-// Multi-tier adaptive quality governor for the ray-traced glass B.
-// Keeps full native sharpness across Tier 2 (Ultra) and Tier 1 (Balanced),
-// ignoring stray GC hitches while reacting smoothly on sustained low-spec load.
-const maxGlassQuality = glass?.software ? 1 : 2;
-let glassQuality = maxGlassQuality, glassDetail = 1;
-let glassPace = 1 / 60, slowGlassRun = 0, quickGlassRun = 0, glassShown = false;
+// Per-variant multi-tier adaptive quality governor for the sculpture layer.
+// Each work remembers its own sustainable quality/detail budget so heavy phases
+// never degrade lighter ones, nor undo protection learned on low-spec GPUs.
+const maxGlassQuality = glass?.software ? 0 : 2;
+const startGlassQuality = glass?.software ? 0 : lowSpec ? 1 : 2;
+const variantBudgets = Array.from({ length: GLASS_VARIANTS }, () => ({
+  quality: startGlassQuality, detail: 1, pace: 1 / 60, slow: 0, quick: 0,
+}));
+const variantBudget = v => variantBudgets[v] || variantBudgets[0];
+let glassShown = false, skipPaceFrames = 0;
 function paceGlass(elapsed) {
-  glassPace += (Math.min(elapsed, .055) - glassPace) * .08;
-  const downThreshold = glassQuality === 2 ? 1 / 44 : glassQuality === 1 ? 1 / 38 : 1 / 34;
-  if (glassPace > downThreshold) {
-    quickGlassRun = 0;
-    if (++slowGlassRun >= 10) {
-      if (glassQuality > 0) glassQuality--;
-      else if (glassDetail > .66) glassDetail = Math.max(.65, Math.round((glassDetail - .14) * 100) / 100);
-      glassPace = 1 / 60;
-      slowGlassRun = 0;
+  const b = variantBudget(glassVariant);
+  b.pace += (Math.min(elapsed, .08) - b.pace) * .11;
+  const downThreshold = b.quality === 2 ? 1 / 44 : b.quality === 1 ? 1 / 38 : 1 / 34;
+  if (b.pace > downThreshold) {
+    b.quick = 0;
+    b.slow += elapsed > .045 ? 2 : 1;
+    if (b.slow >= 6) {
+      if (b.quality > 0) b.quality--;
+      else if (b.detail > .66) b.detail = Math.max(.65, Math.round((b.detail - .14) * 100) / 100);
+      b.pace = 1 / 60;
+      b.slow = 0;
     }
   } else {
-    slowGlassRun = Math.max(0, slowGlassRun - 1);
-    if (elapsed < 1 / 55 && (glassQuality < maxGlassQuality || glassDetail < 1)) {
-      if (++quickGlassRun >= 100) {
-        if (glassDetail < 1) glassDetail = Math.min(1, Math.round((glassDetail + .15) * 100) / 100);
-        else if (glassQuality < maxGlassQuality) glassQuality++;
-        quickGlassRun = 0;
+    b.slow = Math.max(0, b.slow - 1);
+    if (elapsed < 1 / 55 && (b.quality < maxGlassQuality || b.detail < 1)) {
+      if (++b.quick >= 110) {
+        if (b.detail < 1) b.detail = Math.min(1, Math.round((b.detail + .15) * 100) / 100);
+        else if (b.quality < maxGlassQuality) b.quality++;
+        b.quick = 0;
       }
     } else if (elapsed > 1 / 48) {
-      quickGlassRun = 0;
+      b.quick = 0;
     }
   }
 }
@@ -871,11 +891,18 @@ function tick(now) {
   const elapsed = last ? Math.max(0, (now - last) / 1000) : 0;
   const dt = Math.min(elapsed, .06);
   last = now;
-  // Each interval reflects the cost of the frame drawn before it.
-  if (elapsed && glitchShown) paceOil(elapsed);
-  if (elapsed && glassShown && time > .6) paceGlass(elapsed);
+  // Each interval reflects the cost of the frame drawn before it (skipping one-time compile frames).
+  if (skipPaceFrames > 0) {
+    skipPaceFrames--;
+  } else {
+    if (elapsed && glitchShown) paceOil(elapsed);
+    if (elapsed && glassShown && time > .6) paceGlass(elapsed);
+  }
   if (!reduced.matches) {
-    if (oilVolume === undefined && time > .5) oilVolume = prepareOil(canvas);
+    if (oilVolume === undefined && time > .5) {
+      oilVolume = prepareOil(canvas, { lowSpec });
+      skipPaceFrames = Math.max(skipPaceFrames, 2);
+    }
     time += dt;
     followPointer(dt);
   }
@@ -928,7 +955,7 @@ function pointAt(event) {
   if (Number.isFinite(ny)) pointer.ty = Math.max(-1, Math.min(1, ny));
 }
 
-canvas.addEventListener('pointermove', event => {
+function onPointerMove(event) {
   pointAt(event);
   if (drag.down && event.isPrimary) {
     const dx = (event.clientX - drag.startX) / Math.max(240, w * .45);
@@ -942,10 +969,12 @@ canvas.addEventListener('pointermove', event => {
       drag.ty = Math.max(-.42, Math.min(.50, -dy * .68));
     }
   }
-});
+}
+canvas.addEventListener('pointermove', onPointerMove);
+window.addEventListener('pointermove', event => { if (drag.down) onPointerMove(event); });
 
 canvas.addEventListener('pointerdown', event => {
-  if (!event.isPrimary) return;
+  if (!event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return;
   pointAt(event);
   pointer.tPress = 1;
   pointer.pulse = 1;
@@ -954,8 +983,11 @@ canvas.addEventListener('pointerdown', event => {
   drag.startX = event.clientX;
   drag.startY = event.clientY;
   pushRipple(.56 + pointer.tx * .48, .845 + pointer.ty * .62, 1);
-  if (!reduced.matches && time - lastTap < .35 && exposureAge() < 0) {
-    if (oilVolume === undefined) oilVolume = prepareOil(canvas);
+  if (!reduced.matches && time - lastTap < .35 && (time < exposure.start || time >= exposure.end)) {
+    if (oilVolume === undefined) {
+      oilVolume = prepareOil(canvas, { lowSpec });
+      skipPaceFrames = Math.max(skipPaceFrames, 2);
+    }
     exposure = planExposure(time);
   }
   lastTap = time;
@@ -972,8 +1004,9 @@ function release() {
   pointer.tx = pointer.ty = pointer.tPress = 0;
   releaseDrag();
 }
-canvas.addEventListener('pointerleave', release);
+canvas.addEventListener('pointerleave', () => { if (!drag.down) release(); });
 canvas.addEventListener('pointercancel', release);
+window.addEventListener('blur', release);
 window.addEventListener('pointerup', event => {
   if (!event.isPrimary) return;
   pointer.tPress = 0;

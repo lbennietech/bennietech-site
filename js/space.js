@@ -90,50 +90,6 @@ vec3 spaceAt(vec2 p) {
   float H = v.y;
   vec2 uv = p / H;
   float aspect = v.x / v.y;
-  vec3 col = vec3(.0012, .0019, .0036);
-
-  // A faint galactic band rises to the upper right behind the B.
-  vec2 axis = normalize(vec2(1., -.62));
-  vec2 q = uv - vec2(aspect * .52, .40);
-  float across = dot(q, vec2(-axis.y, axis.x));
-  float band = exp(-across * across / .045);
-  float dust = sFbm(uv * 3.4 + vec2(4.1, 2.3));
-  float cloud = sFbm(uv * 1.7 + vec2(dust * .9, 1.3));
-  float lanes = 1. - .78 * smoothstep(.42, .68, dust) * band;
-  col += vec3(.018, .02, .026) * band * smoothstep(.32, .82, cloud) * lanes;
-
-  // Cold teal nebula to the right, a breath of violet to the left.
-  float neb = sFbm(uv * 1.15 + vec2(7.2, 3.1) + .55 * sFbm(uv * 2.4 + 1.7));
-  float right = smoothstep(.15, 1., uv.x / aspect);
-  float nebFine = sFbm(uv * 4.3 + vec2(neb * 1.6, 2.2));
-  float tealGas = smoothstep(.46, .9, neb) * (.6 + .7 * nebFine);
-  col += vec3(.014, .06, .08) * tealGas * right;
-  col += vec3(.05, .018, .03) * smoothstep(.6, .95, neb) * smoothstep(.5, .8, nebFine) * right;
-  float vio = sFbm(uv * 1.35 + vec2(11.4, 5.2));
-  col += vec3(.04, .014, .06) * smoothstep(.52, .9, vio) * (.6 + .6 * nebFine) * (1. - right);
-  // Dark dust filaments silhouetted against the gas.
-  col *= 1. - .55 * smoothstep(.58, .8, sFbm(uv * 6.5 + vec2(3.7, 9.1))) * smoothstep(.4, .8, neb);
-
-  // A distant barred spiral galaxy high on the right.
-  vec2 gq = (p - v * vec2(.83, .2)) / H;
-  gq = mat2(.86, -.5, .5, .86) * gq;
-  gq.y *= 2.6;
-  float gr = length(gq);
-  float garm = .5 + .5 * sin(atan(gq.y, gq.x) * 2. - log(gr + 1e-3) * 5.2);
-  float galaxy = exp(-gr / .012) * 1.4 + exp(-gr / .032) * (.25 + .75 * garm * garm) * smoothstep(.09, .02, gr);
-  col += vec3(.75, .78, 1.) * galaxy * .055 + vec3(1., .82, .6) * exp(-gr / .004) * .12;
-
-  // Stars, denser in the band and dimmed by its dust.
-  float dens = (.75 + 1.7 * band) * lanes;
-  vec3 starlight = starLayer(p, 4.5, .085 * dens, .40, .040, 1.);
-  starlight += starLayer(p, 9., .20 * dens, .52, .13, 7.);
-  starlight += starLayer(p, 23., .34, .64, .50, 13.);
-  starlight += starLayer(p, 61., .42, .80, 1.05, 19.);
-  starlight += heroStars(p, 170., 29.);
-  // The top-left wordmark keeps a darker sky.
-  vec2 lock = (p - vec2(110., 34.)) / vec2(230., 90.);
-  float quietSky = 1. - .7 * exp(-dot(lock, lock));
-  col = (col + starlight) * quietSky;
 
   vec2 pc, sun; float R;
   spacePlanet(v, pc, R, sun);
@@ -146,6 +102,7 @@ vec3 spaceAt(vec2 p) {
   float nearWide = exp(-along * along / .9);
   vec3 atmCol = mix(vec3(.16, .40, 1.), vec3(1., .52, .19), near);
 
+  vec3 col;
   if (alt < 0.) {
     // The night side: dark ocean and cloud, a thin sunrise crescent at the
     // limb and the glow of the atmosphere seen edge-on.
@@ -163,8 +120,65 @@ vec3 spaceAt(vec2 p) {
     float city = step(.965, sHash(cc + 3.1)) * smoothstep(.15, .5, swirl) * smoothstep(.012, .05, depth);
     col += vec3(1., .62, .28) * city * .05 * exp(-length(fract(surf * vec2(46., 30.)) - .5) * 6.);
   } else {
+    col = vec3(.0012, .0019, .0036);
+
+    // A faint galactic band rises to the upper right behind the B.
+    vec2 axis = normalize(vec2(1., -.62));
+    vec2 q = uv - vec2(aspect * .52, .40);
+    float across = dot(q, vec2(-axis.y, axis.x));
+    float band = exp(-across * across / .045);
+    float dust = sFbm(uv * 3.4 + vec2(4.1, 2.3));
+    float cloud = sFbm(uv * 1.7 + vec2(dust * .9, 1.3));
+    float lanes = 1. - .78 * smoothstep(.42, .68, dust) * band;
+    col += vec3(.018, .02, .026) * band * smoothstep(.32, .82, cloud) * lanes;
+
+    // Cold teal nebula to the right, a breath of violet to the left.
+    float neb = sFbm(uv * 1.15 + vec2(7.2, 3.1) + .55 * sFbm(uv * 2.4 + 1.7));
+    float right = smoothstep(.15, 1., uv.x / aspect);
+    float nebFine = sFbm(uv * 4.3 + vec2(neb * 1.6, 2.2));
+    float tealGas = smoothstep(.46, .9, neb) * (.6 + .7 * nebFine);
+    col += vec3(.014, .06, .08) * tealGas * right;
+    col += vec3(.05, .018, .03) * smoothstep(.6, .95, neb) * smoothstep(.5, .8, nebFine) * right;
+    float vio = sFbm(uv * 1.35 + vec2(11.4, 5.2));
+    col += vec3(.04, .014, .06) * smoothstep(.52, .9, vio) * (.6 + .6 * nebFine) * (1. - right);
+    // Dark dust filaments silhouetted against the gas.
+    if (neb > .4) {
+      col *= 1. - .55 * smoothstep(.58, .8, sFbm(uv * 6.5 + vec2(3.7, 9.1))) * smoothstep(.4, .8, neb);
+    }
+
+    // A distant barred spiral galaxy high on the right.
+    vec2 gq = (p - v * vec2(.83, .2)) / H;
+    gq = mat2(.86, -.5, .5, .86) * gq;
+    gq.y *= 2.6;
+    float gr = length(gq);
+    if (gr < .10) {
+      float garm = .5 + .5 * sin(atan(gq.y, gq.x) * 2. - log(gr + 1e-3) * 5.2);
+      float galaxy = exp(-gr / .012) * 1.4 + exp(-gr / .032) * (.25 + .75 * garm * garm) * smoothstep(.09, .02, gr);
+      col += vec3(.75, .78, 1.) * galaxy * .055 + vec3(1., .82, .6) * exp(-gr / .004) * .12;
+    }
+
+    // Stars, denser in the band and dimmed by its dust.
+    float dens = (.75 + 1.7 * band) * lanes;
+    vec3 starlight = starLayer(p, 4.5, .085 * dens, .40, .040, 1.);
+    starlight += starLayer(p, 9., .20 * dens, .52, .13, 7.);
+    starlight += starLayer(p, 23., .34, .64, .50, 13.);
+    starlight += starLayer(p, 61., .42, .80, 1.05, 19.);
+    starlight += heroStars(p, 170., 29.);
+    // The top-left wordmark keeps a darker sky.
+    vec2 lock = (p - vec2(110., 34.)) / vec2(230., 90.);
+    float quietSky = 1. - .7 * exp(-dot(lock, lock));
+    col = (col + starlight) * quietSky;
+
     float a = alt / H;
     col += atmCol * (exp(-a / .0075) * (.32 + 2.2 * near + .35 * nearWide) + exp(-a / .055) * (.035 + .42 * near + .08 * nearWide));
+
+    // Faint auroral curtains hanging over the planet's night side.
+    if (a < .12 && along < -.2 && along > -3.3) {
+      float curtain = .5 + .5 * sin(along * 38. + sFbm(vec2(along * 4., 1.)) * 6.);
+      float rays = smoothstep(.3, 1., sNoise(vec2(along * 160., a * 4.)));
+      float aurBand = exp(-pow((a - .022) / .016, 2.)) * smoothstep(-.25, -1.2, along) * smoothstep(-3.2, -1.6, along);
+      col += mix(vec3(.08, .9, .35), vec3(.2, .45, .9), smoothstep(.01, .05, a)) * aurBand * curtain * (.4 + .6 * rays) * .05;
+    }
   }
 
   // A small moon on the left, lit from the sunrise side.
@@ -179,16 +193,8 @@ vec3 spaceAt(vec2 p) {
     float maria = sFbm(md * 2.4 + 5.) * .6 + sFbm(md * 7. + 1.) * .4;
     vec3 rock = mix(vec3(.5, .47, .44), vec3(.82, .78, .72), smoothstep(.35, .7, maria));
     col = vec3(.0015, .002, .004) + rock * lam * vec3(1., .86, .7) * .42 + vec3(.01, .02, .04) * mn.z * .3;
-  }
-  col += vec3(.25, .3, .45) * exp(-max(ml - 1., 0.) * 9.) * step(1., ml) * .02;
-
-  // Faint auroral curtains hanging over the planet's night side.
-  if (alt > 0.) {
-    float a = alt / H;
-    float curtain = .5 + .5 * sin(along * 38. + sFbm(vec2(along * 4., 1.)) * 6.);
-    float rays = smoothstep(.3, 1., sNoise(vec2(along * 160., a * 4.)));
-    float band = exp(-pow((a - .022) / .016, 2.)) * smoothstep(-.25, -1.2, along) * smoothstep(-3.2, -1.6, along);
-    col += mix(vec3(.08, .9, .35), vec3(.2, .45, .9), smoothstep(.01, .05, a)) * band * curtain * (.4 + .6 * rays) * .05;
+  } else if (ml < 2.2) {
+    col += vec3(.25, .3, .45) * exp(-(ml - 1.) * 9.) * .02;
   }
 
   // Sun glare and a thin anamorphic streak along the horizon.
@@ -457,10 +463,12 @@ vec3 paperStageColor(vec2 p) {
   c *= 1. - .035 * (1. - panes) * sill * smoothstep(.2, -.3, q.x);
 
   // Dappled foliage shadow drifting in from the upper right.
-  vec2 lq = q * vec2(12., 14.) + vec2(1.7, .3);
-  float leaves = sFbm(lq + .8 * vec2(sNoise(lq * 2.3), sNoise(lq * 2.3 + 5.2)));
-  float dapple = smoothstep(.5, .6, leaves) * smoothstep(.1, .5, uv.x - .45) * smoothstep(.5, .05, uv.y);
-  c *= 1. - .04 * dapple;
+  if (uv.x > .55 && uv.y < .5) {
+    vec2 lq = q * vec2(12., 14.) + vec2(1.7, .3);
+    float leaves = sFbm(lq + .8 * vec2(sNoise(lq * 2.3), sNoise(lq * 2.3 + 5.2)));
+    float dapple = smoothstep(.5, .6, leaves) * smoothstep(.1, .5, uv.x - .45) * smoothstep(.5, .05, uv.y);
+    c *= 1. - .04 * dapple;
+  }
 
   // The seamless sweep: the wall bends into the floor with a soft cove.
   float horiz = mix(.77, .8, clamp((1.05 - aspect) / .55, 0., 1.));
@@ -541,45 +549,61 @@ void main() {
 // The layer is oversized by PAD on every side so it can drift with the pointer.
 export const SPACE_PAD = 28;
 
-export function createSpace(before, { software = false } = {}) {
+export function createSpace(before, { software = false, lowSpec = false } = {}) {
   const canvas = document.createElement('canvas');
   canvas.className = 'space';
   canvas.setAttribute('aria-hidden', 'true');
-  const gl = canvas.getContext('webgl', { alpha: false, antialias: false, depth: false, preserveDrawingBuffer: false, powerPreference: 'high-performance' });
+  // Preserve the static drawing buffer so transforms/compositor passes never clear it,
+  // and so field.js can sample it directly during glitches without re-evaluating SPACE.
+  const gl = canvas.getContext('webgl', { alpha: false, antialias: false, depth: false, preserveDrawingBuffer: true, powerPreference: 'high-performance' });
   if (!gl) return null;
-  const prog = program(gl, vert, frag);
-  if (!prog) return null;
-  before.before(canvas);
-  const buf = gl.createBuffer();
-  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
-  const loc = gl.getAttribLocation(prog, 'p');
-  const u = name => gl.getUniformLocation(prog, name);
 
-  let view = [1, 1], ratio = 1, dirty = true, mode = 0;
+  let prog = null, buf = null, loc = -1, locs = null;
+  function setup() {
+    prog = program(gl, vert, frag);
+    if (!prog) return false;
+    buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    loc = gl.getAttribLocation(prog, 'p');
+    const u = name => gl.getUniformLocation(prog, name);
+    locs = { res: u('res'), spaceView: u('spaceView'), scale: u('scale'), pad: u('pad'), stageMode: u('stageMode') };
+    return true;
+  }
+  if (!setup()) return null;
+  before.before(canvas);
+
+  let view = [1, 1], ratio = 1, dirty = true, mode = 0, paintId = 0;
   function paint() {
-    if (!mode || !dirty || view[0] < 2 || gl.isContextLost()) return;
+    if (!mode || !dirty || !prog || view[0] < 2 || gl.isContextLost()) return;
     dirty = false;
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.useProgram(prog);
     gl.bindBuffer(gl.ARRAY_BUFFER, buf);
     gl.enableVertexAttribArray(loc);
     gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-    gl.uniform2f(u('res'), canvas.width, canvas.height);
-    gl.uniform2f(u('spaceView'), view[0], view[1]);
-    gl.uniform1f(u('scale'), ratio);
-    gl.uniform1f(u('pad'), SPACE_PAD);
-    gl.uniform1f(u('stageMode'), mode);
+    gl.uniform2f(locs.res, canvas.width, canvas.height);
+    gl.uniform2f(locs.spaceView, view[0], view[1]);
+    gl.uniform1f(locs.scale, ratio);
+    gl.uniform1f(locs.pad, SPACE_PAD);
+    gl.uniform1f(locs.stageMode, mode);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+    paintId++;
   }
-  canvas.addEventListener('webglcontextrestored', () => { dirty = true; paint(); });
+  canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); prog = null; });
+  canvas.addEventListener('webglcontextrestored', () => {
+    if (setup()) { dirty = true; paint(); }
+  });
 
   return {
     canvas,
+    pad: SPACE_PAD,
     get view() { return view; },
+    get paintId() { return paintId; },
+    get ready() { return Boolean(prog) && !gl.isContextLost() && paintId > 0; },
     resize(w, h, pixelRatio) {
-      // Software rasterisers paint once at CSS resolution.
-      ratio = software ? 1 : Math.min(2, pixelRatio);
+      // Software and low-spec renderers paint static backdrops at moderate resolution.
+      ratio = software ? 1 : lowSpec ? Math.min(1.25, pixelRatio) : Math.min(2, pixelRatio);
       view = [w, h];
       const cw = Math.max(1, Math.round((w + SPACE_PAD * 2) * ratio));
       const ch = Math.max(1, Math.round((h + SPACE_PAD * 2) * ratio));

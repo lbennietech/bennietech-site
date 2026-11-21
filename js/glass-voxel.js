@@ -104,13 +104,32 @@ class Mesh {
     this.reserve(points.length);
     const base = this.cur.count;
     points.forEach((p, i) => this.vert(p, n, uvs ? uvs[i] : [p[0], p[1]], m, aos ? aos[i] : 1));
-    for (let i = 1; i < points.length - 1; i++) this.cur.idx.push(base, base + i, base + i + 1);
+    const p0 = points[0];
+    for (let i = 1; i < points.length - 1; i++) {
+      const p1 = points[i], p2 = points[i + 1];
+      const e1x = p1[0] - p0[0], e1y = p1[1] - p0[1], e1z = p1[2] - p0[2];
+      const e2x = p2[0] - p0[0], e2y = p2[1] - p0[1], e2z = p2[2] - p0[2];
+      const d = (e1y * e2z - e1z * e2y) * n[0] + (e1z * e2x - e1x * e2z) * n[1] + (e1x * e2y - e1y * e2x) * n[2];
+      if (d >= 0) this.cur.idx.push(base, base + i, base + i + 1);
+      else this.cur.idx.push(base, base + i + 1, base + i);
+    }
   }
   quadN(points, normals, m, aos = null, uvs = null) {
     this.reserve(4);
     const base = this.cur.count;
     points.forEach((p, i) => this.vert(p, normals[i], uvs ? uvs[i] : [p[0], p[1]], m, aos ? aos[i] : 1));
-    this.cur.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    const p0 = points[0];
+    for (const [ia, ib] of [[1, 2], [2, 3]]) {
+      const p1 = points[ia], p2 = points[ib];
+      const nx = normals[0][0] + normals[ia][0] + normals[ib][0];
+      const ny = normals[0][1] + normals[ia][1] + normals[ib][1];
+      const nz = normals[0][2] + normals[ia][2] + normals[ib][2];
+      const e1x = p1[0] - p0[0], e1y = p1[1] - p0[1], e1z = p1[2] - p0[2];
+      const e2x = p2[0] - p0[0], e2y = p2[1] - p0[1], e2z = p2[2] - p0[2];
+      const d = (e1y * e2z - e1z * e2y) * nx + (e1z * e2x - e1x * e2z) * ny + (e1x * e2y - e1y * e2x) * nz;
+      if (d >= 0) this.cur.idx.push(base, base + ia, base + ib);
+      else this.cur.idx.push(base, base + ib, base + ia);
+    }
   }
   upload(gl) {
     return this.chunks.filter(c => c.count).map(c => {
@@ -134,7 +153,7 @@ function prepOutline(points) {
     const q = P[P.length - 1];
     if (!q || Math.hypot(p[0] - q[0], p[1] - q[1]) > 1e-5) P.push([p[0], p[1]]);
   }
-  if (Math.hypot(P[0][0] - P.at(-1)[0], P[0][1] - P.at(-1)[1]) < 1e-5) P.pop();
+  if (Math.hypot(P[0][0] - P[P.length - 1][0], P[0][1] - P[P.length - 1][1]) < 1e-5) P.pop();
   const R = [];
   P.forEach((p, i) => {
     const q = P[(i + 1) % P.length];
@@ -461,12 +480,17 @@ void place(vec3 p, vec3 n, float part, float isMote, float seed, out vec3 wp, ou
     lp.y += cos(ph * 1.15) * .0075;
     lp.z += sin(ph * .75 + 1.4) * .0065 + wave * .018;
   }
-  bool upper = part < .5;
-  mat2 R = rot2(upper ? -halfMotion.z : -halfMotion.w);
-  vec2 piv = upper ? vec2(.50, .46) : vec2(.58, 1.22);
-  vec2 off = upper ? vec2(halfMotion.x, -spread) : vec2(halfMotion.y, spread);
-  wp = vec3(R * (lp.xy - piv) + piv + off, lp.z);
-  wn = vec3(R * n.xy, n.z);
+  if (part > 1.5) {
+    wp = lp;
+    wn = n;
+  } else {
+    bool upper = part < .5;
+    mat2 R = rot2(upper ? -halfMotion.z : -halfMotion.w);
+    vec2 piv = upper ? vec2(.50, .46) : vec2(.58, 1.22);
+    vec2 off = upper ? vec2(halfMotion.x, -spread) : vec2(halfMotion.y, spread);
+    wp = vec3(R * (lp.xy - piv) + piv + off, lp.z);
+    wn = vec3(R * n.xy, n.z);
+  }
   // The glossy floor reflection mirrors the world about the floor plane.
   if (mirror > 0.) { wp.y = 2. * mirror - wp.y; wn.y = -wn.y; }
 }
@@ -508,18 +532,18 @@ varying vec3 vObj, vView, vN;
 varying vec4 vUv, vExt;
 varying float vAo, vWave;
 
-vec3 shadeGGX(vec3 N, vec3 V, vec3 L, vec3 col, vec3 diff, vec3 F0, float a) {
+vec3 shadeGGX(vec3 N, vec3 V, vec3 L, vec3 col, vec3 diff, vec3 F0, float a2, float k, float visV) {
   float NdL = dot(N, L);
   if (NdL <= 0.) return vec3(0.);
   vec3 H = normalize(L + V);
-  float NdH = max(dot(N, H), 0.), NdV = max(dot(N, V), 1e-3), VdH = max(dot(V, H), 0.);
-  vec3 F = F0 + (1. - F0) * pow(1. - VdH, 5.);
-  float a2 = a * a;
+  float NdH = max(dot(N, H), 0.), VdH = max(dot(V, H), 0.);
+  float om = 1. - VdH;
+  float om2 = om * om;
+  vec3 F = F0 + (1. - F0) * (om2 * om2 * om);
   float dd = NdH * NdH * (a2 - 1.) + 1.;
-  float Dg = a2 / (3.14159 * dd * dd);
-  float k = a * .5;
-  float Vis = .25 / ((NdV * (1. - k) + k) * (NdL * (1. - k) + k));
-  return (diff * (1. - F) + Dg * Vis * F * 3.14159) * col * NdL;
+  float Dg = a2 / (dd * dd);
+  float Vis = .25 / (visV * (NdL * (1. - k) + k));
+  return (diff * (1. - F) + Dg * Vis * F) * col * NdL;
 }
 
 vec3 cyberEnv(vec3 r, float rough) {
@@ -538,6 +562,7 @@ vec3 toneACES(vec3 c) {
 }
 
 void main() {
+  if (mirror > 0. && vObj.y - mirror > 1.15) discard;
   float kind = floor(vUv.z + .5);
   float seed = vUv.w;
   float bounce = vExt.x;
@@ -646,19 +671,24 @@ void main() {
   }
 
   float a = max(.032, rough * rough);
+  float a2 = a * a, k = a * .5;
+  float ndvClamped = max(NdV, 1e-3);
+  float visV = ndvClamped * (1. - k) + k;
   vec3 diff = albedo * (1. - metal);
   vec3 F0 = mix(vec3(.055), albedo * .75 + .25, metal);
 
   // Sculpted high-contrast cybernetic studio rig (keeps shadows deep sapphire, highlights crisp!)
   float litK = kind < .5 ? .55 : 1.;
   float pinkK = kind < .5 ? .08 : 1.;
-  vec3 col = shadeGGX(N, V, keyV, vec3(1.25, 1.48, 2.05) * litK, diff, F0, a) * ao;
-  col += shadeGGX(N, V, pinkV, vec3(1.75, .20, 1.25) * pinkK, diff, F0, a) * mix(.32, 1., ao);
-  col += shadeGGX(N, V, rimV, vec3(.28, .72, 1.65), diff, F0, a) * mix(.32, 1., ao);
+  vec3 col = shadeGGX(N, V, keyV, vec3(1.25, 1.48, 2.05) * litK, diff, F0, a2, k, visV) * ao;
+  col += shadeGGX(N, V, pinkV, vec3(1.75, .20, 1.25) * pinkK, diff, F0, a2, k, visV) * mix(.32, 1., ao);
+  col += shadeGGX(N, V, rimV, vec3(.28, .72, 1.65), diff, F0, a2, k, visV) * mix(.32, 1., ao);
 
   // Studio environment reflections
   vec3 R = reflect(-V, N);
-  vec3 Fe = F0 + (max(vec3(1. - a), F0) - F0) * pow(1. - NdV, 5.);
+  float omV = 1. - NdV;
+  float omV2 = omV * omV;
+  vec3 Fe = F0 + (max(vec3(1. - a), F0) - F0) * (omV2 * omV2 * omV);
   col += cyberEnv(R, rough) * (kind < .5 ? vec3(.3, .55, 1.) : vec3(1.)) * Fe * mix(.28, 1., ao) * (kind < .5 ? .3 + .4 * isTop : .78);
 
   // Tactile click quantum surge wave rippling across the entire 3D lattice!
@@ -713,21 +743,11 @@ float gridLine(float c, float w) {
 }
 
 void main() {
-  float kind = floor(vUv.z + .5); // 0=front, 1=bevel, 2=wall, 3=divider
+  float kind = floor(vUv.z + .5); // 0=front, 1=bevel, 2=wall
   vec3 rawN = normalize(vN);
   vec3 V = normalize(vec3(0., 0., -${D_CAM.toFixed(1)}) - vView);
-  float facing = dot(rawN, V);
-  // Separate interior back-facing glass walls (passSide 0) from front glass walls (passSide 1)
-  // purely via surface normal so winding stays 100% consistent across all geometry.
-  if (kind < 2.5) {
-    if (passSide < .5 && facing >= 0.) discard;
-    if (passSide >= .5 && facing < 0.) discard;
-  } else if (passSide >= .5) {
-    discard;
-  }
-  vec3 N = facing < 0. ? -rawN : rawN;
+  vec3 N = passSide < .5 ? -rawN : rawN;
   float NdV = clamp(dot(N, V), 0., 1.);
-  float fresnel = pow(1. - NdV, 2.8);
 
   // Signature Image 2 crystal-clear optical glass with razor-sharp micro-dot holographic mesh!
   vec2 guv = vUv.xy;
@@ -763,7 +783,7 @@ void main() {
   // Keep front center 97% optically crystal-clear so every deep sapphire & white-pink voxel pops!
   float meshVis = kind < .5 ? (.09 + .82 * rimF + .5 * vWave) : (.34 + .66 * rimF + .4 * vWave);
   col += mix(vec3(.65, .86, 1.2), vec3(1.25, .42, 1.05), .50 + .35 * sin(guv.y * 9.)) * microMesh * meshVis * .2;
-  col += vec3(.98, .78, 1.15) * mullion * (kind > 2.5 ? .34 : .58);
+  col += vec3(.98, .78, 1.15) * mullion * .58;
   col += vec3(.75, .28, 1.15) * vStri * (.38 + .62 * rimF);
 
   // Polished 45-deg glass chamfers catch razor-sharp pearl-white, hot-pink & cyan specular fire!
@@ -784,8 +804,7 @@ void main() {
   // Ultra-clean premultiplied optical alpha: crystal transparent across front voxels, crisp on bevels/edges!
   float baseAlpha = kind < .5 ? (.012 + .24 * rimF + .08 * microMesh * meshVis + .18 * mullion)
     : (abs(kind - 1.) < .5 ? (.26 + .48 * rimF)
-    : (kind > 2.5 ? (.04 + .12 * rimF + .12 * mullion)
-    : (.06 + .32 * rimF + .14 * microMesh + .16 * mullion + .12 * vStri)));
+    : (.06 + .32 * rimF + .14 * microMesh + .16 * mullion + .12 * vStri));
   if (passSide < .5) {
     col *= .38;
     baseAlpha *= .32;
@@ -1044,9 +1063,13 @@ export function initVoxelGlass(gl, { software, outlines, filament }) {
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
       gl.disable(gl.CULL_FACE);
 
-      // Pass 0: the core mirrored in the polished floor beneath it.
+      const effQ = software ? 0 : (params.quality ?? 2);
+      // Pass 0: the core mirrored in the polished floor beneath it (back-face culled).
       // Weak GPUs (quality governor below 1) skip the mirrored pass.
-      if (ground && !software && (params.quality ?? 2) >= 1) {
+      if (ground && effQ >= 1) {
+        gl.enable(gl.CULL_FACE);
+        gl.frontFace(gl.CCW);
+        gl.cullFace(gl.BACK);
         gl.enable(gl.DEPTH_TEST);
         gl.depthFunc(gl.LEQUAL);
         gl.depthMask(true);
@@ -1063,10 +1086,12 @@ export function initVoxelGlass(gl, { software, outlines, filament }) {
         drawChunks(solidChunks, voxA);
         gl.uniform1f(uv('mirror'), 0);
         gl.clear(gl.DEPTH_BUFFER_BIT);
+        gl.disable(gl.CULL_FACE);
       }
 
       // Pass 1: Radiant sapphire + hot-pink reflection pool & shadow on the dark PCB floor
       if (ground) {
+        gl.disable(gl.CULL_FACE);
         gl.disable(gl.DEPTH_TEST);
         gl.depthMask(false);
         gl.enable(gl.BLEND);
@@ -1088,6 +1113,9 @@ export function initVoxelGlass(gl, { software, outlines, filament }) {
       }
 
       // Pass 2: Solid 3D Quantum Voxel Core + Floating Micro-Motes + Blue/Pink Hardware Cradle
+      gl.enable(gl.CULL_FACE);
+      gl.frontFace(gl.CW);
+      gl.cullFace(gl.BACK);
       gl.enable(gl.DEPTH_TEST);
       gl.depthFunc(gl.LEQUAL);
       gl.depthMask(true);
@@ -1100,6 +1128,7 @@ export function initVoxelGlass(gl, { software, outlines, filament }) {
       gl.uniform1f(uv('pulse'), pulse);
       gl.uniform1f(uv('glow'), Math.min(1.5, glow));
       drawChunks(solidChunks, voxA);
+      gl.disable(gl.CULL_FACE);
 
       // Pass 3: Photonic Diagonal Kerf Ribbons (lime-cyan BennieTech core + hot-pink harmonic stream)
       const writeRibbon = (rIdx, zOff, ampY, freq, speed, widthU, color, gain) => {
@@ -1161,8 +1190,9 @@ export function initVoxelGlass(gl, { software, outlines, filament }) {
       });
       gl.drawElements(gl.TRIANGLES, RIB_COUNT * (RIB_N - 1) * 6, gl.UNSIGNED_SHORT, 0);
 
-      // Pass 4: Outer Crystal Micro-Grid Glass Containment Enclosure (2-pass back then front!)
-      gl.disable(gl.CULL_FACE);
+      // Pass 4: Outer Crystal Micro-Grid Glass Containment Enclosure (hardware face-culled back then front!)
+      gl.enable(gl.CULL_FACE);
+      gl.frontFace(gl.CW);
       gl.useProgram(glassProg);
       setCommon(ug, common);
       gl.uniform3fv(ug('keyV'), key);
@@ -1171,15 +1201,21 @@ export function initVoxelGlass(gl, { software, outlines, filament }) {
       gl.uniform1f(ug('pixel'), 1 / (size * ratio));
       gl.uniform1f(ug('pulse'), pulse);
       gl.uniform1f(ug('glow'), Math.min(1.5, glow));
-      // 4A: Interior rear glass faces & internal divider panes
-      gl.uniform1f(ug('passSide'), 0);
-      drawChunks(glassChunks, glsA);
+      // 4A: Interior rear glass faces (skipped at quality 0 / software to cut glass overdraw in half)
+      if (effQ >= 1) {
+        gl.cullFace(gl.FRONT);
+        gl.uniform1f(ug('passSide'), 0);
+        drawChunks(glassChunks, glsA);
+      }
       // 4B: Front-facing crystal micro-grid panes, polished 45-deg chamfers & curved walls
+      gl.cullFace(gl.BACK);
       gl.uniform1f(ug('passSide'), 1);
       drawChunks(glassChunks, glsA);
+      gl.disable(gl.CULL_FACE);
+      gl.frontFace(gl.CCW);
 
       // Pass 5: Soft Optical Bloom Halos over blazing white-pink voxel hubs & kerf nodes!
-      if (!software || bloomSprites.length) {
+      if (bloomSprites.length) {
         gl.useProgram(spriteProg);
         setCommon(us, common);
         gl.uniform1f(us('pulse'), pulse);

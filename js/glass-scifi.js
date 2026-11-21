@@ -105,14 +105,33 @@ class Mesh {
     this.reserve(points.length);
     const base = this.cur.count;
     points.forEach((p, i) => this.vert(p, n, uvs ? uvs[i] : uvOf(p, n), m, aos ? aos[i] : 1));
-    for (let i = 1; i < points.length - 1; i++) this.cur.idx.push(base, base + i, base + i + 1);
+    const p0 = points[0];
+    for (let i = 1; i < points.length - 1; i++) {
+      const p1 = points[i], p2 = points[i + 1];
+      const e1x = p1[0] - p0[0], e1y = p1[1] - p0[1], e1z = p1[2] - p0[2];
+      const e2x = p2[0] - p0[0], e2y = p2[1] - p0[1], e2z = p2[2] - p0[2];
+      const d = (e1y * e2z - e1z * e2y) * n[0] + (e1z * e2x - e1x * e2z) * n[1] + (e1x * e2y - e1y * e2x) * n[2];
+      if (d >= 0) this.cur.idx.push(base, base + i, base + i + 1);
+      else this.cur.idx.push(base, base + i + 1, base + i);
+    }
   }
   // A quad with its own normal per corner.
   quadN(points, normals, m, aos = null, uvs = null) {
     this.reserve(4);
     const base = this.cur.count;
     points.forEach((p, i) => this.vert(p, normals[i], uvs ? uvs[i] : uvOf(p, normals[i]), m, aos ? aos[i] : 1));
-    this.cur.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    const p0 = points[0];
+    for (const [ia, ib] of [[1, 2], [2, 3]]) {
+      const p1 = points[ia], p2 = points[ib];
+      const nx = normals[0][0] + normals[ia][0] + normals[ib][0];
+      const ny = normals[0][1] + normals[ia][1] + normals[ib][1];
+      const nz = normals[0][2] + normals[ia][2] + normals[ib][2];
+      const e1x = p1[0] - p0[0], e1y = p1[1] - p0[1], e1z = p1[2] - p0[2];
+      const e2x = p2[0] - p0[0], e2y = p2[1] - p0[1], e2z = p2[2] - p0[2];
+      const d = (e1y * e2z - e1z * e2y) * nx + (e1z * e2x - e1x * e2z) * ny + (e1x * e2y - e1y * e2x) * nz;
+      if (d >= 0) this.cur.idx.push(base, base + ia, base + ib);
+      else this.cur.idx.push(base, base + ib, base + ia);
+    }
   }
   get vertexCount() {
     return this.chunks.reduce((n, c) => n + c.count, 0);
@@ -261,7 +280,7 @@ function prepOutline(points) {
     const q = P[P.length - 1];
     if (!q || Math.hypot(p[0] - q[0], p[1] - q[1]) > 1e-5) P.push([p[0], p[1]]);
   }
-  if (Math.hypot(P[0][0] - P.at(-1)[0], P[0][1] - P.at(-1)[1]) < 1e-5) P.pop();
+  if (Math.hypot(P[0][0] - P[P.length - 1][0], P[0][1] - P[P.length - 1][1]) < 1e-5) P.pop();
   const R = [];
   P.forEach((p, i) => {
     const q = P[(i + 1) % P.length];
@@ -675,8 +694,8 @@ function wallRuns(edges, verts) {
       return [m[0] / l, m[1] / l];
     });
     const s = [0];
-    r.edges.forEach(e => s.push(s.at(-1) + e.l));
-    const L = s.at(-1);
+    r.edges.forEach(e => s.push(s[s.length - 1] + e.l));
+    const L = s[s.length - 1];
     const at = sv => {
       sv = clamp(sv, 0, L);
       let k = 0;
@@ -858,7 +877,7 @@ function commandTower(mesh, lights, run, part, rng) {
 function greebleKerf(mesh, lights, edges, part, rng) {
   const cut = edges.filter(e => e.cut);
   if (!cut.length) return;
-  const a = cut[0].a, b = cut.at(-1).b;
+  const a = cut[0].a, b = cut[cut.length - 1].b;
   const d = norm([b[0] - a[0], b[1] - a[1], 0]);
   const n = norm([cut[0].n[0], cut[0].n[1], 0]);
   const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
@@ -1104,7 +1123,7 @@ function createFleet(models) {
   }
 
   function plan(s) {
-    const from = s.plan.length ? s.plan.at(-1).p : s.pos;
+    const from = s.plan.length ? s.plan[s.plan.length - 1].p : s.pos;
     const r = rng();
     if (s.cls.kerf && kerfBusy < 0 && r < .34 && s.lead < 0) {
       // Thread the reactor trench between the two halves.
@@ -1150,7 +1169,7 @@ function createFleet(models) {
         const off = mad(mad([0, 0, 0], u, Math.cos(a0)), v, Math.sin(a0));
         const p = [CX + off[0] * FLIGHT[0] * rad, CY + off[1] * FLIGHT[1] * rad, off[2] * FLIGHT[2] * rad];
         for (let k = 0; k < 6 && sdB(...p) < .3; k++) p[2] += p[2] >= 0 ? .12 : -.12;
-        const prev = s.plan.length ? s.plan.at(-1).p : from;
+        const prev = s.plan.length ? s.plan[s.plan.length - 1].p : from;
         if (!clearPath(prev, p, s.cls.kerf ? .1 : .2)) {
           const via = detourFor(prev, p);
           if (via) s.plan.push({ p: via });
@@ -1555,18 +1574,18 @@ vec3 envView(vec3 r, float rough) {
   return c;
 }
 
-vec3 shade(vec3 N, vec3 V, vec3 L, vec3 col, vec3 diff, vec3 F0, float a) {
+vec3 shade(vec3 N, vec3 V, float NdV, vec3 L, vec3 col, vec3 diff, vec3 F0, float a2, float k, float visV) {
   float NdL = dot(N, L);
   if (NdL <= 0.) return vec3(0.);
   vec3 H = normalize(L + V);
-  float NdH = max(dot(N, H), 0.), NdV = max(dot(N, V), 1e-3), VdH = max(dot(V, H), 0.);
-  vec3 F = F0 + (1. - F0) * pow(1. - VdH, 5.);
-  float a2 = a * a;
+  float NdH = max(dot(N, H), 0.), VdH = max(dot(V, H), 0.);
+  float om = 1. - VdH;
+  float om2 = om * om;
+  vec3 F = F0 + (1. - F0) * (om2 * om2 * om);
   float dd = NdH * NdH * (a2 - 1.) + 1.;
-  float Dg = a2 / (3.14159 * dd * dd);
-  float k = a * .5;
-  float Vis = .25 / ((NdV * (1. - k) + k) * (NdL * (1. - k) + k));
-  return (diff * (1. - F) + Dg * Vis * F * 3.14159) * col * NdL;
+  float Dg = a2 / (dd * dd);
+  float Vis = .25 / (visV * (NdL * (1. - k) + k));
+  return (diff * (1. - F) + Dg * Vis * F) * col * NdL;
 }
 
 vec3 toView(vec3 v) { return vec3(dot(row1, v), dot(row2, v), dot(row3, v)); }
@@ -1659,7 +1678,9 @@ void main() {
           float port = smoothstep(.3, .2, max(abs(wf.x), abs(wf.y) * 1.5));
           cavity *= 1. - .3 * port;
           vec3 wcol = hash12(wc + 7.7) < .82 ? vec3(1., .62, .3) : vec3(.62, .85, 1.);
-          emit += wcol * port * lit * on * 1.6 * (.85 + .15 * sin(time * 1.7 + hash12(wc) * 30.));
+          float portTh = .15 + .62 * hash12(vec2(id, 4.1));
+          float portOn = smoothstep(portTh, portTh + .05, power);
+          emit += wcol * port * lit * portOn * .95 * (.85 + .15 * sin(time * 1.7 + hash12(wc) * 30.));
         } else if (pick > .965) {
           // Faded stencil stripe.
           float st = step(.5, fract((local.x + local.y) / .009));
@@ -1668,8 +1689,9 @@ void main() {
       }
     }
     // Grime, streaks and worn edges.
-    float g = fbm(uv * 15. + seed * 7.);
-    float streak = vnoise(vec2(uv.x * 150., uv.y * 7.));
+    float g = quality > .5 ? fbm(uv * 15. + seed * 7.)
+      : (.62 * vnoise(uv * 15. + seed * 7.) + .38 * vnoise(uv * 32. + seed * 7. + 4.1));
+    float streak = quality > .5 ? vnoise(vec2(uv.x * 150., uv.y * 7.)) : .5;
     albedo *= (.72 + .38 * g) * (.9 + .14 * streak);
     rough = clamp(rough + .2 * (1. - g) - .08 * streak, .22, .95);
   } else if (kind == 1.) {
@@ -1721,38 +1743,47 @@ void main() {
 
   vec3 Nd = normalize(N + T * dn.x + Bt * dn.y);
   float a = max(.04, rough * rough);
+  float a2 = a * a, k = a * .5;
+  float NdV = max(dot(Nd, V), 1e-3);
+  float visV = NdV * (1. - k) + k;
   vec3 diff = albedo * (1. - metal);
   vec3 F0 = mix(vec3(.045), albedo * 2.4 + .03, metal);
-  float sh = shadowAt(vShadow, .0016 + .0035 * (1. - clamp(dot(N, keyV), 0., 1.)));
+  float keyFacing = dot(Nd, keyV);
+  float sh = keyFacing > 0. ? shadowAt(vShadow, .0016 + .0035 * (1. - clamp(dot(N, keyV), 0., 1.))) : 0.;
   float direct = mix(1., cavity, .72);
 
   // Cinematic falloff: the key pools on the upper left of the station and
   // the lower right sinks toward the warm bounce of the sunrise below.
   float across = (vObj.x - .3) * .75 + (vObj.y - .55) * .62;
   float pool = mix(1.3, .5, smoothstep(-.55, .85, across));
-  vec3 col = shade(Nd, V, keyV, keyCol * sh * pool, diff, F0, a) * direct;
+  vec3 col = keyFacing > 0. ? shade(Nd, V, NdV, keyV, keyCol * sh * pool, diff, F0, a2, k, visV) * direct : vec3(0.);
   col += diff * vec3(.42, .2, .07) * smoothstep(.1, 1.1, across) * max(Nd.y * .6 + .5, 0.) * cavity * .9;
-  col += shade(Nd, V, sunV, sunCol, diff, F0, a) * direct;
-  col += shade(Nd, V, kickV, kickCol, diff, F0, a) * direct;
+  col += shade(Nd, V, NdV, sunV, sunCol, diff, F0, a2, k, visV) * direct;
+  col += shade(Nd, V, NdV, kickV, kickCol, diff, F0, a2, k, visV) * direct;
   // A soft fill from beside the camera keeps the plating legible face-on.
-  col += shade(Nd, V, normalize(vec3(-.22, -.3, -1.)), vec3(.11, .13, .17), diff, F0, max(a, .35)) * cavity;
+  float fillA = max(a, .35);
+  float fillK = fillA * .5;
+  col += shade(Nd, V, NdV, vec3(-.20628, -.28130, -.93766), vec3(.11, .13, .17), diff, F0, fillA * fillA, fillK, NdV * (1. - fillK) + fillK) * cavity;
   // Hemispheric fill: cold space above, the planet's glow below.
   col += diff * mix(vec3(.006, .008, .013), vec3(.016, .026, .042), Nd.y * .5 + .5) * cavity;
   vec3 R = reflect(-V, Nd);
-  float NdV = max(dot(Nd, V), 0.);
-  vec3 Fe = F0 + (max(vec3(1. - a), F0) - F0) * pow(1. - NdV, 5.);
+  float omV = 1. - NdV;
+  float omV2 = omV * omV;
+  vec3 Fe = F0 + (max(vec3(1. - a), F0) - F0) * (omV2 * omV2 * omV);
   col += envView(R, rough) * Fe * cavity;
   // The reactor beam in the cut is a line light.
   vec3 ab = kerfB - kerfA;
   float t = clamp(dot(vObj - kerfA, ab) / dot(ab, ab), 0., 1.);
   vec3 toBeam = kerfA + ab * t - vObj;
-  float bd = length(toBeam);
-  vec3 Lb = toView(toBeam / max(bd, 1e-4));
-  float fall = (1. / (1. + bd * bd / .0045)) * smoothstep(.0, .05, t) * smoothstep(1., .95, t);
-  col += shade(Nd, V, Lb, LIME * 2.4 * fall * power * glow, diff, F0, a);
+  float bd2 = dot(toBeam, toBeam);
+  float fall = (1. / (1. + bd2 / .0045)) * smoothstep(.0, .05, t) * smoothstep(1., .95, t);
+  if (fall > .004) {
+    vec3 Lb = toView(toBeam * inversesqrt(max(bd2, 1e-8)));
+    col += shade(Nd, V, NdV, Lb, LIME * 2.4 * fall * power * glow, diff, F0, a2, k, visV);
+  }
   // The sunrise behind the planet catches every edge that turns toward it.
   float facing = max(dot(normalize(Nd.xy + vec2(1e-4)), normalize(sunV.xy)), 0.);
-  float rim = pow(1. - NdV, 3.5) * facing * smoothstep(-.35, .25, Nd.z);
+  float rim = pow(omV, 3.5) * facing * smoothstep(-.35, .25, Nd.z);
   col += sunCol * .42 * rim * (1. - .3 * metal) * mix(.5, 1., cavity);
   // Grade the reflected light too, so the falloff reads on polished metal.
   col *= mix(1.22, .58, smoothstep(-.55, .85, across));
@@ -1876,7 +1907,7 @@ function quadIndices(count) {
 
 const FIRST_SEED = 0x5EED1;
 
-export function initStarshipGlass(gl, { software, outlines, filament }) {
+export function initStarshipGlass(gl, { software, lowSpec = false, outlines, filament }) {
   if (!outlines) return null;
   const litProg = program(gl, litVert, litFrag);
   const shadowProg = program(gl, shadowVert, shadowFrag);
@@ -1892,10 +1923,11 @@ export function initStarshipGlass(gl, { software, outlines, filament }) {
   const [[fx0, fy0], [fx1, fy1]] = filament || [[.09, KERF_MID - SLOPE * .09], [.96, KERF_MID - SLOPE * .96]];
   const beamA = [fx0, fy0, 0], beamB = [fx1, fy1, 0];
   const beamSprites = [];
-  for (let t = 0; t <= 1.0001; t += 1 / 18) {
+  for (let k = 0; k <= 18; k++) {
+    const t = k / 18;
     const p = [fx0 + (fx1 - fx0) * t, fy0 + (fy1 - fy0) * t, 0];
     beamSprites.push({ p, part: 2, color: [.5, 1, .18], size: .07, intensity: .2, rate: 0, phase: 0, duty: 1, threshold: .1, bias: .004 });
-    if (t * 18 % 2 < .5) beamSprites.push({ p, part: 2, color: [.45, 1, .2], size: .17, intensity: .1, rate: 0, phase: 0, duty: 1, threshold: .2, bias: .06 });
+    if (k % 2 === 0) beamSprites.push({ p, part: 2, color: [.45, 1, .2], size: .17, intensity: .1, rate: 0, phase: 0, duty: 1, threshold: .2, bias: .06 });
   }
   const staticSprites = [...hullLights, ...beamSprites];
 
@@ -1933,7 +1965,7 @@ export function initStarshipGlass(gl, { software, outlines, filament }) {
   gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, trailIdx, gl.STATIC_DRAW);
 
   // Shadow map from the key light, depth packed into RGBA8.
-  const SHADOW = software ? 0 : 1024;
+  const SHADOW = software ? 0 : lowSpec ? 512 : 1024;
   let shadowTex = null, shadowFbo = null;
   if (SHADOW && shadowProg) {
     shadowTex = gl.createTexture();
@@ -1950,8 +1982,15 @@ export function initStarshipGlass(gl, { software, outlines, filament }) {
     gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFbo);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, shadowTex, 0);
     gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depth);
-    if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) shadowFbo = null;
+    if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+      gl.deleteFramebuffer(shadowFbo);
+      gl.deleteRenderbuffer(depth);
+      gl.deleteTexture(shadowTex);
+      shadowFbo = null;
+      shadowTex = null;
+    }
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.bindRenderbuffer(gl.RENDERBUFFER, null);
   }
   // Without a shadow map the sampler still needs something bound.
   if (!shadowFbo) {
@@ -2093,8 +2132,11 @@ export function initStarshipGlass(gl, { software, outlines, filament }) {
       const common = { rows, box, centre, size, lift, spread, halfMotion };
       const visible = fleet.ships.filter(s => s.arrive <= 0);
 
-      // Pass 1: shadow depth from the key light.
+      // Pass 1: shadow depth from the key light (back-face culled via consistent outward CW winding).
       const useShadow = Boolean(shadowFbo) && effQ >= 1;
+      gl.enable(gl.CULL_FACE);
+      gl.frontFace(gl.CW);
+      gl.cullFace(gl.BACK);
       if (useShadow) {
         gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFbo);
         gl.viewport(0, 0, SHADOW, SHADOW);
@@ -2122,7 +2164,9 @@ export function initStarshipGlass(gl, { software, outlines, filament }) {
       }
 
       // Pass 2: the lit hull and fleet.
-      gl.disable(gl.CULL_FACE);
+      gl.enable(gl.CULL_FACE);
+      gl.frontFace(gl.CW);
+      gl.cullFace(gl.BACK);
       gl.enable(gl.DEPTH_TEST);
       gl.depthFunc(gl.LEQUAL);
       gl.depthMask(true);
@@ -2220,7 +2264,12 @@ export function initStarshipGlass(gl, { software, outlines, filament }) {
           if (lead < .32 && lead > 0) {
             const k = 1 - lead / .32;
             const reach = 1.6 * (1 - k) * (1 - k) + .05;
-            for (let j = 0; j < 10; j++) pts[j] = mad(s.pos, s.fwd, -reach * j / 9);
+            for (let j = 0; j < 10; j++) {
+              const stepR = -reach * j / 9;
+              pts[j][0] = s.pos[0] + s.fwd[0] * stepR;
+              pts[j][1] = s.pos[1] + s.fwd[1] * stepR;
+              pts[j][2] = s.pos[2] + s.fwd[2] * stepR;
+            }
             ribbon(pts, 10, .006 + .014 * k, [.62, .84, 1], t => (1 - t) * (.8 + 1.6 * k), true);
           }
           continue;
@@ -2228,11 +2277,12 @@ export function initStarshipGlass(gl, { software, outlines, filament }) {
         model.engines.forEach((en, k) => {
           const tr = s.trail[k];
           const head = fleet.enginePoint(s, en.p);
-          pts[0] = head;
+          pts[0][0] = head[0]; pts[0][1] = head[1]; pts[0][2] = head[2];
           let count = 1;
           for (let j = 0; j < tr.count && count < TRAIL_N; j++) {
             const idx = ((tr.head - j) % TRAIL_N + TRAIL_N) % TRAIL_N;
-            pts[count++] = [tr.pts[idx * 3], tr.pts[idx * 3 + 1], tr.pts[idx * 3 + 2]];
+            const dst = pts[count++];
+            dst[0] = tr.pts[idx * 3]; dst[1] = tr.pts[idx * 3 + 1]; dst[2] = tr.pts[idx * 3 + 2];
           }
           const hot = .55 + s.boost * .9;
           ribbon(pts, count, en.r * L * .95, s.cls.col, t => Math.pow(1 - t, 1.5) * hot);
@@ -2253,7 +2303,9 @@ export function initStarshipGlass(gl, { software, outlines, filament }) {
       const beamN = 26;
       for (let j = 0; j < beamN; j++) {
         const t = j / (beamN - 1);
-        pts[j] = [beamA[0] + (beamB[0] - beamA[0]) * t, beamA[1] + (beamB[1] - beamA[1]) * t, 0];
+        pts[j][0] = beamA[0] + (beamB[0] - beamA[0]) * t;
+        pts[j][1] = beamA[1] + (beamB[1] - beamA[1]) * t;
+        pts[j][2] = 0;
       }
       const beamGlow = power * Math.min(1.6, glow);
       ribbon(pts, beamN, .009, [.55, 1, .2], t => {
@@ -2264,6 +2316,7 @@ export function initStarshipGlass(gl, { software, outlines, filament }) {
         return (1.1 + 1.8 * pulseK) * ends * beamGlow * (1 + .6 * pulse);
       }, true);
 
+      gl.disable(gl.CULL_FACE);
       gl.depthMask(false);
       gl.enable(gl.BLEND);
       gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);

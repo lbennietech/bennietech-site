@@ -96,20 +96,43 @@ class Mesh {
     for (let i = 0; i < 3; i++) {
       this.vert(pts[i], n, uvs ? uvs[i] : uvOf(pts[i], n), m, aos ? aos[i] : 1);
     }
-    this.cur.idx.push(base, base + 1, base + 2);
+    const e1x = b[0] - a[0], e1y = b[1] - a[1], e1z = b[2] - a[2];
+    const e2x = c[0] - a[0], e2y = c[1] - a[1], e2z = c[2] - a[2];
+    const d = (e1y * e2z - e1z * e2y) * n[0] + (e1z * e2x - e1x * e2z) * n[1] + (e1x * e2y - e1y * e2x) * n[2];
+    if (d >= 0) this.cur.idx.push(base, base + 1, base + 2);
+    else this.cur.idx.push(base, base + 2, base + 1);
   }
   poly(points, n, m, aos = null, uvs = null) {
     if (points.length < 3) return;
     this.reserve(points.length);
     const base = this.cur.count;
     points.forEach((p, i) => this.vert(p, n, uvs ? uvs[i] : uvOf(p, n), m, aos ? aos[i] : 1));
-    for (let i = 1; i < points.length - 1; i++) this.cur.idx.push(base, base + i, base + i + 1);
+    const p0 = points[0];
+    for (let i = 1; i < points.length - 1; i++) {
+      const p1 = points[i], p2 = points[i + 1];
+      const e1x = p1[0] - p0[0], e1y = p1[1] - p0[1], e1z = p1[2] - p0[2];
+      const e2x = p2[0] - p0[0], e2y = p2[1] - p0[1], e2z = p2[2] - p0[2];
+      const d = (e1y * e2z - e1z * e2y) * n[0] + (e1z * e2x - e1x * e2z) * n[1] + (e1x * e2y - e1y * e2x) * n[2];
+      if (d >= 0) this.cur.idx.push(base, base + i, base + i + 1);
+      else this.cur.idx.push(base, base + i + 1, base + i);
+    }
   }
   quadN(points, normals, m, aos = null, uvs = null) {
     this.reserve(4);
     const base = this.cur.count;
     points.forEach((p, i) => this.vert(p, normals[i], uvs ? uvs[i] : uvOf(p, normals[i]), m, aos ? aos[i] : 1));
-    this.cur.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    const p0 = points[0];
+    for (const [ia, ib] of [[1, 2], [2, 3]]) {
+      const p1 = points[ia], p2 = points[ib];
+      const nx = normals[0][0] + normals[ia][0] + normals[ib][0];
+      const ny = normals[0][1] + normals[ia][1] + normals[ib][1];
+      const nz = normals[0][2] + normals[ia][2] + normals[ib][2];
+      const e1x = p1[0] - p0[0], e1y = p1[1] - p0[1], e1z = p1[2] - p0[2];
+      const e2x = p2[0] - p0[0], e2y = p2[1] - p0[1], e2z = p2[2] - p0[2];
+      const d = (e1y * e2z - e1z * e2y) * nx + (e1z * e2x - e1x * e2z) * ny + (e1x * e2y - e1y * e2x) * nz;
+      if (d >= 0) this.cur.idx.push(base, base + ia, base + ib);
+      else this.cur.idx.push(base, base + ib, base + ia);
+    }
   }
   upload(gl) {
     return this.chunks.filter(c => c.count).map(c => {
@@ -159,7 +182,7 @@ function cleanPoly(raw, minStep = .012) {
     const q = dedup[dedup.length - 1];
     if (!q || Math.hypot(p[0] - q[0], p[1] - q[1]) > 1e-5) dedup.push([p[0], p[1]]);
   }
-  if (dedup.length > 1 && Math.hypot(dedup[0][0] - dedup.at(-1)[0], dedup[0][1] - dedup.at(-1)[1]) < 1e-5) dedup.pop();
+  if (dedup.length > 1 && Math.hypot(dedup[0][0] - dedup[dedup.length - 1][0], dedup[0][1] - dedup[dedup.length - 1][1]) < 1e-5) dedup.pop();
   if (dedup.length < 3) return [];
   // Keep polygon clean and gently decimated along tiny arc segments for fast exact clipping.
   const out = [];
@@ -204,7 +227,7 @@ function clipHalfPlane(poly, nx, ny, c) {
     const q = res[res.length - 1];
     if (!q || Math.hypot(p[0] - q[0], p[1] - q[1]) > 1e-5) res.push(p);
   }
-  if (res.length > 1 && Math.hypot(res[0][0] - res.at(-1)[0], res[0][1] - res.at(-1)[1]) < 1e-5) res.pop();
+  if (res.length > 1 && Math.hypot(res[0][0] - res[res.length - 1][0], res[0][1] - res[res.length - 1][1]) < 1e-5) res.pop();
   return res.length >= 3 ? res : [];
 }
 
@@ -484,43 +507,6 @@ function addConcentricLouvers(mesh, chamberPoly, part, opts = {}) {
     const zCap = Math.max(zFloor + .018, zStart - maxFins * zDrop);
     const capM = { kind: M.CORE, part, seed: .91 + seedBase, depthT: 1, phase: 1, bounce: .45, extra: maxFins };
     mesh.poly(lastValid.map(p => [p[0], p[1], zCap]), [0, 0, 1], capM, lastValid.map(() => .28));
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Signature Image-1 Prismatic Accordion V-Pinch Louvers!
-// Builds crisp, razor-thin, deeply shadowed pleated emerald-to-aqua origami
-// louver steps recessed cleanly inside the cantilevered cutout notch!
-// ---------------------------------------------------------------------------
-function addAccordionPinch(mesh, part, apex, cornerA, cornerB, zFront, zDeep, count = 16) {
-  for (let i = 0; i < count; i++) {
-    const t = i / Math.max(1, count - 1);
-    const z0 = zFront - t * (zFront - zDeep);
-    const zStep = (zFront - zDeep) / Math.max(1, count - 1);
-    const bladeThick = zStep * .46;
-    // Recessed stepped pleats fanning from outer opening into the deep pinched vertex!
-    const pull = t * .76;
-    const pA = [cornerA[0] + (apex[0] - cornerA[0]) * pull, cornerA[1] + (apex[1] - cornerA[1]) * pull];
-    const pB = [cornerB[0] + (apex[0] - cornerB[0]) * pull, cornerB[1] + (apex[1] - cornerB[1]) * pull];
-    const pA2 = [cornerA[0] + (apex[0] - cornerA[0]) * Math.min(.94, pull + .065), cornerA[1] + (apex[1] - cornerA[1]) * Math.min(.94, pull + .065)];
-    const pB2 = [cornerB[0] + (apex[0] - cornerB[0]) * Math.min(.94, pull + .065), cornerB[1] + (apex[1] - cornerB[1]) * Math.min(.94, pull + .065)];
-    const mCrest = { kind: M.PINCH, part, seed: .2 + t * .6, depthT: t, phase: t, bounce: 1, extra: 1 };
-    const mRiser = { kind: M.PINCH, part, seed: .2 + t * .6, depthT: Math.min(1, t + .28), phase: t, bounce: .85, extra: 0 };
-    const aoTop = 1 - t * .38;
-    const aoDeep = Math.max(.12, .36 - t * .22);
-
-    // Narrow pleated strip along the leading fan contour (leaving deep dark shadow slots between blades!)
-    const A = [pA[0], pA[1], z0], B = [pB[0], pB[1], z0];
-    const C = [pB2[0], pB2[1], z0 - bladeThick * .6], D = [pA2[0], pA2[1], z0 - bladeThick * .6];
-    const nrm = norm3(cross3([B[0] - A[0], B[1] - A[1], B[2] - A[2]], [D[0] - A[0], D[1] - A[1], D[2] - A[2]]));
-    const fn = nrm[2] < 0 ? [-nrm[0], -nrm[1], -nrm[2]] : nrm;
-    if (nrm[2] < 0) mesh.poly([A, D, C, B], fn, mCrest, [aoTop, aoTop * .72, aoTop * .72, aoTop]);
-    else mesh.poly([A, B, C, D], fn, mCrest, [aoTop, aoTop, aoTop * .72, aoTop * .72]);
-
-    // Deep dark emerald riser edge plunging back behind each pleat!
-    const eN = norm3([pB[1] - pA[1], -(pB[0] - pA[0]), .18]);
-    mesh.poly([[pA[0], pA[1], z0 - bladeThick * 1.4], [pB[0], pB[1], z0 - bladeThick * 1.4], [pB[0], pB[1], z0], [pA[0], pA[1], z0]],
-      eN, mRiser, [aoDeep, aoDeep, aoTop * .92, aoTop * .92]);
   }
 }
 
@@ -927,11 +913,13 @@ void terrazzo(vec2 p, out vec3 col, out float rough, out vec2 dn) {
     vec3 chip = pick < .28 ? vec3(.05, .52, .34) : pick < .55 ? vec3(.40, .44, .9) : pick < .75 ? vec3(.15, .15, .22) : vec3(.62, .44, .86);
     col = mix(col, chip, m * .92);
   }
-  m = chipLayer(p + 9.7, 58., .55, .3, dir, pick);
-  col = mix(col, pick < .5 ? vec3(.38, .4, .62) : vec3(.62, .6, .7), m * .55);
-  // Fine pores catch grazing light.
-  float pore = vnoise(p * 220.);
-  dn += vec2(vnoise(p * 180. + vec2(1., 0.)) - pore, vnoise(p * 180. + vec2(0., 1.)) - pore) * .08;
+  if (mirror <= 0. && quality > .5) {
+    m = chipLayer(p + 9.7, 58., .55, .3, dir, pick);
+    col = mix(col, pick < .5 ? vec3(.38, .4, .62) : vec3(.62, .6, .7), m * .55);
+    // Fine pores catch grazing light.
+    float pore = vnoise(p * 180.);
+    dn += vec2(vnoise(p * 180. + vec2(1., 0.)) - pore, vnoise(p * 180. + vec2(0., 1.)) - pore) * .08;
+  }
 }
 
 float unpackDepth(vec4 c) { return dot(c, vec4(1., 1. / 255., 1. / 65025., 1. / 16581375.)); }
@@ -945,18 +933,18 @@ float shadowAt(vec3 s, float bias) {
   return sum / 9.;
 }
 
-vec3 shadeGGX(vec3 N, vec3 V, vec3 L, vec3 col, vec3 diff, vec3 F0, float a) {
+vec3 shadeGGX(vec3 N, vec3 V, vec3 L, vec3 col, vec3 diff, vec3 F0, float a2, float k, float visV) {
   float NdL = dot(N, L);
   if (NdL <= 0.) return vec3(0.);
   vec3 H = normalize(L + V);
-  float NdH = max(dot(N, H), 0.), NdV = max(dot(N, V), 1e-3), VdH = max(dot(V, H), 0.);
-  vec3 F = F0 + (1. - F0) * pow(1. - VdH, 5.);
-  float a2 = a * a;
+  float NdH = max(dot(N, H), 0.), VdH = max(dot(V, H), 0.);
+  float om = 1. - VdH;
+  float om2 = om * om;
+  vec3 F = F0 + (1. - F0) * (om2 * om2 * om);
   float dd = NdH * NdH * (a2 - 1.) + 1.;
-  float Dg = a2 / (3.14159 * dd * dd);
-  float k = a * .5;
-  float Vis = .25 / ((NdV * (1. - k) + k) * (NdL * (1. - k) + k));
-  return (diff * (1. - F) + Dg * Vis * F * 3.14159) * col * NdL;
+  float Dg = a2 / (dd * dd);
+  float Vis = .25 / (visV * (NdL * (1. - k) + k));
+  return (diff * (1. - F) + Dg * Vis * F) * col * NdL;
 }
 
 // Photographic architectural gallery studio environment map (Image 1 lighting mood!).
@@ -985,6 +973,7 @@ vec3 toneACES(vec3 c) {
 }
 
 void main() {
+  if (mirror > 0. && vObj.y - mirror > 1.05) discard;
   float kind = floor(vUv.z + .5);
   float seed = vUv.w;
   float depthT = vExt.x;
@@ -998,8 +987,6 @@ void main() {
   float rough = .65, metal = .02, cavity = vAo;
   vec2 dn = vec2(0.);
   vec3 emit = vec3(0.);
-  // Tri-planar object-space coordinate so terrazzo speckles wrap cleanly across chamfers!
-  vec2 objUv = abs(vObj.z) > .001 && abs(N.z) > .55 ? vObj.xy : vUv.xy;
 
   if (kind < .5) {
     // 0: Speckled White Architectural Terrazzo Monolith
@@ -1072,50 +1059,62 @@ void main() {
 
   vec3 Nd = normalize(N + T * dn.x + Bt * dn.y);
   float a = max(.045, rough * rough);
+  float a2 = a * a, k = a * .5;
+  float NdV = max(dot(Nd, V), 1e-3);
+  float visV = NdV * (1. - k) + k;
   vec3 diff = albedo * (1. - metal);
   vec3 F0 = mix(vec3(.042), albedo * .85 + .15, metal);
 
-  float sh = mirror > 0. ? 1. : shadowAt(vShadow, .0018 + .0038 * (1. - clamp(dot(N, keyV), 0., 1.)));
+  float inCavity = bounceW * (1. - cavity * .55);
+  float keyFacing = dot(Nd, keyV);
+  float sh = (mirror > 0. || (keyFacing <= 0. && inCavity < .01)) ? 1. : shadowAt(vShadow, .0018 + .0038 * (1. - clamp(dot(N, keyV), 0., 1.)));
   // Rich Octane shadow depth: deeper shadows inside louver canyons, luminous bounce on open stone!
   float isLouver = (kind > .5 && kind < 3.5) || kind > 5.5 ? 1. : 0.;
   float directShadow = mix(isLouver > .5 ? .07 : .24, 1., sh);
   float cavDirect = mix(isLouver > .5 ? .14 : .45, 1., cavity);
 
   // 1. Overhead-right warm architectural studio key light (carves crisp deep louver shadows!)
-  vec3 col = shadeGGX(Nd, V, keyV, vec3(2.45, 2.40, 2.26) * directShadow, diff, F0, a) * cavDirect;
+  vec3 col = shadeGGX(Nd, V, keyV, vec3(2.45, 2.40, 2.26) * directShadow, diff, F0, a2, k, visV) * cavDirect;
   // 2. Cool periwinkle-violet left gallery fill (creates Image 1's iconic warm-top vs cool-lavender-left stone contrast!)
-  col += shadeGGX(Nd, V, fillV, vec3(.42, .45, 1.38) * mix(1., .45, isLouver), diff, F0, max(a, .24)) * mix(.38, 1., cavity);
+  float aFill = max(a, .24), kFill = aFill * .5;
+  col += shadeGGX(Nd, V, fillV, vec3(.42, .45, 1.38) * mix(1., .45, isLouver), diff, F0, aFill * aFill, kFill, NdV * (1. - kFill) + kFill) * mix(.38, 1., cavity);
   // 3. Vibrant ultraviolet-magenta upward bounce from the drafting grid floor!
-  col += shadeGGX(Nd, V, floorV, vec3(.68, .18, 1.18), diff, F0, max(a, .28)) * mix(.32, 1., cavity);
+  float aFlr = max(a, .28), kFlr = aFlr * .5;
+  col += shadeGGX(Nd, V, floorV, vec3(.68, .18, 1.18), diff, F0, aFlr * aFlr, kFlr, NdV * (1. - kFlr) + kFlr) * mix(.32, 1., cavity);
   // 4. Crisp overhead-rear architectural skylight rim (highlights terrazzo edges & louver crests!)
-  col += shadeGGX(Nd, V, rimV, vec3(1.12, 1.18, 1.34), diff, F0, a) * cavDirect;
+  col += shadeGGX(Nd, V, rimV, vec3(1.12, 1.18, 1.34), diff, F0, a2, k, visV) * cavDirect;
 
   // 5. Restrained hemispheric architectural ambient (never washes out deep emerald louver crevices!)
   vec3 hemi = mix(vec3(.28, .29, .46), vec3(.14, .08, .34), Nd.y * .5 + .5);
   col += diff * hemi * mix(.18, .72, cavity) * mix(1., .42, isLouver);
 
   // 6. Fake-GI Saturated Emerald Cavity Radiosity (rich lush botanical green inter-bounce!)
-  float inCavity = bounceW * (1. - cavity * .55);
   vec3 emBounce = mix(vec3(.003, .36, .095), vec3(.045, .74, .32), smoothstep(.0, .85, 1. - depthT));
   col += diff * emBounce * inCavity * (.22 + .26 * sh);
 
   // 7. Diagonal kerf mint-lime line light illuminating nearby terrazzo & louver faces
-  vec3 ab = kerfB - kerfA;
-  float kt = clamp(dot(vObj - kerfA, ab) / dot(ab, ab), 0., 1.);
-  vec3 toKerf = kerfA + ab * kt - vObj;
-  float kd = length(toKerf);
-  vec3 Lk = toView(toKerf / max(kd, 1e-4));
-  float kFall = (1. / (1. + kd * kd / .0055)) * smoothstep(0., .06, kt) * smoothstep(1., .94, kt);
-  col += shadeGGX(Nd, V, Lk, vec3(.22, 1.05, .44) * kFall * glow, diff, F0, a);
+  if (mirror <= 0.) {
+    vec3 ab = kerfB - kerfA;
+    float kt = clamp(dot(vObj - kerfA, ab) / dot(ab, ab), 0., 1.);
+    vec3 toKerf = kerfA + ab * kt - vObj;
+    float kd2 = dot(toKerf, toKerf);
+    float kFall = (1. / (1. + kd2 / .0055)) * smoothstep(0., .06, kt) * smoothstep(1., .94, kt);
+    if (kFall > .005) {
+      vec3 Lk = toView(toKerf * inversesqrt(max(kd2, 1e-8)));
+      col += shadeGGX(Nd, V, Lk, vec3(.22, 1.05, .44) * kFall * glow, diff, F0, a2, k, visV);
+    }
+  }
 
   // 8. Studio environment specular reflections
   vec3 R = reflect(-V, Nd);
-  float NdV = max(dot(Nd, V), 0.);
-  vec3 Fe = F0 + (max(vec3(1. - a), F0) - F0) * pow(1. - NdV, 5.);
+  float omV = 1. - NdV;
+  float omV2 = omV * omV;
+  float fres5 = omV2 * omV2 * omV;
+  vec3 Fe = F0 + (max(vec3(1. - a), F0) - F0) * fres5;
   col += studioEnv(R, rough) * Fe * mix(.22, 1., cavity) * .56;
   // Polished terrazzo carries a clear lacquer coat.
   if (kind < .5) {
-    float Fc = .04 + .96 * pow(1. - NdV, 5.);
+    float Fc = .04 + .96 * fres5;
     col += studioEnv(reflect(-V, N), .06) * Fc * mix(.3, 1., cavity) * .9;
   }
 
@@ -1192,7 +1191,7 @@ void main() {
   gl_FragColor = vec4(c, clamp(max(c.r, max(c.g, c.b)) * .45, 0., .65));
 }`;
 
-export function initLouverGlass(gl, { software, outlines, filament }) {
+export function initLouverGlass(gl, { software, lowSpec = false, outlines, filament }) {
   if (!outlines) return null;
   const litProg = program(gl, litVert, litFrag);
   const shadowProg = program(gl, shadowVert, shadowFrag);
@@ -1227,8 +1226,8 @@ export function initLouverGlass(gl, { software, outlines, filament }) {
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, kerfIbo);
   gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, kerfIdx, gl.STATIC_DRAW);
 
-  // 1024^2 RGBA-packed shadow map from studio key light
-  const SHADOW = software ? 0 : 1024;
+  // RGBA-packed shadow map from studio key light
+  const SHADOW = software ? 0 : lowSpec ? 512 : 1024;
   let shadowTex = null, shadowFbo = null;
   if (SHADOW && shadowProg) {
     shadowTex = gl.createTexture();
@@ -1245,8 +1244,15 @@ export function initLouverGlass(gl, { software, outlines, filament }) {
     gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFbo);
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, shadowTex, 0);
     gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depth);
-    if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) shadowFbo = null;
+    if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+      gl.deleteFramebuffer(shadowFbo);
+      gl.deleteRenderbuffer(depth);
+      gl.deleteTexture(shadowTex);
+      shadowFbo = null;
+      shadowTex = null;
+    }
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.bindRenderbuffer(gl.RENDERBUFFER, null);
   }
   if (!shadowFbo) {
     shadowTex = gl.createTexture();
@@ -1323,7 +1329,9 @@ export function initLouverGlass(gl, { software, outlines, filament }) {
         gl.clearColor(1, 1, 1, 1);
         gl.clearDepth(1);
         gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-        gl.disable(gl.CULL_FACE);
+        gl.enable(gl.CULL_FACE);
+        gl.frontFace(gl.CW);
+        gl.cullFace(gl.BACK);
         gl.enable(gl.DEPTH_TEST);
         gl.depthFunc(gl.LEQUAL);
         gl.depthMask(true);
@@ -1334,6 +1342,7 @@ export function initLouverGlass(gl, { software, outlines, filament }) {
         gl.uniform3fv(us('lightW'), w);
         gl.uniform1f(us('spread'), spread);
         gl.uniform1f(us('time'), time);
+        gl.uniform1f(us('mirror'), 0);
         gl.uniform4f(us('halfMotion'), halfMotion[0], halfMotion[1], halfMotion[2], halfMotion[3]);
         gl.uniform4fv(us('shockA'), shocks[0]);
         gl.uniform4fv(us('shockB'), shocks[1]);
@@ -1404,17 +1413,23 @@ export function initLouverGlass(gl, { software, outlines, filament }) {
       gl.activeTexture(gl.TEXTURE3);
       gl.bindTexture(gl.TEXTURE_2D, shadowTex);
       gl.uniform1i(ul('shadowMap'), 3);
-      // The monolith mirrored in the lacquered floor, then the monolith itself.
+      // The monolith mirrored in the lacquered floor, then the monolith itself (back-face culled).
+      gl.enable(gl.CULL_FACE);
+      gl.cullFace(gl.BACK);
       if (ground && effQ >= 1) {
         gl.enable(gl.BLEND);
         gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+        gl.frontFace(gl.CCW);
         gl.uniform1f(ul('mirror'), FLOOR_Y);
         drawChunks(litA);
         gl.uniform1f(ul('mirror'), 0);
         gl.clear(gl.DEPTH_BUFFER_BIT);
         gl.disable(gl.BLEND);
       }
+      gl.frontFace(gl.CW);
       drawChunks(litA);
+      gl.disable(gl.CULL_FACE);
+      gl.frontFace(gl.CCW);
 
       // Pass 4: Delicate luminous mint-lime architectural light blade nestled inside the diagonal kerf
       for (let k = 0; k < BEAM_N; k++) {

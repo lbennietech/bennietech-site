@@ -9,14 +9,19 @@
 html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; }
 main {
   --margin: clamp(18px, 6.2vh, 84px);
+  --unit: min(31vh, 49vw);
   position: fixed;
   inset: 0;
   isolation: isolate;
+  container-type: size;
   background-color: #e5e1d8;
   background-image:
     linear-gradient(116deg, #7a806c13 0%, #7a806c0a 12%, transparent 19%,
       #fffef348 26%, transparent 43%, transparent 70%, #8490800d 86%, transparent),
     radial-gradient(ellipse at 36% 26%, #fbf9f1 0%, #efece2 43%, #ddddd2 78%, #c8c9bc 112%);
+}
+@supports (width: 1cqh) {
+  main { --unit: min(31cqh, 49cqw); }
 }
 /* The black stage and the paper grain are both kept as ready-made layers.
    The glitch only changes their opacity, so nothing is repainted. */
@@ -53,40 +58,26 @@ main::after {
 /* The glass B is drawn on its own layer above the stage and hides in the glitch. */
 .glass { will-change: opacity; pointer-events: none; }
 .silhouette {
-  --unit: min(31vh, 49vw);
   position: absolute;
   left: calc(50% - .98 * var(--unit));
-  top: calc(46% - var(--unit));
+  top: calc(50% - var(--unit));
   width: calc(2.56 * var(--unit));
   height: auto;
   pointer-events: none;
 }
-@supports (width: 1cqh) {
-  .silhouette { --unit: min(31cqh, 49cqw); }
-}
-.signature {
-  position: absolute; left: 50%; bottom: max(var(--margin), calc(env(safe-area-inset-bottom) + 10px));
-  transform: translateX(-50%); width: clamp(100px, 8.3vw, 138px);
-  pointer-events: none;
-  user-select: none;
-}
-.signature img { width: 100%; height: auto; display: block; }
-.signature-night { position: absolute; inset: 0; opacity: 0; }
 
 @media (prefers-reduced-motion: no-preference) {
   main.negative::before { opacity: 1; }
   main.negative .field, main.negative .oil { opacity: 1; }
   main.negative .glass { opacity: 0; }
   main.negative::after { opacity: 0; }
-  main.negative .signature img:first-child { opacity: 0; }
-  main.negative .signature-night { opacity: 1; }
 }
 
 .email {
   --fringe: #708637;
   position: absolute;
   left: 50%;
-  top: calc(max(var(--margin), calc(env(safe-area-inset-top) + 10px)) + 10px);
+  top: max(calc(25% - .44 * var(--unit)), calc(env(safe-area-inset-top) + 28px));
   transform: translate(-50%, -50%);
   display: grid;
   place-items: center;
@@ -142,7 +133,7 @@ main::after {
 .exhibit canvas { cursor: grab; }
 main.dragging .exhibit canvas { cursor: grabbing; }
 
-/* Subtle moving studio skylight wash across the calm paper plane. */
+/* Subtle moving architectural gallery skylight wash across the calm paper plane. */
 .studio-wash {
   position: absolute;
   inset: -14%;
@@ -151,8 +142,8 @@ main.dragging .exhibit canvas { cursor: grabbing; }
   opacity: 0;
   will-change: transform, opacity;
   background:
-    radial-gradient(ellipse 46% 38% at 38% 28%, rgba(255, 254, 244, .44), transparent 72%),
-    linear-gradient(118deg, transparent 22%, rgba(255, 255, 244, .24) 44%, rgba(166, 206, 86, .06) 53%, transparent 68%);
+    radial-gradient(ellipse 48% 40% at 38% 30%, rgba(255, 254, 246, .48), transparent 72%),
+    linear-gradient(118deg, transparent 20%, rgba(255, 255, 244, .28) 43%, rgba(120, 212, 198, .055) 50%, rgba(176, 224, 72, .065) 55%, transparent 70%);
   transition: opacity .5s ease;
 }
 main.ready .studio-wash { opacity: .85; }

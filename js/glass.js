@@ -13,16 +13,17 @@
 //      keeping register pressure and JIT compile times minimal on low-spec GPUs
 //      and software rasterisers.
 //   4. Separate lightweight programs draw the extruded crystal halves vs. the
-//      ground caustics, halo, and filament.
+//      ground caustics, halo/kerf light-shafts, and filament.
 //   5. Optical features: true Fe2+ architectural float-glass emerald-teal edge
 //      absorption, diamond-ground & satin-buffed perimeter edges with twin 45-deg
-//      polished arris bevels, longitudinal wheel-grinding striations, internal
-//      optical crease, translucent sea-glass subsurface scatter & micro-crystal
-//      flecks, 5-wavelength CIE-normalized Cauchy spectral dispersion, smooth
-//      internal Fresnel critical-angle transitions, internal reed-underside
-//      reflections gleaming through the walls, cylindrical-lens reed caustics
-//      and fiber-optic kerf light-piping, interactive cursor kicker light,
-//      Michels-Levy photoelastic shockwaves, and live additive floor caustics.
+//      polished arris bevels, crisp laser-etched/sandblasted 3D BennieTech
+//      wordmark stamped along BOTH top and bottom flat ends (with anisotropic
+//      filtering, carved bevel normals, edge-lit TIR glow, and internal glass
+//      refraction visibility), 5-wavelength CIE-normalized Cauchy spectral
+//      dispersion, sweeping solar crystal-harp prism beam, internal 3D caustic
+//      interference ribbons, volumetric diagonal kerf light shafts, interactive
+//      cursor kicker light, Michels-Levy photoelastic shockwaves, and live
+//      additive refractive floor caustics.
 import { program } from './gl/gl.js';
 
 const vertex = `
@@ -60,25 +61,25 @@ void main() {
 const STUDIO_LIGHTS = [
   // [centre, half-extent, softness, colour*intensity, gradientDir, mullionFlag]
   // 1. Hero tall architectural window softbox on the left (warm ivory core + transom mullions)
-  [[-3.65, .30, -1.35], [.82, 1.60], .18, [7.6, 7.35, 6.80], [-.38, -.45], 1],
+  [[-3.65, .30, -1.35], [.82, 1.60], .18, [7.9, 7.60, 7.00], [-.38, -.45], 1],
   // 2. Crisp cool-silver front-right vertical strip for opposing reed shoulders
-  [[2.30, .70, -3.08], [.12, 1.80], .040, [3.35, 3.56, 3.82], [.4, -.2], 0],
+  [[2.30, .70, -3.08], [.12, 1.80], .040, [3.55, 3.76, 4.05], [.4, -.2], 0],
   // 3. Bright cool-daylight rim strip behind-right sweeping the curved barrels
-  [[3.10, -.36, 2.30], [.19, 2.50], .055, [4.05, 4.38, 4.72], [.5, -.3], 0],
-  // 4. Overhead clerestory bar catching the flat top ledge & upper bevels
-  [[-1.48, -3.28, -1.10], [1.62, .175], .048, [3.35, 3.42, 3.32], [0, -.6], 0],
+  [[3.10, -.36, 2.30], [.19, 2.50], .055, [4.30, 4.65, 5.00], [.5, -.3], 0],
+  // 4. Overhead clerestory bar catching the flat top ledge, etched wordmark & upper bevels
+  [[-1.35, -3.22, -1.05], [1.72, .20], .050, [3.95, 4.05, 3.92], [0, -.6], 0],
   // 5. Rear-left precision backlight kicker (ignites left-reed spectral fire)
-  [[-1.20, -.26, 2.70], [.065, 2.45], .030, [4.10, 4.08, 3.92], [-.3, 0], 0],
+  [[-1.20, -.26, 2.70], [.065, 2.45], .030, [4.35, 4.32, 4.15], [-.3, 0], 0],
   // 6. Rear-right precision backlight kicker (ignites right-bowl prism edge)
-  [[1.40, -.26, 2.70], [.055, 2.45], .028, [2.85, 2.98, 3.16], [.3, 0], 0],
-  // 7. Rear-overhead crown bar illuminating back chamfers & top edges
-  [[-.10, -1.80, 2.90], [1.70, .095], .040, [3.45, 3.48, 3.38], [0, -.5], 0],
-  // 8. Pinpoint HDR diamond catchlight strobe (front-upper-left, sparks chamfer glints)
-  [[-2.12, -1.52, -2.82], [.105, .155], .030, [19.5, 19.2, 18.0], [-.2, -.4], 0],
+  [[1.40, -.26, 2.70], [.055, 2.45], .028, [3.05, 3.20, 3.40], [.3, 0], 0],
+  // 7. Rear-overhead crown bar illuminating back chamfers & top flat-end etching
+  [[-.10, -1.78, 2.88], [1.74, .10], .042, [3.85, 3.88, 3.78], [0, -.5], 0],
+  // 8. Pinpoint HDR diamond catchlight strobe (front-upper-left, sparks bevel glints)
+  [[-2.10, -1.50, -2.80], [.11, .16], .030, [21.5, 21.0, 19.6], [-.2, -.4], 0],
   // 9. Secondary pinpoint cool-crystal catchlight (upper-right barrel & bevel glint)
-  [[2.42, -1.25, -2.38], [.090, .135], .028, [16.0, 17.4, 19.2], [.3, -.3], 0],
+  [[2.40, -1.24, -2.36], [.095, .14], .028, [18.0, 19.5, 21.4], [.3, -.3], 0],
   // 10. Lower-right prism accent strobe (feeds fiery spectral dispersion off lower curved bowl)
-  [[2.08, 1.42, 2.22], [.12, .38], .038, [10.4, 10.9, 11.7], [.4, .3], 0],
+  [[2.06, 1.40, 2.20], [.125, .40], .038, [11.6, 12.1, 13.0], [.4, .3], 0],
 ].map(([at, extent, soft, colour, grad, mullion]) => {
   const unit = v => { const l = Math.hypot(...v); return v.map(x => x / l); };
   const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
@@ -120,7 +121,7 @@ vec3 sampleStudio(vec3 d) {
   c = mix(c, vec3(.015, .023, .022), smoothstep(.14, .03, abs(d.x + .34)) * smoothstep(.1, .7, d.z));
   c = mix(c, vec3(.50, .49, .44), smoothstep(-.38, -.84, d.x) * smoothstep(-.75, -.15, d.y));
   c = mix(c, vec3(.55, .54, .49), smoothstep(.08, .62, d.y));
-  c += vec3(.07, .112, .125) * smoothstep(.2, .85, -d.y) * smoothstep(-.1, -.75, d.x);
+  c += vec3(.07, .115, .13) * smoothstep(.2, .85, -d.y) * smoothstep(-.1, -.75, d.x);
 ${STUDIO_LIGHTS}
   return c;
 }
@@ -153,7 +154,7 @@ uniform float size, lift, shift, time, quality;
 uniform vec2 lightRot, filamentRange, centre, view, pointer;
 uniform vec3 row1, row2, row3;
 uniform vec4 shadow, shockA, shockB;
-uniform sampler2D groundMap;
+uniform sampler2D groundMap, etchMap;
 uniform samplerCube envCube;
 varying vec3 plate;
 varying float side;
@@ -166,7 +167,7 @@ const float BACK_CHAMFER = .022;
 const float SLOPE = .27875, NORM = .96327;
 // Authentic thick architectural float-glass (Fe2+) absorption: strong red
 // attenuation with nearly equal emerald + cyan-blue transmission so thick
-// perimeter edges read as deep luminous sea-glass viridian-teal (never olive).
+// perimeter edges read as deep luminous sea-glass viridian-teal.
 const vec3 ABSORB = vec3(.90, .175, .208);
 const vec3 SEA_TEAL = vec3(.048, .38, .38);
 const vec3 SEA_AQUA = vec3(.44, .88, .86);
@@ -187,6 +188,32 @@ float vnoise(vec2 x) {
     mix(hash21(i + vec2(0., 1.)), hash21(i + vec2(1., 1.)), f.x),
     f.y
   );
+}
+
+// Fast 1-tap wordmark lookup (used for internal glass refraction rays inside shade()).
+vec3 sampleEtchMask(vec2 xz, bool isTop) {
+  float x0 = isTop ? .046 : .064;
+  float xW = isTop ? .490 : .582;
+  float u = (xz.x - x0) / xW;
+  float v = isTop ? (xz.y + .170) / .355 : (.185 - xz.y) / .355;
+  if (u <= 0. || u >= 1. || v <= 0. || v >= 1.) return vec3(0.);
+  return texture2D(etchMap, vec2(u, 1. - v)).rgb;
+}
+
+// Full 3-tap carved-bevel lookup (ONLY evaluated on direct flat-end wall fragments).
+vec3 sampleEtch(vec2 xz, bool isTop, out vec2 grad) {
+  grad = vec2(0.);
+  float x0 = isTop ? .046 : .064;
+  float xW = isTop ? .490 : .582;
+  float u = (xz.x - x0) / xW;
+  float v = isTop ? (xz.y + .170) / .355 : (.185 - xz.y) / .355;
+  if (u <= 0. || u >= 1. || v <= 0. || v >= 1.) return vec3(0.);
+  vec2 uv = vec2(u, 1. - v);
+  vec3 c = texture2D(etchMap, uv).rgb;
+  float gx = texture2D(etchMap, uv + vec2(.0035, 0.)).g - c.g;
+  float gy = texture2D(etchMap, uv + vec2(0., .012)).g - c.g;
+  grad = vec2(gx, isTop ? -gy : gy);
+  return c;
 }
 
 float halfRound(vec2 p, float cx, float cy, float r) {
@@ -287,12 +314,18 @@ vec3 dynamicLights(vec3 d) {
   vec3 add = vec3(0.);
   float pMag = dot(pointer, pointer);
   if (pMag > .002) {
-    vec3 kDir = normalize(vec3(pointer.x * 1.38, pointer.y * .95 - .26, -1.12));
+    vec3 kDir = normalize(vec3(pointer.x * 1.42, pointer.y * .95 - .26, -1.10));
     float al = max(dot(d, kDir), 0.);
     float pFade = smoothstep(.002, .10, pMag);
-    add += vec3(3.8, 4.0, 3.85) * pow(al, 26.) * pFade * (.80 + .55 * pulse);
-    add += vec3(.58, .72, .68) * pow(al, 5.) * pFade * .48;
+    add += vec3(4.2, 4.4, 4.2) * pow(al, 26.) * pFade * (.82 + .58 * pulse);
+    add += vec3(.62, .78, .74) * pow(al, 5.) * pFade * .52;
   }
+  // Ambient orbiting gallery rim kicker catches bevels and flutes with living specular fire.
+  float orb = time * .34 + lightAngle * .8;
+  vec3 orbDir = normalize(vec3(sin(orb) * 1.15, -.58 + .25 * cos(orb * .7), -1.05));
+  float oa = max(dot(d, orbDir), 0.);
+  add += vec3(2.4, 2.65, 2.55) * pow(oa, 34.) * (.55 + .45 * pulse);
+
   float sweep = sin(intro * 3.14159265);
   if (sweep > .002) {
     vec3 at = vec3(-5.5 + 10. * intro, -.6, -2.6);
@@ -351,14 +384,21 @@ vec3 studioWithPaper(vec3 o, vec3 d, float paperGain, float bias, out float pool
 }
 
 float flow(float x) {
-  return 1. + .18 * sin(x * 8.5 - time * 1.10) + .10 * sin(x * 3.7 + time * .62);
+  return 1. + .19 * sin(x * 8.5 - time * 1.10) + .11 * sin(x * 3.7 + time * .62);
+}
+
+// Smooth collimated gallery solar-prism beam coordinate sweeping gracefully across the crystal.
+float harpBeam(vec2 p) {
+  float sweepPos = .56 + .76 * sin(time * .48 + .35) + lightAngle * .48 + pointer.x * .38;
+  float proj = p.x * .92 + (p.y - .845) * .28;
+  return exp(-pow((proj - sweepPos) / .24, 2.));
 }
 
 vec3 satin(vec3 x) {
   float depth = exp(-pow((x.z - .0085) / .19, 2.));
   float along = smoothstep(filamentRange.x - .14, filamentRange.x + .10, x.x)
     * (1. - smoothstep(filamentRange.y - .10, filamentRange.y + .18, x.x));
-  return LIME * (1.02 + 1.40 * pulse) * glow * flow(x.x) * (.32 + .68 * depth) * (.28 + .72 * along) + vec3(.012, .022, .009);
+  return LIME * (1.04 + 1.42 * pulse) * glow * flow(x.x) * (.32 + .68 * depth) * (.28 + .72 * along) + vec3(.012, .022, .009);
 }
 
 vec3 echo(vec3 x, vec3 T, float boost) {
@@ -385,13 +425,13 @@ vec3 evalExit(vec3 oCam, vec3 T, vec3 n, float bias, float prismBoost) {
   float cosI = max(dot(T, n), 0.);
   float cosT = max(dot(g, n), .05);
   float sin2I = max(0., 1. - cosI * cosI);
-  float splitGate = smoothstep(.03, .28, cosT) * (1. + prismBoost * 1.25);
+  float splitGate = smoothstep(.03, .28, cosT) * (1. + prismBoost * 1.32);
   vec3 de = cam((T - n * cosI) - n * (ETA * sin2I / max(cosT, .20)));
   float dispMag = length(de) * splitGate;
-  if (dispMag < .020) return base;
+  if (dispMag < .018) return base;
 
   vec3 dir0 = normalize(dg + oCam * .14);
-  vec3 stepDir = de * (.058 * splitGate);
+  vec3 stepDir = de * (.062 * splitGate);
 
   vec3 dispAcc = vec3(0.);
   if (quality > 1.5) {
@@ -414,8 +454,8 @@ vec3 evalExit(vec3 oCam, vec3 T, vec3 n, float bias, float prismBoost) {
     }
   }
 
-  float chromaVis = (1. - pool * .60) + prismBoost * .60;
-  float maxSwing = .48 + .58 * prismBoost;
+  float chromaVis = (1. - pool * .56) + prismBoost * .64;
+  float maxSwing = .54 + .64 * prismBoost;
   vec3 chromaDelta = clamp((dispAcc - cG) * chromaVis, -maxSwing, maxSwing);
   return max(vec3(0.), base + chromaDelta);
 }
@@ -468,8 +508,6 @@ vec3 faceNormal(vec2 p, vec2 nw, float inside, float grooveSoft) {
   return normalize(n);
 }
 
-// Flattened single-call crystal shader supporting both razor-glossy reeded crystal
-// faces & twin arris bevels AND diamond-ground satin float-glass perimeter walls.
 vec3 shade(vec3 o, vec3 n, float isFace, float edgeFactor, float bias, float wallRough) {
   vec3 V = normalize(row3);
   float ndv = max(-dot(V, n), 0.);
@@ -477,29 +515,28 @@ vec3 shade(vec3 o, vec3 n, float isFace, float edgeFactor, float bias, float wal
   float om2 = om * om;
   float fresnel = .042 + .958 * (om2 * om2 * om);
 
-  // 1. Primary mirror/satin reflection (mip-convolved on diamond-ground outer edges!).
+  // 1. Primary mirror/satin reflection (mip-convolved on diamond-ground outer edges).
   vec3 R = reflect(V, n);
   float refPool;
   vec3 refEnv;
   float refBias = bias * .8 + wallRough * 1.45;
   vec3 reflected = studioWithPaper(camAt(o), cam(R), .62, refBias, refPool, refEnv);
-  // Satin-ground glass edges slightly soften extreme mirror reflectance into translucent sheen.
   float effFresnel = fresnel * (1. - wallRough * .38);
 
   // Precision optical thin-film sheen strictly at grazing Fresnel edges & arris bevels.
-  float grazing = om2 * om2 * (.14 + .42 * edgeFactor) * (1. - wallRough * .55);
+  float grazing = om2 * om2 * (.16 + .44 * edgeFactor) * (1. - wallRough * .55);
   vec3 coat = thinFilmSheen(ndv, o.x * 190. + o.y * 95. + lightAngle * 145.);
-  reflected += coat * grazing * (.12 + .20 * min(dot(reflected, vec3(.3, .6, .1)), 3.0));
+  reflected += coat * grazing * (.13 + .22 * min(dot(reflected, vec3(.3, .6, .1)), 3.2));
 
-  // Pinpoint diamond-crisp specular glint on polished 45-deg arris bevels & high-HDR reed crests!
+  // Pinpoint diamond-crisp specular glint + cinema anamorphic micro-flare on chamfers & reed crests!
   float rLum = dot(reflected, vec3(.28, .60, .12));
   if (edgeFactor > .08) {
-    float spark = smoothstep(1.75, 5.6, rLum) * edgeFactor;
-    vec3 prismSpark = mix(vec3(1.18, 1.32, 1.28), coat * 1.55, .30);
-    reflected += prismSpark * spark * 1.25;
-  } else if (isFace > .5 && rLum > 2.6) {
-    float crestSpark = smoothstep(2.6, 8.2, rLum);
-    reflected += mix(vec3(.82, .90, .86), coat, .25) * crestSpark * .38;
+    float spark = smoothstep(1.65, 5.2, rLum) * edgeFactor;
+    vec3 prismSpark = mix(vec3(1.24, 1.38, 1.32), coat * 1.65, .34);
+    reflected += prismSpark * spark * 1.38;
+  } else if (isFace > .5 && rLum > 2.4) {
+    float crestSpark = smoothstep(2.4, 7.6, rLum);
+    reflected += mix(vec3(.88, .96, .92), coat, .30) * crestSpark * .48;
   }
 
   // 2. Refracted internal ray path (exact analytic exits — zero loops!).
@@ -513,7 +550,7 @@ vec3 shade(vec3 o, vec3 n, float isFace, float edgeFactor, float bias, float wal
   bool hasExit = false;
   float exitWeight = 1.;
   vec3 exitPos = o, exitDir = T, exitNorm = vec3(0., 0., -1.);
-  float prismBoost = edgeFactor * 1.05 + om * .70 * (1. - wallRough * .65);
+  float prismBoost = edgeFactor * 1.12 + om * .74 * (1. - wallRough * .65);
   vec3 internalEmit = vec3(0.);
 
   if (tWall < tBack) {
@@ -521,13 +558,33 @@ vec3 shade(vec3 o, vec3 n, float isFace, float edgeFactor, float bias, float wal
     vec3 x = o + T * L;
     vec3 wn = vec3(nw, 0.);
     if (cut > .5) {
-      internalEmit += satin(x) * (isFace > .5 ? 1.18 : 1.42);
+      if (isFace > .5) {
+        internalEmit += satin(x) * 1.22;
+      } else {
+        // Seen from an outer edge across the solid block, the frosted cut attenuates with
+        // path length L and transmits diffused studio light — keeping far outer edges
+        // (top/bottom flat ends & curved barrel) true deep Fe2+ viridian-teal float glass
+        // while preserving warm organic lime bleed right near the diagonal kerf.
+        float kerfVis = exp(-L * 2.95) * (.34 + .66 * abs(dot(T, wn)));
+        vec3 cutDiff = envLookup(cam(T), 1.9) * .56 + envLookup(cam(reflect(T, wn)), 1.4) * .26;
+        internalEmit += satin(x) * (1.12 * kerfVis) + cutDiff + SEA_TEAL * .10;
+      }
     } else {
+      // INTERNAL REFRACTED VIEW OF THE ETCHED BENNIETECH WORDMARK ON BOTH FLAT ENDS!
+      // Single fast tap (no gradient overhead inside shade) creates an authentic subtle
+      // frosted-crystal internal ghost refracted through the vertical flutes.
+      if (abs(nw.y) > .95 && quality > .5) {
+        vec3 eSample = sampleEtchMask(x.xz, nw.y < 0.);
+        if (eSample.r > .01) {
+          vec3 etchTint = mix(vec3(.56, .92, .88), vec3(.72, 1., .26), eSample.b);
+          internalEmit += etchTint * eSample.r * (.36 + .20 * glow);
+        }
+      }
       vec3 eCheck = refract(T, -wn, ETA);
       if (dot(eCheck, eCheck) > .5) {
         hasExit = true;
         exitPos = x; exitDir = T; exitNorm = wn;
-        prismBoost += .92;
+        prismBoost += .96;
       } else {
         vec3 T2 = reflect(T, wn);
         float tB2 = (back - x.z) / min(T2.z, -.02);
@@ -536,12 +593,15 @@ vec3 shade(vec3 o, vec3 n, float isFace, float edgeFactor, float bias, float wal
         if (tW2 < tB2) {
           extra = tW2;
           vec3 y = x + T2 * tW2;
-          if (cut2 > .5) internalEmit += satin(y) * .60;
-          else {
+          if (cut2 > .5) {
+            internalEmit += isFace > .5
+              ? satin(y) * .60
+              : satin(y) * (.32 * exp(-(L + extra) * 2.2)) + envLookup(cam(T2), 1.8) * .30 + SEA_TEAL * .06;
+          } else {
             vec3 wn2 = vec3(nw2, 0.);
             vec3 e2 = refract(T2, -wn2, ETA);
             if (dot(e2, e2) > .5) { hasExit = true; exitPos = y; exitDir = T2; exitNorm = wn2; prismBoost += .75; }
-            else internalEmit += vec3(.006, .036, .030) + LIME * .045 * glow;
+            else internalEmit += vec3(.006, .036, .034) + LIME * .045 * glow;
           }
         } else {
           extra = tB2;
@@ -556,21 +616,24 @@ vec3 shade(vec3 o, vec3 n, float isFace, float edgeFactor, float bias, float wal
             float fInt = .04 + .96 * pow(1. - ct, 5.);
             exitWeight = 1. - smoothstep(.55, .96, fInt);
             hasExit = true; exitPos = xb; exitDir = T2; exitNorm = bn;
-            prismBoost += bEdge * 1.15;
-            internalEmit += echo(xb, T2, isFace < .5 ? 2.4 : 1.20)
-                          + (vec3(.008, .044, .038) + envLookup(cam(reflect(T2, bn)), .9) * .32) * (1. - exitWeight);
+            prismBoost += bEdge * 1.18;
+            internalEmit += echo(xb, T2, isFace < .5 ? 2.4 : 1.22)
+                          + (vec3(.008, .044, .042) + envLookup(cam(reflect(T2, bn)), .9) * .32) * (1. - exitWeight);
           } else {
             vec3 Tp = reflect(T2, bn);
             vec2 nwp; float cutp;
             float lp = analyticExit(xb.xy, Tp.xy, nwp, cutp);
             extra += lp;
             vec3 yp = vec3(xb.xy + Tp.xy * lp, (front + back) * .5);
-            if (cutp > .5) internalEmit += satin(yp) * .38;
-            else {
+            if (cutp > .5) {
+              internalEmit += isFace > .5
+                ? satin(yp) * .38
+                : satin(yp) * (.22 * exp(-(L + extra) * 2.0)) + envLookup(cam(Tp), 1.8) * .24 + SEA_TEAL * .06;
+            } else {
               vec3 outP = normalize(vec3(Tp.xy, -abs(Tp.z)));
               vec3 ep = refract(outP, -vec3(nwp, 0.), ETA);
-              if (dot(ep, ep) > .5) { hasExit = true; exitPos = yp; exitDir = outP; exitNorm = vec3(nwp, 0.); prismBoost += .60; }
-              else internalEmit += vec3(.006, .034, .028) + LIME * .042 * glow;
+              if (dot(ep, ep) > .5) { hasExit = true; exitPos = yp; exitDir = outP; exitNorm = vec3(nwp, 0.); prismBoost += .62; }
+              else internalEmit += vec3(.006, .034, .032) + LIME * .042 * glow;
             }
           }
         }
@@ -590,13 +653,13 @@ vec3 shade(vec3 o, vec3 n, float isFace, float edgeFactor, float bias, float wal
       exitWeight = 1. - smoothstep(.52, .96, fInt);
       hasExit = true;
       exitPos = xb; exitDir = T; exitNorm = bn;
-      prismBoost += bEdge * 1.25;
-      internalEmit += echo(xb, T, isFace < .5 ? 2.5 : 1.24);
+      prismBoost += bEdge * 1.30;
+      internalEmit += echo(xb, T, isFace < .5 ? 2.5 : 1.26);
 
       if (bEdge > .04 || exitWeight < .98) {
         vec3 rb = reflect(T, -bn);
         vec3 bGlint = envLookup(cam(rb), .55);
-        internalEmit += bGlint * (bEdge * (.26 + .20 * isFace) + (1. - exitWeight) * .42) * absorb(.26);
+        internalEmit += bGlint * (bEdge * (.28 + .22 * isFace) + (1. - exitWeight) * .44) * absorb(.26);
       }
 
       // Multi-bounce internal reed-underside shimmer seen softly inside the outer edges.
@@ -613,8 +676,8 @@ vec3 shade(vec3 o, vec3 n, float isFace, float edgeFactor, float bias, float wal
           vec3 ribEnv = envLookup(cam(rUnder), .8 + wallRough * .9);
           float cutD = abs((xf.y + SLOPE * xf.x) * NORM - .98 * NORM);
           vec3 ribKerf = LIME * glow * flow(xf.x) * exp(-cutD * 3.8) * 1.05;
-          float bWeight = (.20 + .46 * pow(1. - max(-T.z, 0.), 2.2)) * (1. - wallRough * .35);
-          internalEmit += (ribEnv * (.26 + .58 * ribCrest) + ribKerf) * bWeight * absorb(tF * .72);
+          float bWeight = (.22 + .48 * pow(1. - max(-T.z, 0.), 2.2)) * (1. - wallRough * .35);
+          internalEmit += (ribEnv * (.28 + .62 * ribCrest) + ribKerf) * bWeight * absorb(tF * .72);
         }
       }
     } else {
@@ -624,15 +687,17 @@ vec3 shade(vec3 o, vec3 n, float isFace, float edgeFactor, float bias, float wal
       extra = lp;
       vec3 yp = vec3(xb.xy + Tp.xy * lp, (front + back) * .5);
       if (cutp > .5) {
-        internalEmit += satin(yp) * .42;
+        internalEmit += isFace > .5
+          ? satin(yp) * .42
+          : satin(yp) * (.24 * exp(-(L + extra) * 2.1)) + envLookup(cam(Tp), 1.7) * .28 + SEA_TEAL * .08;
       } else {
         vec3 outP = normalize(vec3(Tp.xy, -abs(Tp.z)));
         vec3 ep = refract(outP, -vec3(nwp, 0.), ETA);
         if (dot(ep, ep) > .5) {
           hasExit = true; exitPos = yp; exitDir = outP; exitNorm = vec3(nwp, 0.);
-          prismBoost += .72;
+          prismBoost += .74;
         } else {
-          internalEmit += vec3(.006, .036, .030) + LIME * .045 * glow;
+          internalEmit += vec3(.006, .036, .034) + LIME * .045 * glow;
         }
       }
     }
@@ -640,26 +705,21 @@ vec3 shade(vec3 o, vec3 n, float isFace, float edgeFactor, float bias, float wal
 
   vec3 radiance = internalEmit;
   if (hasExit && exitWeight > .01) {
-    // Ground outer walls gently soften transmitted light via subtle mip bias while keeping glassy clarity.
     radiance += evalExit(camAt(exitPos), exitDir, exitNorm, bias + wallRough * 1.15, prismBoost) * exitWeight;
   }
   vec3 through = radiance * absorb(L + extra);
   if (isFace < .5) {
-    // Deep architectural float-glass viridian-teal thickness absorption along perimeter walls.
     through *= exp(-ABSORB * (.58 + .32 * wallRough));
   }
 
   vec3 colour = mix(through, reflected, effFresnel);
-  // Near the diagonal cut the body glows electric lime; farther out along the thick
-  // outer float-glass edges, long-range internal scatter cools naturally into deep sea-teal.
-  float cutProx = exp(-abs((o.y + SLOPE * o.x) * NORM - .98 * NORM) * 3.2);
-  vec3 deepScatterTint = isFace < .5 ? mix(vec3(.07, .52, .50), LIME, cutProx) : LIME;
-  colour += LIME * glow * .94 * scatter(o, T, L, 7.)
+  float cutProx = exp(-abs((o.y + SLOPE * o.x) * NORM - .98 * NORM) * 4.2);
+  vec3 deepScatterTint = isFace < .5 ? mix(vec3(.06, .48, .48), LIME, cutProx) : LIME;
+  colour += LIME * glow * (.96 * (isFace > .5 ? 1. : .55 + .45 * cutProx)) * scatter(o, T, L, 7.)
           + deepScatterTint * glow * .20 * scatter(o, T, L, 1.8);
   return colour;
 }
 
-// Exact C1-continuous perimeter arc length in B-units around this half's outer walls.
 float wallArc(vec2 p, vec2 nw) {
   if (nw.x < -.95) return part < .5 ? -p.y : -(1.69 - p.y);
   if (abs(nw.y) > .95) return p.x;
@@ -673,6 +733,7 @@ void main() {
   vec2 nw = wallNormal(p, cut);
   float cutDist = abs((p.y + SLOPE * p.x) * NORM - .98 * NORM);
   float mipBias = clamp(pixel * 44., 0., 1.0);
+  float beam = harpBeam(p);
   vec3 colour = vec3(0.);
   float edgeLit = 0.;
 
@@ -682,13 +743,11 @@ void main() {
     float thickness = front - back;
     float tz = clamp(dBack / thickness, 0., 1.);
 
-    // Twin razor-crisp 45-degree polished arris bevels along BOTH front and back edges.
     float ef = 1. - smoothstep(WALL_BEVEL * .16, WALL_BEVEL, dFront);
     float eb = 1. - smoothstep(WALL_BEVEL * .16, WALL_BEVEL, dBack);
     edgeLit = max(ef, eb);
 
     if (cut > .5 && edgeLit < .45) {
-      // Frosted diagonal kerf: glowing lime satin + micro-crystalline ground-glass sparkle.
       vec3 V = normalize(row3);
       vec3 n = normalize(vec3(nw, ef - eb));
       float ndv = max(-dot(V, n), 0.);
@@ -698,72 +757,93 @@ void main() {
       float sparkle = pow(fract(grain + dot(V.xy, vec2(1.9, 2.5)) + lightAngle * .52), 13.);
       vec3 softSheen = envLookup(cam(reflect(V, n)), 2.1);
       colour = satin(plate) * (.92 + .14 * grain)
-             + vec3(.90, 1.0, .64) * sparkle * .72 * glow
-             + softSheen * fresnel * .28;
+             + vec3(.90, 1.0, .64) * sparkle * .76 * glow
+             + softSheen * fresnel * .30;
     } else if (cut < .5) {
-      // PRECISION MACHINE-GROUND & POLISHED ARCHITECTURAL FLOAT-GLASS OUTER EDGE:
-      // Optically flat macro normal keeps studio reflections razor-smooth and straight,
-      // while straight longitudinal diamond-wheel striations, twin 45-deg arris bevels,
-      // dark internal optical creases, and translucent icy-aqua subsurface scatter match
-      // real thick flat-polished sea-green float glass.
+      // PRECISION MACHINE-GROUND & POLISHED ARCHITECTURAL FLOAT-GLASS OUTER EDGE
+      // + LASER-ETCHED / SANDBLASTED 3D BENNIETECH STAMP ON BOTH FLAT ENDS!
       float perim = wallArc(p, nw);
       float groundMask = 1. - smoothstep(.04, .60, edgeLit);
-
-      // Band-limiting gates guarantee zero moire or stippling at every resolution & angle.
       float fineGate = smoothstep(.0090, .0026, pixel);
       float microGate = smoothstep(.0052, .0016, pixel);
 
-      // Optically flat macro normal (zero wavy normal distortion!).
-      vec3 n = normalize(vec3(nw, (ef - eb) * .96));
+      // Evaluate stamped/etched wordmark on top flat end (nw.y < -0.95) & bottom flat end (nw.y > 0.95).
+      vec2 eGrad = vec2(0.);
+      vec3 etch = abs(nw.y) > .95 ? sampleEtch(plate.xz, nw.y < 0., eGrad) : vec3(0.);
+      float etchMask = etch.r * groundMask;
+      float etchBevel = etch.g * groundMask;
+      float etchDot = etch.b * groundMask;
 
-      // Dead-straight longitudinal diamond-wheel polishing striations running parallel
-      // to the front & back arris bevels (high aspect ratio along perim vs thickness tz).
+      // Optically flat macro normal + crisp 3D V-carved groove slope on etched letter lips!
+      vec3 n = normalize(vec3(nw.x - eGrad.x * 2.4 * groundMask, nw.y, (ef - eb) * .96 - eGrad.y * 2.4 * groundMask));
+
       float streakBroad = vnoise(vec2(perim * .45, tz * 16.));
       float streakFine = vnoise(vec2(perim * .85 + 4.1, tz * 52.));
       float streakHair = .5 + .5 * sin(tz * 150. + streakBroad * 1.4);
       float striation = streakBroad * .46 + mix(.5, streakFine, fineGate) * .36 + mix(.5, streakHair, microGate) * .18;
-
-      // Soft translucent internal sea-glass scatter cloud (broad & smooth along edge).
       float cloud = vnoise(vec2(perim * 1.35 + 2.7, tz * 4.2));
       float centerBand = smoothstep(0., .18, tz) * smoothstep(1., .82, tz);
 
-      // Satin-buffed translucent edge roughness (~0.24..0.44): stays deeply glassy & reflective!
-      float wallRough = groundMask * (.24 + .22 * centerBand * (.45 + .55 * cloud));
+      // Frosted etched glyphs raise surface roughness locally into luminous sandblasted glass!
+      float wallRough = clamp(groundMask * (.24 + .22 * centerBand * (.45 + .55 * cloud)) + etchMask * .65, 0., 1.);
       colour = shade(vec3(p - nw * .0004, plate.z), n, 0., edgeLit, mipBias * .50, wallRough);
 
-      // 1. Crisp dark viridian-teal internal refraction crease hugging right behind BOTH 45-deg bevels!
+      // 1. Crisp dark viridian-teal internal refraction crease behind BOTH 45-deg arris bevels.
       float creaseF = exp(-pow((dFront - WALL_BEVEL * 1.12) / .0065, 2.));
       float creaseB = exp(-pow((dBack  - WALL_BEVEL * 1.12) / .0065, 2.));
       float crease = max(creaseF, creaseB * .82);
       colour = mix(colour, colour * vec3(.10, .34, .36), crease * .84);
 
-      // 2. Smooth translucent sea-glass viridian-aqua subsurface luminance & straight wheel polish!
+      // 2. Smooth translucent sea-glass viridian-aqua subsurface luminance & straight wheel polish.
       vec3 envSoft = envLookup(cam(normalize(vec3(nw, .18))), 1.7);
       float envEnergy = clamp(dot(envSoft, vec3(.26, .54, .20)), .05, 3.2);
       float litFactor = smoothstep(.18, 1.35, envEnergy * (.58 + .65 * cloud));
 
-      // Luminous translucent frosted-aqua center glow (catches light softly inside the ground glass!).
       vec3 seaBody = mix(SEA_TEAL * .62, SEA_AQUA * .94, litFactor);
       float satinVeil = groundMask * centerBand * (.14 + .24 * cloud) * smoothstep(.10, 1.10, envEnergy);
       colour = mix(colour, seaBody * (.44 + .42 * envEnergy), satinVeil * .52);
 
-      // Silky straight parallel longitudinal grinding sheen across the flat & curved edges!
       float fineSheen = groundMask * (striation - .32) * (.13 + .18 * envEnergy);
       colour += mix(SEA_TEAL * 1.25, SEA_AQUA, litFactor) * max(fineSheen, 0.);
 
-      // Crisp translucent icy-aqua internal light-guide band tucked just inside the front crease!
       float innerRibbon = exp(-pow((dFront - WALL_BEVEL * 1.90) / .015, 2.));
       float backRibbon = exp(-pow((dBack - WALL_BEVEL * 1.85) / .015, 2.));
       colour += SEA_AQUA * (innerRibbon * .16 + backRibbon * .09) * (.35 + .65 * envEnergy);
 
-      // 3. Razor-clean glossy icy-aqua translucent highlight on the twin 45-degree polished arris bevels!
-      vec3 bevelLight = mix(vec3(.14, .58, .58), vec3(.84, .99, .97), smoothstep(.26, 1.60, envEnergy));
-      colour += bevelLight * edgeLit * (.18 + .26 * envEnergy);
-      // Thin crisp bright outer specular arris line right at the 45-deg shoulder corner.
-      float arrisCorner = exp(-pow((dFront - WALL_BEVEL * .45) / .0045, 2.));
-      colour += vec3(.72, .96, .95) * arrisCorner * (.14 + .28 * envEnergy);
+      // 3. STAMPED / LASER-ETCHED BENNIETECH WORDMARK OPTICAL SHADING ON TOP & BOTTOM FLAT ENDS!
+      //    Breaks Total Internal Reflection so every etched stroke glows with luminous frosted
+      //    sea-glass crystal clarity, framed by a carved dark recess lip & specular rim catchlight!
+      if (etchMask > .005 || etchBevel > .01) {
+        // Subtle fine sandblasted crystalline frost grain inside the carved glyphs.
+        float etchFrost = .88 + .24 * hash21(floor(plate.xz * 1200.));
+        // Directional carved-lip shading: bright catchlight on the studio-facing groove wall,
+        // crisp deep viridian shadow on the opposite carved wall for unmistakable tactile depth!
+        vec2 key2D = normalize(vec2(-.65 + lightAngle * .45 + pointer.x * .35, -.75));
+        float lipLight = dot(eGrad, key2D) * 4.5;
+        float darkRecess = clamp(-lipLight, 0., 1.) * (1. - etchMask * .35);
+        float brightLip = clamp(lipLight, 0., 1.);
 
-      // 4. Delicate pinpoint micro-crystalline wheel-grind dust flecks ONLY where light illuminates the edge!
+        // Deepen the recessed pocket immediately around the carved glyph for genuine carved depth.
+        colour *= (1. - darkRecess * .64 - etchBevel * (1. - etchMask) * .42);
+
+        // Translucent sandblasted / laser-etched crystal fill (frosted aquamarine-ivory glass,
+        // NOT flat white paint, with signature lime-tinted 'i' dot and sweeping light response).
+        float sweepLift = 1. + .48 * beam + .24 * pulse;
+        vec3 frostFill = mix(vec3(.68, .92, .90), vec3(.58, 1., .08), etchDot);
+        vec3 etchedCol = (colour * .26 + frostFill * (.58 + .26 * glow)) * etchFrost * sweepLift;
+        colour = mix(colour, etchedCol, clamp(etchMask * .86, 0., .90));
+        // Razor-crisp diamond specular catchlight along the carved upper groove lip!
+        vec3 lipTint = mix(vec3(.94, 1., .98), vec3(.82, 1., .42), etchDot);
+        colour += lipTint * brightLip * (.88 + .50 * beam) * (.65 + .35 * glow);
+      }
+
+      // 4. Razor-clean glossy icy-aqua translucent highlight on the twin 45-degree polished arris bevels.
+      vec3 bevelLight = mix(vec3(.14, .58, .58), vec3(.86, 1., .98), smoothstep(.26, 1.55, envEnergy));
+      colour += bevelLight * edgeLit * (.19 + .28 * envEnergy + .22 * beam);
+      float arrisCorner = exp(-pow((dFront - WALL_BEVEL * .45) / .0045, 2.));
+      colour += vec3(.74, .98, .96) * arrisCorner * (.15 + .30 * envEnergy + .20 * beam);
+
+      // 5. Delicate pinpoint micro-crystalline wheel-grind flecks strictly where light hits.
       if (microGate > .15) {
         float fleck = smoothstep(.976, .998, hash21(floor(vec2(perim * 280., tz * 130.))));
         float seamFleck = smoothstep(.966, .997, hash21(floor(vec2(perim * 380., dFront * 190.))));
@@ -771,7 +851,7 @@ void main() {
         colour += vec3(.84, .99, .97) * (fleck * groundMask * .34 + seamFleck * (creaseF + ef * .65) * .45) * fVis;
       }
 
-      // 5. Electric lime kerf glow bleeding organically into the deep sea-glass teal walls near the cut!
+      // 6. Electric lime kerf glow bleeding organically into the deep sea-glass teal walls near the cut.
       float hot = exp(-cutDist * 14.) * .24 + exp(-cutDist * 5.0) * .18 + exp(-cutDist * 1.5) * .026;
       colour += LIME * glow * flow(p.x) * hot;
     } else {
@@ -799,40 +879,57 @@ void main() {
 
     // 1. Cylindrical-lens internal studio caustic ribbon + living gallery daylight wave.
     float keyPhase = clamp(.5 + .25 * sin(lightAngle * 1.25 - row3.x * 1.5 + pointer.x * .70 + sin(time * .42) * .12), .17, .83);
-    float reedFocus = exp(-pow((uReed - keyPhase) / .115, 2.)) * (1. - edgeLit);
+    float reedFocus = exp(-pow((uReed - keyPhase) / .110, 2.)) * (1. - edgeLit);
     float alongBlock = smoothstep(.02, .18, inside);
     float diagBand = .55 + .45 * cos((p.x * 2.2 - p.y * 1.1) - time * .46 - lightAngle * 1.6 - pointer.x * .9);
-    colour += vec3(.16, .24, .22) * reedFocus * alongBlock * (.32 + .34 * diagBand + .32 * pulse);
+    colour += vec3(.17, .25, .23) * reedFocus * alongBlock * (.34 + .36 * diagBand + .34 * pulse);
 
-    // 2. Fiber-optic kerf light-piping: cylindrical reeds lens the glowing lime filament into
+    // 2. SWEEPING SOLAR CRYSTAL-HARP PRISM BEAM:
+    //    As the gallery skylight beam sweeps across the 26 vertical flutes, each cylindrical
+    //    reed sequentially focuses it into a cascading diamond rainbow caustic crest!
+    float harpCore = exp(-pow((uReed - (1. - keyPhase)) / .135, 2.)) * (1. - edgeLit) * alongBlock;
+    float fluteIndex = floor(p.x / flute);
+    vec3 prismArc = .5 + .5 * cos(uReed * 5.2 + fluteIndex * .38 - time * .9 + vec3(0., 2.094, 4.188));
+    vec3 harpSpectral = mix(vec3(.92, 1., .96), prismArc * vec3(1.15, 1.05, 1.25), .48);
+    colour += harpSpectral * harpCore * beam * (.34 + .28 * pulse);
+
+    // 3. INTERNAL 3D CAUSTIC INTERFERENCE RIBBONS suspended deep inside the crystal volume!
+    //    Parallax-shifted curved light filaments where refracted flute caustics intersect.
+    vec2 cp = p + row3.xy * .14;
+    float rib1 = sin(cp.x * 15.5 + cp.y * 5.2 - time * .62 - lightAngle * 2.1);
+    float rib2 = sin(cp.x * 11.0 - cp.y * 7.8 + time * .48 + pointer.x * 1.8);
+    float causticNet = pow(max(0., 1. - abs(rib1 + rib2 * .75) * .85), 5.0) * alongBlock * (1. - edgeLit);
+    colour += mix(vec3(.20, .42, .40), LIME * .85, exp(-cutDist * 3.0)) * causticNet * (.16 + .20 * beam + .22 * pulse);
+
+    // 4. Fiber-optic kerf light-piping: cylindrical reeds lens the glowing lime filament into
     //    stepped chartreuse-emerald vertical crystal columns rippling with flow(x).
     float pipeLens = .26 + .74 * pow(1. - abs(uReed * 2. - 1.), 1.9);
-    float kerfPipe = (exp(-cutDist * 4.0) * .30 + exp(-cutDist * 11.5) * .40) * pipeLens * (1. - edgeLit);
+    float kerfPipe = (exp(-cutDist * 4.0) * .32 + exp(-cutDist * 11.5) * .42) * pipeLens * (1. - edgeLit);
     float alongFil = smoothstep(filamentRange.x - .12, filamentRange.x + .08, p.x)
                    * (1. - smoothstep(filamentRange.y - .08, filamentRange.y + .14, p.x));
     colour += LIME * glow * flow(p.x) * kerfPipe * (1. + .55 * pulse) * (.35 + .65 * alongFil);
 
-    // 3. Outer perimeter float-glass sea-teal arris crease & glowing translucent bevel framing the face!
+    // 5. Outer perimeter float-glass sea-teal arris crease & glowing translucent bevel framing the face.
     float faceCrease = exp(-pow((inside - CHAMFER * 1.18) / .0058, 2.)) * (1. - cut);
     colour = mix(colour, colour * vec3(.22, .52, .52), faceCrease * .56);
     float rim = exp(-max(inside - CHAMFER, 0.) * 34.) * (1. - edgeLit);
     vec3 rimTint = mix(SEA_TEAL * .85, LIME, exp(-cutDist * 2.2));
-    colour += rimTint * glow * flow(p.x) * rim * (.10 + .36 * exp(-cutDist * 2.4));
+    colour += rimTint * glow * flow(p.x) * rim * (.10 + .38 * exp(-cutDist * 2.4));
 
-    // 4. Michels-Levy photoelastic stress birefringence along touch/click shockwaves.
+    // 6. Michels-Levy photoelastic stress birefringence along touch/click shockwaves.
     float phA, phB;
     float sA = stress(p, shockA, phA), sB = stress(p, shockB, phB);
     float ring = sA + sB;
     if (ring > .004) {
       float ph = (sA * phA + sB * phB) / max(ring, 1e-4) + cutDist * 22.;
       vec3 biref = .5 + .5 * cos(ph + vec3(0., 2.094, 4.188));
-      colour += biref * vec3(.30, .38, .24) * ring;
+      colour += biref * vec3(.32, .40, .26) * ring;
     }
   }
 
   // Polished 45-degree arris bevels gleam icy sea-aqua around the exterior and chartreuse-lime along the cut.
-  vec3 edgeCol = mix(vec3(.20, .64, .61), LIME, exp(-cutDist * 2.5));
-  colour += edgeCol * edgeLit * glow * flow(p.x) * (.14 + .52 * exp(-cutDist * 2.6));
+  vec3 edgeCol = mix(vec3(.22, .68, .65), LIME, exp(-cutDist * 2.5));
+  colour += edgeCol * edgeLit * glow * flow(p.x) * (.15 + .54 * exp(-cutDist * 2.6) + .22 * beam);
 
   if (recovery < .999) {
     float travel = cutDist - (.05 + .46 * recovery);
@@ -842,8 +939,8 @@ void main() {
   gl_FragColor = vec4(display(colour), 1.);
 }`;
 
-// Ultra-lightweight fragment shader for the large ground caustic card, lime halo,
-// and filament bar/bloom — skips fully transparent margin pixels early via discard!
+// Ultra-lightweight fragment shader for the large ground caustic card, volumetric
+// kerf light-shafts + lime halo, and incandescent filament bar/bloom.
 const fxFrag = `precision highp float;
 uniform float kind, sway, recovery, pulse, lightAngle, intro, glow, haloPad, time, flute;
 uniform vec2 filamentRange, pointer;
@@ -856,19 +953,35 @@ const float SLOPE = .27875, NORM = .96327;
 
 float ramp(float x, float a, float b) { return clamp((x - a) / (b - a), 0., 1.); }
 float flow(float x) {
-  return 1. + .18 * sin(x * 8.5 - time * 1.10) + .10 * sin(x * 3.7 + time * .62);
+  return 1. + .19 * sin(x * 8.5 - time * 1.10) + .11 * sin(x * 3.7 + time * .62);
 }
 
 void main() {
   vec2 p = plate.xy;
   if (kind > 4.5) {
+    // Kind 5: Soft lime aura + subtle collimated volumetric light shafts escaping the diagonal kerf!
     vec2 huv = (p + haloPad) / (vec2(1.21, 1.69) + 2. * haloPad);
     vec4 light = texture2D(halo, vec2(huv.x, 1. - huv.y));
     vec2 rim = min(huv, 1. - huv);
-    float fade = smoothstep(0., .06, min(rim.x, rim.y));
+    float fade = smoothstep(0., .08, min(rim.x, rim.y));
     float a = light.a * fade * (.62 * glow + .24 * pulse);
-    if (a < .002) discard;
-    gl_FragColor = vec4(light.rgb * a, a * .80);
+
+    // Collimated diagonal kerf volumetric light shafts fanning softly out both ends of the split!
+    float across = abs((p.y + SLOPE * p.x - .98) * NORM);
+    float along = (p.x - .56) * NORM - (p.y - .84) * SLOPE * NORM;
+    float fanW = .046 + .062 * abs(along);
+    float normAcross = across / fanW;
+    float rayCore = exp(-normAcross * normAcross * 1.9) * exp(-abs(along) * 2.55);
+    float rayHalo = exp(-normAcross * normAcross * .34) * exp(-abs(along) * 2.85);
+    float edgeFade = smoothstep(0., .18, min(rim.x, rim.y));
+    float shimmer = .85 + .15 * sin(along * 14. - time * 1.45) * cos(across * 34. + time * .9);
+    float shaft = (rayCore * .24 + rayHalo * .085) * edgeFade * glow * shimmer * (1. + .55 * pulse);
+    // Subtle warm-chartreuse core feathering to cool sea-aqua dispersion along the beam wings.
+    vec3 shaftTint = mix(vec3(.50, .86, .42), vec3(.94, 1., .76), clamp(rayCore * 2.6, 0., 1.));
+    vec3 shaftCol = shaftTint * shaft;
+
+    if (a + shaft < .002) discard;
+    gl_FragColor = vec4(light.rgb * a + shaftCol, a * .80);
   } else if (kind > 3.5) {
     vec2 guv = vec2(p.x, -p.y) * .5 + .5;
     vec4 base = texture2D(groundMap, guv);
@@ -890,34 +1003,39 @@ void main() {
     vec3 causticAdd = vec3(0.);
 
     if (footMask > .005) {
-      // 1. Crisp shimmering vertical reed focal caustic lines gliding across the translucent shadow.
+      // Synchronized sweeping gallery solar-prism beam across the paper shadow!
+      float sweepPos = .56 + .76 * sin(time * .48 + .35) + lightAngle * .48 + pointer.x * .38;
+      float floorBeam = exp(-pow((bp.x * .92 + (bp.y - .845) * .28 - sweepPos) / .30, 2.));
+
+      // 1. Crisp shimmering vertical reed focal caustic lines + dual-wave optical interference!
       float reedShift = sway * .22 + lightAngle * .30 + pointer.x * .09 + sin(time * .42) * .018;
       float reedWave = pow(.5 + .5 * cos((bp.x + reedShift) / flute * 6.2831853), 6.5);
+      float caustRip = .78 + .22 * sin(bp.y * 12. - time * 1.15 + bp.x * 5.0);
       vec2 fp = (bp - vec2(.60 - lightAngle * .18 - pointer.x * .09, .88 - pointer.y * .10)) * vec2(1.02, .82);
-      float focusPatch = exp(-dot(fp, fp) * 1.18);
-      causticAdd += vec3(.30, .35, .30) * reedWave * focusPatch * footMask * (.42 + .28 * pulse);
+      float focusPatch = exp(-dot(fp, fp) * 1.15);
+      causticAdd += vec3(.32, .37, .33) * reedWave * caustRip * (focusPatch + .35 * floorBeam) * footMask * (.44 + .30 * pulse);
 
-      // 2. Jewel-crisp curved-barrel prismatic rainbow caustic crescents (warm gold -> white core -> aqua/violet).
+      // 2. Jewel-crisp curved-barrel prismatic rainbow caustic crescents (ruby-gold -> white core -> aqua/violet)!
       vec2 loV = bp - vec2(.71, 1.20);
       float loR = length(loV);
       float loAng = atan(loV.y, loV.x) - lightAngle * .24 - pointer.x * .14;
-      float loArc = smoothstep(-.50, .14, loAng) * (1. - smoothstep(.66, 1.22, loAng));
-      float dispShift = .021 + .028 * (lightAngle * .55 + sway * .45 + pointer.x * .26);
-      float cR = exp(-pow((loR - (.540 + dispShift)) / .027, 2.));
-      float cG = exp(-pow((loR - .502) / .025, 2.));
-      float cB = exp(-pow((loR - (.466 - dispShift)) / .027, 2.));
-      vec3 lowerPrism = vec3(cR * .38 + cG * .20, cG * .33 + cR * .14 + cB * .14, cB * .38 + cG * .11);
+      float loArc = smoothstep(-.52, .14, loAng) * (1. - smoothstep(.66, 1.24, loAng));
+      float dispShift = .022 + .030 * (lightAngle * .55 + sway * .45 + pointer.x * .26);
+      float cR = exp(-pow((loR - (.542 + dispShift)) / .025, 2.));
+      float cG = exp(-pow((loR - .502) / .023, 2.));
+      float cB = exp(-pow((loR - (.464 - dispShift)) / .025, 2.));
+      vec3 lowerPrism = vec3(cR * .44 + cG * .24, cG * .38 + cR * .15 + cB * .15, cB * .44 + cG * .12);
 
       vec2 upV = bp - vec2(.57, .43);
       float upR = length(upV);
       float upAng = atan(upV.y, upV.x) - lightAngle * .20 - pointer.x * .10;
       float upArc = smoothstep(-.92, -.18, upAng) * (1. - smoothstep(.38, .86, upAng));
-      float uR = exp(-pow((upR - (.446 + dispShift * .72)) / .029, 2.));
-      float uG = exp(-pow((upR - .422) / .027, 2.));
-      float uB = exp(-pow((upR - (.398 - dispShift * .72)) / .029, 2.));
-      vec3 upperPrism = vec3(uR * .28 + uG * .15, uG * .27 + uR * .09 + uB * .10, uB * .28 + uG * .09);
+      float uR = exp(-pow((upR - (.448 + dispShift * .72)) / .027, 2.));
+      float uG = exp(-pow((upR - .422) / .025, 2.));
+      float uB = exp(-pow((upR - (.396 - dispShift * .72)) / .027, 2.));
+      vec3 upperPrism = vec3(uR * .32 + uG * .18, uG * .30 + uR * .10 + uB * .11, uB * .32 + uG * .10);
 
-      float prismGain = (.74 + .44 * pulse + .34 * abs(lightAngle) + .26 * abs(sway));
+      float prismGain = (.78 + .44 * pulse + .34 * abs(lightAngle) + .26 * abs(sway) + .36 * floorBeam);
       causticAdd += (lowerPrism * loArc + upperPrism * upArc) * footMask * prismGain;
 
       // 3. Flute-modulated travelling lime filament caustic seam on the warm paper.
@@ -926,19 +1044,19 @@ void main() {
       float reedMod = .72 + .28 * pow(.5 + .5 * cos((bp.x + reedShift * .5) / flute * 6.2831853), 2.5);
       float seamCore = exp(-kerfD * kerfD * 640.) * alongKerf * reedMod;
       float seamHalo = exp(-kerfD * kerfD * 52.) * alongKerf;
-      float fPulse = flow(bp.x) * glow * (.44 + .52 * pulse + .48 * (1. - recovery) + .26 * (1. - intro));
-      causticAdd += (vec3(.25, .35, .07) * seamCore + vec3(.065, .11, .014) * seamHalo) * fPulse * footMask;
+      float fPulse = flow(bp.x) * glow * (.46 + .52 * pulse + .48 * (1. - recovery) + .26 * (1. - intro));
+      causticAdd += (vec3(.26, .37, .075) * seamCore + vec3(.068, .115, .015) * seamHalo) * fPulse * footMask;
 
       // 4. Touch shockwave refracted caustic ring projected onto the paper.
       if (shockA.w > .01 && shockA.z < 2.2) {
         float x = (length(bp - shockA.xy) - shockA.z * .95) / (.055 + shockA.z * .06);
         float w = exp(-x * x) * shockA.w * exp(-shockA.z * 1.7);
-        causticAdd += vec3(.24, .36, .22) * w * footMask;
+        causticAdd += vec3(.26, .38, .24) * w * footMask;
       }
       if (shockB.w > .01 && shockB.z < 2.2) {
         float x = (length(bp - shockB.xy) - shockB.z * .95) / (.055 + shockB.z * .06);
         float w = exp(-x * x) * shockB.w * exp(-shockB.z * 1.7);
-        causticAdd += vec3(.24, .36, .22) * w * footMask;
+        causticAdd += vec3(.26, .38, .24) * w * footMask;
       }
     }
 
@@ -946,31 +1064,40 @@ void main() {
   } else if (kind < 2.5) {
     float z = ramp(plate.z, -.1445, .1615);
     float wakePulse = (1. - intro) * .45;
-    vec3 bar = mix(vec3(.62, .82, .16), vec3(.98, 1., .80), clamp(z * z + .38 * pulse + wakePulse + (flow(p.x) - 1.) * .9, 0., 1.));
+    vec3 bar = mix(vec3(.62, .82, .16), vec3(.98, 1., .82), clamp(z * z + .38 * pulse + wakePulse + (flow(p.x) - 1.) * .9, 0., 1.));
     gl_FragColor = vec4(bar, 1.);
   } else {
     float d = abs(side);
     float cap = smoothstep(filamentRange.x - .028, filamentRange.x + .008, p.x)
       * (1. - smoothstep(filamentRange.y - .008, filamentRange.y + .028, p.x));
     float wakeBoost = (1. - intro) * .28;
-    float bloom = (.31 + .19 * pulse + wakeBoost) * glow * flow(p.x) * exp(-d * d * (4.4 - 1.2 * pulse)) * cap;
-    float spread = (.13 + .10 * pulse + wakeBoost * .5) * glow * exp(-d * d * 18.) * cap;
+    float bloom = (.32 + .20 * pulse + wakeBoost) * glow * flow(p.x) * exp(-d * d * (4.4 - 1.2 * pulse)) * cap;
+    float spread = (.14 + .10 * pulse + wakeBoost * .5) * glow * exp(-d * d * 18.) * cap;
     float core = (1. - smoothstep(.055, .175 + .045 * pulse, d)) * cap * cap;
     float alpha = min(1., max(bloom + spread, core));
-    vec3 colour = mix(vec3(178., 226., 50.) / 255., vec3(250., 255., 228.) / 255., core);
+    vec3 colour = mix(vec3(178., 228., 52.) / 255., vec3(250., 255., 230.) / 255., core);
     gl_FragColor = vec4(colour * alpha, alpha);
   }
 }`;
 
-function texture(gl, source) {
+function texture(gl, source, mipmap = false) {
   const tex = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, tex);
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, mipmap ? gl.LINEAR_MIPMAP_LINEAR : gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  if (mipmap) {
+    gl.generateMipmap(gl.TEXTURE_2D);
+    const aniso = gl.getExtension('EXT_texture_filter_anisotropic')
+      || gl.getExtension('WEBKIT_EXT_texture_filter_anisotropic');
+    if (aniso) {
+      const max = gl.getParameter(aniso.MAX_TEXTURE_MAX_ANISOTROPY_EXT);
+      gl.texParameterf(gl.TEXTURE_2D, aniso.TEXTURE_MAX_ANISOTROPY_EXT, Math.min(8, max));
+    }
+  }
   return tex;
 }
 
@@ -1054,7 +1181,7 @@ function filamentBars([[x0, y0], [x1, y1]], near, far) {
   return { data: data.concat(card), barCount: box.length, glowCount: 6 };
 }
 
-export function createGlass(stage, { outlines, flute, filament, back, front, groundMap, halo, haloPad = 0 }) {
+export function createGlass(stage, { outlines, flute, filament, back, front, groundMap, halo, haloPad = 0, etchMap }) {
   const canvas = document.createElement('canvas');
   canvas.className = 'glass';
   canvas.setAttribute('aria-hidden', 'true');
@@ -1106,10 +1233,12 @@ export function createGlass(stage, { outlines, flute, filament, back, front, gro
 
   const groundTexture = texture(gl, groundMap);
   const haloTexture = halo ? texture(gl, halo) : null;
+  const etchTexture = etchMap ? texture(gl, etchMap, true) : null;
 
   gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_CUBE_MAP, envCube);
   gl.activeTexture(gl.TEXTURE3); gl.bindTexture(gl.TEXTURE_2D, groundTexture);
   gl.activeTexture(gl.TEXTURE4); gl.bindTexture(gl.TEXTURE_2D, haloTexture);
+  if (etchTexture) { gl.activeTexture(gl.TEXTURE5); gl.bindTexture(gl.TEXTURE_2D, etchTexture); }
 
   gl.useProgram(glassProg);
   gl.uniform1f(ug('flute'), flute);
@@ -1119,6 +1248,7 @@ export function createGlass(stage, { outlines, flute, filament, back, front, gro
   gl.uniform2f(ug('filamentRange'), filament[0][0], filament[1][0]);
   gl.uniform1i(ug('envCube'), 2);
   gl.uniform1i(ug('groundMap'), 3);
+  gl.uniform1i(ug('etchMap'), 5);
 
   gl.useProgram(fxProg);
   gl.uniform1f(uf('flute'), flute);
@@ -1175,7 +1305,7 @@ export function createGlass(stage, { outlines, flute, filament, back, front, gro
       const px = pointer[0], py = pointer[1];
       const effQuality = software ? Math.min(quality, 1) : quality;
 
-      // Pass 1: Ground caustics + halo using lightweight fxProg.
+      // Pass 1: Ground caustics + volumetric kerf shafts / halo using lightweight fxProg.
       gl.useProgram(fxProg);
       setAttribs(fAttr);
       gl.uniform3fv(uf('row1'), rows[0]);

@@ -11,11 +11,14 @@
 import { createRenderer } from './gl/gl.js';
 import { TEAR } from './negative.js';
 import { SPECTRUM, makeBeams } from './spectrum.js';
+import { SPACE } from './space.js';
 
 const fragment = `precision highp float;
 ${TEAR}
 ${SPECTRUM}
-uniform vec2 res, origin, dir, pointer, trail;
+${SPACE}
+uniform vec2 res, origin, dir, pointer, trail, spaceShift;
+uniform float spaceOn;
 uniform vec4 ghostBox, tear;
 uniform float cell, time, age, hold, end, size, ghostReady, pulse, dpr, wake, lightAngle;
 uniform vec3 rings;
@@ -125,6 +128,8 @@ vec4 heldGlass(vec2 screen) {
 // The calm print as it stood before the exposure: the captured glass over
 // paper that follows the page's own gradient, studio wash, and grain.
 vec3 paperAt(vec2 s) {
+  // Behind the starship the print is deep space, not paper.
+  if (spaceOn > .5) return spaceColor(s / dpr - spaceShift);
   vec2 uv = s / res;
   float t = length((uv - vec2(.36, .26)) / vec2(.64, .74)) * .7071;
   vec3 c = mix(vec3(.984, .976, .945), vec3(.937, .925, .886), clamp(t / .43, 0., 1.));
@@ -248,6 +253,7 @@ export function createField(stage) {
   let ghost = null, scale = 1;
   const held = makeBeams();
   let ghostBox = [0, 0, 1, 1];
+  let spaceHeld = 0, spaceView = [1, 1], spaceShift = [0, 0];
 
   return {
     canvas,
@@ -258,8 +264,13 @@ export function createField(stage) {
       canvas.height = Math.max(1, Math.round(h * scale));
     },
     // Upload just the glass layer when available, before it is hidden.
-    capture(source, [x, y, width, height], w, h, beams = null) {
+    capture(source, [x, y, width, height], w, h, beams = null, space = null) {
       ghostBox = [x / w, y / h, width / w, height / h];
+      spaceHeld = space ? 1 : 0;
+      if (space) {
+        spaceView = space.view.slice();
+        spaceShift = space.shift.slice();
+      }
       held.tone.fill(0);
       if (beams?.lit) {
         held.ref = beams.ref;
@@ -281,6 +292,7 @@ export function createField(stage) {
         wake, lightAngle,
         ghostReady: ghost ? 1 : 0, ghostBox, pulse, tear, dpr: scale,
         beamRef: held.ref, beamRay: held.ray, beamFan: held.fan, beamTone: held.tone,
+        spaceOn: spaceHeld, spaceView, spaceShift,
       };
       if (ghost) uniforms.ghost = ghost;
       renderer.draw(uniforms);

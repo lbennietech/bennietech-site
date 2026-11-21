@@ -167,3 +167,34 @@ main.ready .studio-wash { opacity: .85; }
 @media (prefers-reduced-motion: reduce) {
   .studio-wash { display: none; }
 }
+
+/* Deep space behind the starship B. The starfield canvas is oversized so it
+   can drift with the pointer; it fades in once painted. Before that, and
+   without scripts, a gradient sketch of the same planet and sunrise stands in. */
+canvas.space {
+  inset: auto;
+  left: -28px;
+  top: -28px;
+  width: calc(100% + 56px);
+  height: calc(100% + 56px);
+  opacity: 0;
+  pointer-events: none;
+  will-change: opacity, transform;
+}
+main.space.ready canvas.space { opacity: 1; transition: opacity .9s ease; }
+main.space {
+  background-color: #020308;
+  background-image:
+    radial-gradient(ellipse 58vmax 3px at 79% 87.6%, rgba(130, 175, 255, .45), transparent),
+    radial-gradient(ellipse 26vmax 7vmax at 79% 87.6%, rgba(255, 214, 170, .6), rgba(255, 140, 60, .16) 38%, transparent 72%),
+    radial-gradient(circle 230vmax at 56% calc(87.5% + 230vmax), #05080d 0, #05080d calc(100% - 2px),
+      #6e9cf2 100%, rgba(70, 120, 230, .28) calc(100% + 5px), rgba(40, 80, 180, .07) calc(100% + 40px), transparent calc(100% + 120px)),
+    radial-gradient(ellipse 60% 50% at 80% 28%, rgba(10, 42, 56, .32), transparent 70%),
+    linear-gradient(#020308, #03060c);
+}
+main.space::after { opacity: 0; }
+main.space .studio-wash { opacity: 0; }
+main.space .signature img:first-child { opacity: 0; }
+main.space .signature-night { opacity: 1; }
+main.space .email { color: #b7bcb2; --fringe: #8fb02a; }
+main.space .email:hover, main.space .email:focus-visible { color: #eef0ea; --fringe: #c6ec5a; }

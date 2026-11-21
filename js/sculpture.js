@@ -1,9 +1,11 @@
 import { createField } from './field.js';
 import { createGlass } from './glass.js';
-import { makeGround, makeHalo, HALO_PAD } from './glass-ground.js';
+import { makeReededGround, makeFurGround, makeHalo, HALO_PAD } from './glass-ground.js';
+import { FLIGHT } from './glass-scifi.js';
 import { prepareOil } from './oil-volume.js';
 import { exposureTear } from './negative.js';
 import { createSpectrum, aimBeams, makeBeams } from './spectrum.js';
+import { createSpace } from './space.js';
 
 // The two radii, baseline and diagonal kerf come from the production B mark.
 // Both glass halves and their projected light share this exact silhouette.
@@ -162,7 +164,8 @@ const SIDE_STOPS = [
 ];
 const ARRIS_STOPS = [[0, '#fcfff2'], [.38, '#f1f6df'], [.63, '#9fae94'], [.78, '#e1e9d9'], [1, '#fefff0']];
 const BACK = -.272, FRONT = .2805;
-const groundMap = makeGround(plates, FLUTE);
+const reededGroundMap = makeReededGround(plates, FLUTE);
+const furGroundMap = makeFurGround(plates);
 const filamentLine = [[.09, KERF - .27875 * .09], [filamentEnd, KERF - .27875 * filamentEnd]];
 const haloMap = makeHalo(plates, filamentLine);
 
@@ -233,7 +236,7 @@ const ctx = canvas.getContext('2d');
 const stage = canvas.closest('main');
 const wash = stage.querySelector('.studio-wash');
 const chrome = document.querySelector('meta[name="theme-color"]');
-const paperTone = chrome?.content;
+const PAPER_TONE = '#e5e1d8', SPACE_TONE = '#03060b';
 let chromeDark = false;
 const reduced = matchMedia('(prefers-reduced-motion: reduce)');
 
@@ -249,6 +252,13 @@ const drag = {
 };
 // Direct studio light angle (scroll wheel) and passive mobile tilt parallax.
 const rig = { lightDeg: 0, lightRad: 0, lightTarget: 0, gyroX: 0, gyroY: 0 };
+// Secondary spring follow-through for independent half-B magnetic coupling & levitating rift shards.
+const kinetic = {
+  lagX: 0, lagY: 0, vLagX: 0, vLagY: 0,
+  twist: 0, vTwist: 0,
+  shardX: 0, shardY: 0, vShardX: 0, vShardY: 0,
+  shardSpin: 0,
+};
 // Travelling capillary ripple memory for the obsidian liquid shader.
 const ripples = [[.56, .845, 10, 0], [.56, .845, 10, 0]];
 let rippleSlot = 0;
@@ -258,13 +268,17 @@ function pushRipple(fx, fy, strength = 1) {
   rippleSlot = (rippleSlot + 1) % ripples.length;
 }
 
-let w, h, size, centre, pixelRatio, time = 0, last = 0, frame = 0, lastTap = -1;
+let w = canvas.clientWidth || innerWidth || 1, h = canvas.clientHeight || innerHeight || 1;
+let size = Math.min(h * .31, w * .49), centre = h * .48, pixelRatio = Math.min(devicePixelRatio || 1, 2);
+let time = 0, last = 0, frame = 0, lastTap = -1;
 
 const field = createField(canvas);
 const glass = createGlass(canvas, {
-  outlines: halves.map(half => half.points), flute: FLUTE, back: BACK, front: FRONT, groundMap,
-  halo: haloMap, haloPad: HALO_PAD, filament: filamentLine,
+  outlines: halves.map(half => half.points), flute: FLUTE, back: BACK, front: FRONT,
+  reededGroundMap, furGroundMap, halo: haloMap, haloPad: HALO_PAD, filament: filamentLine,
 });
+// Deep space behind the starship B; the paper returns for the other works.
+const space = glass ? createSpace(canvas.closest('.exhibit').firstElementChild, { software: glass.software }) : null;
 // Sunlight split by the glass, thrown across the paper behind it.
 const spectrum = glass ? createSpectrum(glass.canvas, { software: glass.software }) : null;
 const beams = makeBeams();
@@ -279,6 +293,7 @@ const rightVec = new Float32Array(3), downVec = new Float32Array(3);
 const centreArr = [0, 0], viewArr = [0, 0], shiftArr = [0, 0], groundArr = [0, 0, 0, 0];
 const focusArr = [0, 0], tearArr = [0, 0, 0, 0], pointerPxArr = [0, 0], trailPxArr = [0, 0], velArr = [0, 0];
 const originArr = [0, 0], dirArr = [0, 0], pointerNormArr = [0, 0];
+const halfMotionArr = [0, 0, 0, 0], shardMotionArr = [0, 0, 0, 0];
 
 // The turn as three rows over the B's own axes: screen x, screen y, and
 // depth, signed so the front face (larger z) is nearer.
@@ -313,18 +328,26 @@ const reachPoints = [
   [-HALO_PAD, -HALO_PAD, 0], [1.21 + HALO_PAD, -HALO_PAD, 0],
   [1.21 + HALO_PAD, 1.69 + HALO_PAD, 0], [-HALO_PAD, 1.69 + HALO_PAD, 0],
 ];
-function reachOf() {
+// The starship's fleet flies inside an ellipsoid around the B.
+const flightPoints = [];
+for (let i = 0; i < 14; i++) for (let j = 0; j < 7; j++) {
+  const a = i / 14 * Math.PI * 2, b = (j + .5) / 7 * Math.PI - Math.PI / 2;
+  flightPoints.push([.56 + Math.cos(a) * Math.cos(b) * (FLIGHT[0] + .07), .845 + Math.sin(b) * (FLIGHT[1] + .07),
+    Math.sin(a) * Math.cos(b) * (FLIGHT[2] + .07)]);
+}
+function reachOf(variant = glassVariant) {
   const box = [Infinity, Infinity, -Infinity, -Infinity];
+  const points = variant === STARSHIP && glass ? [...reachPoints, ...flightPoints] : reachPoints;
   const steps = n => Array.from({ length: n }, (_, i) => i / (n - 1) * 2 - 1);
-  for (const y of steps(5)) for (const p of steps(5)) for (const t of [-1, 1]) for (const offset of [-.048, .048]) {
-    const yaw = -.46 + y * .56, pitch = -.16 + (p > 0 ? p * .46 : p * .30), tilt = -.115 + t * .022;
+  for (const y of steps(5)) for (const p of steps(5)) for (const t of [-1, 1]) for (const offset of [-.06, .06]) {
+    const yaw = -.46 + y * .95, pitch = -.16 + (p > 0 ? p * .58 : p * .48), tilt = -.115 + t * .045;
     const c = Math.cos(tilt), s = Math.sin(tilt);
     const ax = c * Math.cos(yaw) - s * Math.sin(yaw) * Math.sin(pitch);
     const ay = s * Math.cos(yaw) + c * Math.sin(yaw) * Math.sin(pitch);
     const bx = -s * Math.cos(pitch), by = c * Math.cos(pitch);
     const zx = c * Math.sin(yaw) + s * Math.cos(yaw) * Math.sin(pitch);
     const zy = s * Math.sin(yaw) - c * Math.cos(yaw) * Math.sin(pitch);
-    for (const [u, v, z] of reachPoints) {
+    for (const [u, v, z] of points) {
       const dv = v - .845 + offset;
       const x = w / 2 + size * (ax * (u - .56) + bx * dv + zx * z);
       const yy = centre + size * (ay * (u - .56) + by * dv + zy * z);
@@ -333,8 +356,8 @@ function reachOf() {
     }
   }
   // The shadow and caustic lie on the ground beneath it.
-  for (const sway of [-.52, .52]) {
-    const [x, y, rx, ry] = groundCard(sway, .012, sway * .5);
+  for (const sway of [-.58, .58]) {
+    const [x, y, rx, ry] = groundCard(sway, .016, sway * .5);
     box[0] = Math.min(box[0], x - rx);
     box[2] = Math.max(box[2], x + rx);
     box[3] = Math.max(box[3], y + ry);
@@ -344,6 +367,33 @@ function reachOf() {
 
 let glitchShowing = false, stageDrawn = true, glassDrawn = false;
 let lastExposureEnd = -Infinity, tearBeat = 0, nextTear = 0, lastWashKey = '';
+// Rotates through all 3 sculpture variants once per black-liquid exposure:
+//   0 = Starship B, a kitbashed megastructure patrolled by a small fleet, in deep space
+//   1 = Classic Reeded Architectural Float-Glass B
+//   2 = AAA 3D Plush Fur B (Bright Orange Fur + Bright Purple Streaks, PBD Physics & Light Breeze)
+const GLASS_VARIANTS = 3, STARSHIP = 0;
+// The starship holds the stage for at least this long unless a double-tap
+// calls the glitch sooner.
+const STARSHIP_STAY = 10.5;
+let glassVariant = 0, swappedExposure = null;
+let spaceOn = false, spaceShiftX = 0, spaceShiftY = 0;
+
+function setSpace(on) {
+  on = Boolean(on && space);
+  stage.classList.toggle('space', on);
+  if (on === spaceOn) return;
+  spaceOn = on;
+  space?.activate(on);
+  if (chrome && !chromeDark) chrome.content = on ? SPACE_TONE : PAPER_TONE;
+}
+
+// Each glitch hands the stage to the next work, unseen behind the black.
+function advanceVariant() {
+  glassVariant = (glassVariant + 1) % GLASS_VARIANTS;
+  setSpace(glassVariant === STARSHIP);
+  if (glass) glass.resize(pixelRatio, reachOf(glassVariant));
+  if (glassVariant === STARSHIP) glass?.arrive();
+}
 let oilVolume;
 // Each exposure is planned afresh so no two play alike: a stutter of up to
 // three brief flashes, a hold of uneven length, rings and drips in their own
@@ -386,18 +436,29 @@ function planExposure(start, aftershock = false) {
     phase: Math.random() * 4, seed: Math.random(),
   };
 }
-let exposure = planExposure(3 + Math.random() * 3);
+if (!glass) glassVariant = 1;
+setSpace(glassVariant === STARSHIP);
+let exposure = planExposure(spaceOn ? STARSHIP_STAY + Math.random() * 3 : 3 + Math.random() * 3);
 
 function exposureAge() {
   if (reduced.matches) return -1;
   const age = time - exposure.start;
   // The glass starts to recover when the hold ends, even if the signal
   // still relapses afterwards.
-  if (age >= exposure.end && lastExposureEnd < exposure.start) lastExposureEnd = exposure.start + exposure.end;
+  if (age >= exposure.end && lastExposureEnd < exposure.start) {
+    lastExposureEnd = exposure.start + exposure.end;
+    if (swappedExposure !== exposure) {
+      swappedExposure = exposure;
+      advanceVariant();
+    }
+  }
   if (age >= exposure.finish) {
     // Waits average about thirteen seconds but range from six to twenty-six.
-    const shock = !exposure.aftershock && Math.random() < .14;
-    const wait = shock ? 1.2 + Math.random() * 2.2 : 6 + Math.min(20, -Math.log(1 - Math.random()) * 7);
+    // The starship always gets its full stay, with no aftershock.
+    const starship = glassVariant === STARSHIP && spaceOn;
+    const shock = !starship && !exposure.aftershock && Math.random() < .14;
+    let wait = shock ? 1.2 + Math.random() * 2.2 : 6 + Math.min(20, -Math.log(1 - Math.random()) * 7);
+    if (starship) wait = Math.max(wait, STARSHIP_STAY + Math.random() * 3.5);
     exposure = planExposure(time + wait, shock);
     return -1;
   }
@@ -406,6 +467,11 @@ function exposureAge() {
   if (age < exposure.holdStart) return within(exposure.flashes) ? age : -1;
   if (age >= exposure.end) return within(exposure.tail) ? age : -1;
   return age;
+}
+
+// What the glitch's torn print rows need to rebuild the starfield behind the B.
+function spaceStill() {
+  return spaceOn ? { view: [w, h], shift: [spaceShiftX, spaceShiftY] } : null;
 }
 
 function glassRamp(x, y, dx, dy, stops) {
@@ -445,9 +511,9 @@ function ensureStageBuffer() {
 function draw() {
   const age = exposureAge();
   const isNeg = age >= 0;
-  // The held print can come straight from the last presented glass frame.
+  // The held print can come straight from the last presented sculpture frame.
   if (isNeg && !glitchShowing && field) {
-    if (glassDrawn) field.capture(glass.canvas, glass.box, w, h, spectrum ? beams : null);
+    if (glassDrawn) field.capture(glass.canvas, glass.box, w, h, spectrum && glassVariant === 1 ? beams : null, spaceStill());
     else field.capture(canvas, [0, 0, w, h], w, h);
   }
   glassDrawn = false;
@@ -464,7 +530,7 @@ function draw() {
   const held = isNeg && age >= exposure.holdStart && age < exposure.end;
   if (chrome && held !== chromeDark) {
     chromeDark = held;
-    chrome.content = held ? '#000000' : paperTone;
+    chrome.content = held ? '#000000' : spaceOn ? SPACE_TONE : PAPER_TONE;
   }
 
   const yaw = -.46 + Math.sin(time * .30) * .055 + pointer.x * .18 + drag.x + rig.gyroX;
@@ -502,13 +568,62 @@ function draw() {
   trailPxArr[1] = (pointer.trailY + 1) * h * .5;
 
   // Update ambient studio paper skylight wash smoothly without layout work.
-  if (wash && !isNeg) {
+  // In space the starfield drifts a little the other way instead.
+  if (spaceOn && !isNeg) {
+    const sx = Math.round((-rig.lightRad * 10 - pointer.x * 14) * 2) / 2;
+    const sy = Math.round(-pointer.y * 10 * 2) / 2;
+    if (sx !== spaceShiftX || sy !== spaceShiftY) {
+      spaceShiftX = sx;
+      spaceShiftY = sy;
+      space.canvas.style.transform = `translate3d(${sx}px,${sy}px,0)`;
+    }
+  } else if (wash && !isNeg) {
     const wx = (-rig.lightRad * 48 - pointer.x * 16).toFixed(1);
     const wy = (-pointer.y * 12).toFixed(1);
     const key = wx + ',' + wy;
     if (key !== lastWashKey) {
       lastWashKey = key;
       wash.style.transform = `translate3d(${wx}px,${wy}px,0)`;
+    }
+  }
+
+  const sway = yaw + .46;
+  const glint = .10 * Math.sin(time * .35) + pointer.x * .14 - pointer.y * .035;
+  const ground = groundCard(sway, lift, rig.lightRad, groundArr);
+  const recovery = reduced.matches ? 1 : Math.min(1, (time - lastExposureEnd) / .74);
+  const afterglow = reduced.matches ? 0 : Math.exp(-Math.max(0, time - lastExposureEnd) * 1.6);
+  const glow = 1 + .1 * Math.sin(time * .9) * intro + .3 * pulse + .45 * afterglow;
+  centreArr[0] = w * .5; centreArr[1] = centre;
+  viewArr[0] = w; viewArr[1] = h;
+  shiftArr[0] = -spread; shiftArr[1] = spread;
+  pointerNormArr[0] = pointer.x; pointerNormArr[1] = pointer.y;
+  const idleWave = time <= .001 || reduced.matches ? 0 : Math.min(1, time / 1.4);
+  halfMotionArr[0] = kinetic.lagX * .032 + Math.sin(time * .46) * .0065 * idleWave;
+  halfMotionArr[1] = -kinetic.lagX * .038 - Math.sin(time * .46 + .55) * .0075 * idleWave;
+  halfMotionArr[2] = kinetic.twist * .032 + Math.sin(time * .37) * .014 * idleWave;
+  halfMotionArr[3] = -kinetic.twist * .036 - Math.sin(time * .37 + .72) * .016 * idleWave;
+  shardMotionArr[0] = kinetic.shardX * .085;
+  shardMotionArr[1] = kinetic.shardY * .085;
+  shardMotionArr[2] = pointer.press * .72 + pulse * .42;
+  shardMotionArr[3] = kinetic.shardSpin;
+
+  // Mid-hold swap: once the black liquid has fully taken over (after tear-in,
+  // before tear-out), flip to the alternate glass work, render one hidden frame
+  // onto .glass (opacity 0), and re-capture the field's print so tear-out and
+  // the reforming dithered ghost materialize seamlessly as the new glass B.
+  if (held && swappedExposure !== exposure) {
+    const swapAt = Math.min(exposure.holdStart + exposure.tearIn, (exposure.holdStart + exposure.end) * .5);
+    if (age >= swapAt) {
+      swappedExposure = exposure;
+      advanceVariant();
+      if (field && glass?.render({
+        rows, centre: centreArr, size, view: viewArr, lift, shift: shiftArr, glint, sway, pulse, ground,
+        recovery: 0, lightAngle: rig.lightRad, intro: 1, glow: glow + .45, time, quality: glassQuality, detail: glassDetail,
+        pointer: pointerNormArr, shocks: ripples, sun: null,
+        halfMotion: halfMotionArr, shardMotion: shardMotionArr, variant: glassVariant,
+      })) {
+        field.capture(glass.canvas, glass.box, w, h, null, spaceStill());
+      }
     }
   }
 
@@ -545,16 +660,6 @@ function draw() {
       return;
     }
   }
-  const sway = yaw + .46;
-  const glint = .10 * Math.sin(time * .35) + pointer.x * .14 - pointer.y * .035;
-  const ground = groundCard(sway, lift, rig.lightRad, groundArr);
-  const recovery = reduced.matches ? 1 : Math.min(1, (time - lastExposureEnd) / .74);
-  // The filament's light breathes slowly, swells under a touch, and runs
-  // high for a moment as the glass comes back after a glitch.
-  const afterglow = reduced.matches ? 0 : Math.exp(-Math.max(0, time - lastExposureEnd) * 1.6);
-  const glow = 1 + .1 * Math.sin(time * .9) * intro + .3 * pulse + .45 * afterglow;
-  centreArr[0] = w * .5; centreArr[1] = centre;
-  viewArr[0] = w; viewArr[1] = h;
   // Sunlight reaches the glass just after the arrival sweep, and again,
   // a little quicker, as the glass returns from each glitch.
   const dawn = reduced.matches ? 9 : Math.min(time - .85, (time - lastExposureEnd - .12) * 1.5);
@@ -562,18 +667,18 @@ function draw() {
     rows, centre: centreArr, size, lift, yaw, pitch, lightAngle: rig.lightRad, time, dawn, pulse,
     tall: Math.min(1, Math.max(0, (1.05 - w / h) / .55)),
   });
-  shiftArr[0] = -spread; shiftArr[1] = spread;
-  pointerNormArr[0] = pointer.x; pointerNormArr[1] = pointer.y;
   // The GPU layer hides during a glitch, so a glitch without its liquid B
   // falls back to drawing the glass here.
+  const useSpectrum = Boolean(spectrum && glassVariant === 1);
   if (!isNeg && glass?.render({
     rows, centre: centreArr, size, view: viewArr, lift, shift: shiftArr, glint, sway, pulse, ground,
     recovery, lightAngle: rig.lightRad, intro, glow, time, quality: glassQuality, detail: glassDetail,
-    pointer: pointerNormArr, shocks: ripples, sun: spectrum ? beams.sun : null,
+    pointer: pointerNormArr, shocks: ripples, sun: useSpectrum ? beams.sun : null,
+    halfMotion: halfMotionArr, shardMotion: shardMotionArr, variant: glassVariant,
   })) {
     glassDrawn = glassShown = true;
     if (spectrum) {
-      if (beams.lit) spectrum.render(beams, rig.lightRad);
+      if (useSpectrum && beams.lit) spectrum.render(beams, rig.lightRad);
       else spectrum.clear();
     }
     return;
@@ -584,7 +689,7 @@ function draw() {
   stageDrawn = true;
   if (!isNeg) {
     const [x, y, rx, ry] = ground;
-    ctx.drawImage(groundMap, x - rx, y - ry, rx * 2, ry * 2);
+    ctx.drawImage(reededGroundMap, x - rx, y - ry, rx * 2, ry * 2);
   }
 
   function plane(z, part) {
@@ -727,11 +832,32 @@ function followPointer(dt) {
   const spd = Math.min(1, Math.hypot(pointer.vx, pointer.vy) * .22);
   pointer.wake = Math.max(pointer.wake * Math.exp(-4.2 * dt), spd);
   for (const rip of ripples) if (rip[3] > 0 && rip[2] < 3.5) rip[2] += dt;
+
+  // Secondary spring follow-through for half-B magnetic shear/torsion & levitating shards.
+  const kRate = 6.2, kDec = Math.exp(-kRate * dt);
+  const tLagX = Math.max(-1, Math.min(1, drag.vx * .34 + pointer.vx * .14));
+  const tLagY = Math.max(-1, Math.min(1, drag.vy * .34 + pointer.vy * .14));
+  const kdx = kinetic.lagX - tLagX, kmx = kinetic.vLagX + kRate * kdx;
+  kinetic.lagX = tLagX + (kdx + kmx * dt) * kDec;
+  kinetic.vLagX = (kinetic.vLagX - kRate * kmx * dt) * kDec;
+  const tTwist = Math.max(-1, Math.min(1, drag.x * .95 + drag.vx * .22));
+  const kdt = kinetic.twist - tTwist, kmt = kinetic.vTwist + kRate * kdt;
+  kinetic.twist = tTwist + (kdt + kmt * dt) * kDec;
+  kinetic.vTwist = (kinetic.vTwist - kRate * kmt * dt) * kDec;
+
+  const sRate = 4.6, sDec = Math.exp(-sRate * dt);
+  const sdx = kinetic.shardX - (-tLagX), smx = kinetic.vShardX + sRate * sdx;
+  kinetic.shardX = -tLagX + (sdx + smx * dt) * sDec;
+  kinetic.vShardX = (kinetic.vShardX - sRate * smx * dt) * sDec;
+  const sdy = kinetic.shardY - (-tLagY), smy = kinetic.vShardY + sRate * sdy;
+  kinetic.shardY = -tLagY + (sdy + smy * dt) * sDec;
+  kinetic.vShardY = (kinetic.vShardY - sRate * smy * dt) * sDec;
+  kinetic.shardSpin += (drag.vx * .65 + pointer.vx * .22) * dt;
 }
 
 function tick(now) {
   frame = 0;
-  const elapsed = last ? (now - last) / 1000 : 0;
+  const elapsed = last ? Math.max(0, (now - last) / 1000) : 0;
   const dt = Math.min(elapsed, .06);
   last = now;
   // Each interval reflects the cost of the frame drawn before it.
@@ -753,14 +879,17 @@ function refresh() {
 }
 
 function fitCanvas() {
-  w = canvas.clientWidth;
-  h = canvas.clientHeight;
+  const cw = canvas.clientWidth, ch = canvas.clientHeight;
+  if (!cw || !ch) return false;
+  w = cw;
+  h = ch;
   pixelRatio = Math.min(devicePixelRatio || 1, 2);
   field?.resize(w, h, pixelRatio);
   size = Math.min(h * .31, w * .49);
   centre = h * .48;
   glass?.resize(pixelRatio, reachOf());
   spectrum?.resize(w, h, pixelRatio);
+  space?.resize(w, h, pixelRatio);
   // Keep the underlying 2D stage canvas at 1x1 while WebGL draws calm frames
   // so the browser avoids compositing an empty full-viewport 2D bitmap.
   if (!glass) ensureStageBuffer();
@@ -769,10 +898,11 @@ function fitCanvas() {
     canvas.height = 1;
     stageBufW = stageBufH = 1;
   }
+  return true;
 }
 
 function resize() {
-  fitCanvas();
+  if (!fitCanvas()) return;
   draw();
   document.querySelector('.silhouette').hidden = true;
   stage.classList.add('ready');
@@ -780,9 +910,11 @@ function resize() {
 }
 
 function pointAt(event) {
-  if (!event.isPrimary) return;
-  pointer.tx = Math.max(-1, Math.min(1, event.clientX / w * 2 - 1));
-  pointer.ty = Math.max(-1, Math.min(1, event.clientY / h * 2 - 1));
+  if (!event.isPrimary || !w || !h) return;
+  const nx = event.clientX / w * 2 - 1;
+  const ny = event.clientY / h * 2 - 1;
+  if (Number.isFinite(nx)) pointer.tx = Math.max(-1, Math.min(1, nx));
+  if (Number.isFinite(ny)) pointer.ty = Math.max(-1, Math.min(1, ny));
 }
 
 canvas.addEventListener('pointermove', event => {
@@ -795,8 +927,8 @@ canvas.addEventListener('pointermove', event => {
       stage.classList.add('dragging');
     }
     if (drag.moved) {
-      drag.tx = Math.max(-.34, Math.min(.34, dx * .52));
-      drag.ty = Math.max(-.20, Math.min(.36, -dy * .46));
+      drag.tx = Math.max(-.82, Math.min(.82, dx * .95));
+      drag.ty = Math.max(-.42, Math.min(.50, -dy * .68));
     }
   }
 });
@@ -838,12 +970,12 @@ window.addEventListener('pointerup', event => {
   if (event.pointerType !== 'mouse') pointer.tx = pointer.ty = 0;
 });
 
-// Wheel gently sweeps the studio key-light without scrolling the viewport.
+// Wheel smoothly rotates the 360-deg studio light rig & prism angle without scrolling.
 stage.addEventListener('wheel', event => {
   if (reduced.matches) return;
   event.preventDefault();
   const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
-  rig.lightDeg = Math.max(-55, Math.min(55, rig.lightDeg + Math.sign(delta) * Math.min(7, Math.abs(delta) * .06)));
+  rig.lightDeg = Math.max(-180, Math.min(180, rig.lightDeg + Math.sign(delta) * Math.min(9, Math.abs(delta) * .08)));
   rig.lightTarget = rig.lightDeg * Math.PI / 180;
 }, { passive: false });
 

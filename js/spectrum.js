@@ -1,34 +1,19 @@
-// Sunlight split by the glass B, thrown across the paper as spectral blades.
-//
-// Each blade is a thin fan of light that leaves a point on the B. Every
-// wavelength leaves at a slightly different angle, so the colours overlap
-// into a white-hot sliver where the light leaves the glass and draw apart
-// into a full spectrum the further it travels. The blades are anchored to
-// the block and swing with its turn, much faster than the block itself, as
-// light thrown by a turning prism does.
-//
-// Inside the glass, the sunlight's path through the upper bowl is handed to
-// the glass shader, where every reed splits it into a small spectrum and the
-// barrel walls flare where it leaves. The glitch's torn print rows keep the
-// light as it was when the picture was held.
+// Sunlight split by the crystal B, thrown across the gallery paper as silky
+// atmospheric spectral prism fans with delicate optical interference ribbons.
 import { program } from './gl/gl.js';
 
 export const BEAM_COUNT = 4;
 
-// Shared GLSL. Positions are CSS pixels on the page.
 export const SPECTRUM = `
 uniform vec4 beamRay[${BEAM_COUNT}];
 uniform vec4 beamFan[${BEAM_COUNT}];
 uniform vec4 beamTone[${BEAM_COUNT}];
 uniform float beamRef;
 
-// One line of the spectrum: its place across the blade, widened by the size
-// of the sun. Where the spread is still smaller than the source, near the
-// glass, the lines overlap into white.
 float spectralLine(float x, float spread, float blur, float at) {
-  float s = sqrt(.042 * spread * spread + blur * blur);
+  float s = sqrt(.044 * spread * spread + blur * blur);
   float d = (x - at * spread) / s;
-  return exp(-d * d) * inversesqrt(max(s / beamRef, .05));
+  return exp(-d * d) * inversesqrt(max(s / beamRef, .052));
 }
 
 vec3 spectralLight(vec2 s) {
@@ -42,32 +27,28 @@ vec3 spectralLight(vec2 s) {
     float spread = a * fan.x;
     float blur = fan.y + a * fan.z;
     float x = (ray.z * r.y - ray.w * r.x) * tone.y;
-    if (abs(x) > 1.3 * spread + 3. * blur + 2.) continue;
-    // Six lines from red, which bends least, to violet. Together they sum
-    // to warm sunlight.
-    vec3 c = vec3(.255, .021, .010) * spectralLine(x, spread, blur, -.84)
-      + vec3(.326, .135, .0) * spectralLine(x, spread, blur, -.50)
-      + vec3(.326, .323, .035) * spectralLine(x, spread, blur, -.17)
-      + vec3(.049, .342, .119) * spectralLine(x, spread, blur, .17)
-      + vec3(.0, .146, .485) * spectralLine(x, spread, blur, .51)
-      + vec3(.044, .013, .250) * spectralLine(x, spread, blur, .86);
-    // A little of the light scatters off the paper around each blade.
-    float wide = 2.4 * (spread + blur);
-    c += vec3(1., .93, .80) * .05 * exp(-x * x / (wide * wide)) * inversesqrt(max(wide / beamRef, .2));
+    if (abs(x) > 1.45 * spread + 3.4 * blur + 2.) continue;
+    vec3 c = vec3(.262, .019, .012) * spectralLine(x, spread, blur, -.85)
+      + vec3(.328, .132, .000) * spectralLine(x, spread, blur, -.51)
+      + vec3(.318, .322, .034) * spectralLine(x, spread, blur, -.17)
+      + vec3(.044, .344, .128) * spectralLine(x, spread, blur, .17)
+      + vec3(.000, .148, .488) * spectralLine(x, spread, blur, .52)
+      + vec3(.048, .016, .254) * spectralLine(x, spread, blur, .87);
+    // Gentle organic optical wave striation matching the broad sculpted lenses.
+    float stria = 1. + tone.w * .10 * sin((x / max(spread + blur, 1.)) * 8.5 - a / max(beamRef * 7., 1.));
+    float wide = 2.8 * (spread + blur);
+    c = c * stria + vec3(1., .96, .88) * .055 * exp(-x * x / (wide * wide)) * inversesqrt(max(wide / beamRef, .22));
     float along = a / fan.w;
-    float reach = (1. - smoothstep(.30, 1., along)) * smoothstep(0., tone.z, a);
-    light += c * (2.8 * tone.x * reach * (1. - .35 * smoothstep(0., .9, along)));
+    float reach = (1. - smoothstep(.24, 1., along)) * smoothstep(0., tone.z, a);
+    light += c * (2.55 * tone.x * reach * (1. - .40 * smoothstep(0., .92, along)));
   }
   return light;
 }
 
-// Light falling on paper. The paper keeps its own grain and tone, takes on
-// the colour of the light, and brightens where the light is strong: the
-// result is paper * tint + paper * light * gain.
 vec3 lightTint(vec3 light) {
   float peak = max(light.r, max(light.g, light.b));
   if (peak < .0015) return vec3(1.);
-  float cover = peak / (peak + .30);
+  float cover = peak / (peak + .34);
   return mix(vec3(1.), light / peak, .62 * cover);
 }
 const float LIGHT_GAIN = .52;
@@ -103,8 +84,6 @@ void main() {
   if (peak < .0015) { gl_FragColor = vec4(0.); return; }
   vec3 paper = paperAt(s);
   vec3 tint = lightTint(light);
-  // Composited over the real paper, which shows through by the share it
-  // keeps in every channel; this layer supplies the rest.
   float keep = min(tint.r, min(tint.g, tint.b));
   vec3 colour = paper * (tint - keep + light * LIGHT_GAIN);
   colour += dither(gl_FragCoord.xy) / 255.;
@@ -113,25 +92,21 @@ void main() {
 
 const vertex = `attribute vec2 p; void main() { gl_Position = vec4(p, 0., 1.); }`;
 
-// The sun enters the stem of the upper bowl from the window side and leaves
-// through the crown of its barrel (plate units). Every blade below starts
-// where light leaves the glass.
-const ENTRY = [0, .26], EXIT = [.99, .52], LOWER_EXIT = [1.2, 1.2];
+const ENTRY = [0, .27], EXIT = [.98, .50], LOWER_EXIT = [1.18, 1.22];
 const PATH = (() => {
   const dx = EXIT[0] - ENTRY[0], dy = EXIT[1] - ENTRY[1], length = Math.hypot(dx, dy);
   return { dir: [dx / length, dy / length], length };
 })();
 
-// Which way each blade runs at rest, on a wide screen and on a tall one, and
-// how hard it swings as the B turns [yaw, pitch, studio light]. Spread is
-// the tangent of half the spectrum's angle; source and divergence set how
-// soon the white separates into colour. Reach is in B heights.
 const BLADES = [
-  { at: EXIT, angle: [-.40, -1.22], lever: [2.4, -1.0, .75], spread: .032, source: .014, diverge: .009, reach: 1.45, power: 1, side: 1, wobble: .7 },
-  { at: EXIT, angle: [-.50, -1.34], lever: [2.8, -.9, .8], spread: .024, source: .008, diverge: .008, reach: 1.05, power: .30, side: 1, wobble: 4.4 },
-  { at: LOWER_EXIT, angle: [.36, 1.16], lever: [3.0, 1.2, .85], spread: .028, source: .011, diverge: .009, reach: 1.1, power: .6, side: -1, wobble: 3.1 },
-  // The sunlight itself, falling across the paper toward the B.
-  { at: ENTRY, sun: true, lever: [0, 0, .25], spread: 0, source: .034, diverge: .007, reach: 1.5, power: .24, side: 1, wobble: 2.2 },
+  // Hero primary spectral prism fan from the faceted upper crystal crown
+  { at: EXIT, angle: [-.36, -1.20], lever: [1.9, -.85, .72], spread: .038, source: .016, diverge: .011, reach: 1.52, power: .86, side: 1, wobble: .7, stria: .8 },
+  // Silky harmonic secondary fan off the upper crystal bevel
+  { at: EXIT, angle: [-.49, -1.32], lever: [2.3, -.75, .78], spread: .028, source: .010, diverge: .010, reach: 1.08, power: .26, side: 1, wobble: 4.4, stria: .6 },
+  // Lower pavilion barrel dispersive prism ray
+  { at: LOWER_EXIT, angle: [.37, 1.15], lever: [2.2, .95, .78], spread: .034, source: .013, diverge: .0105, reach: 1.16, power: .54, side: -1, wobble: 3.1, stria: .7 },
+  // Incoming gallery sunlight sheet from window side
+  { at: ENTRY, sun: true, lever: [0, 0, .22], spread: 0, source: .034, diverge: .008, reach: 1.5, power: .19, side: 1, wobble: 2.2, stria: 0 },
 ];
 
 export function createSpectrum(before, { software = false } = {}) {
@@ -166,7 +141,6 @@ export function createSpectrum(before, { software = false } = {}) {
   return {
     canvas,
     resize(w, h, ratio) {
-      // The light is soft-edged, so CSS resolution is indistinguishable from device resolution.
       scale = Math.min(ratio, 1);
       canvas.width = Math.max(1, Math.round(w * scale));
       canvas.height = Math.max(1, Math.round(h * scale));
@@ -199,23 +173,17 @@ const ease = (t, length) => {
   return 1 - (1 - x) ** 3;
 };
 
-// Aims every blade for this frame, and the light inside the glass that feeds
-// them. `dawn` counts seconds since the sunlight began to arrive: it falls
-// on the paper, crosses the glass, breaks out of the barrels with a spark,
-// and then the blades unfurl outward from the B.
 export function aimBeams(out, { rows, centre, size, lift, yaw, pitch, lightAngle, time, dawn, pulse, tall }) {
   const sunIn = ease(dawn, .9);
   const crossing = ease(dawn - .4, .7);
   const breach = ease(dawn - .95, .3);
   const spark = breach * Math.exp(-Math.max(0, dawn - 1.1) * 3.2);
   const unfurl = ease(dawn - 1.0, 1.5);
-  const press = 1 + .14 * pulse;
+  const press = 1 + .15 * pulse;
   out.lit = sunIn > .001;
-  out.ref = size * .05;
+  out.ref = size * .052;
   const [r0, r1] = rows;
-  // A turning prism throws its light through a wider angle than it turns,
-  // but the swing eases off so a hard drag never flings the blades about.
-  const soft = x => x / (1 + Math.abs(x) * 1.6);
+  const soft = x => x / (1 + Math.abs(x) * 1.85);
   const dyaw = soft(yaw + .46), dpitch = soft(pitch + .16);
   const screen = (u, v, z = 0) => {
     const qx = u - .56, qy = v - .845 + lift;
@@ -224,7 +192,6 @@ export function aimBeams(out, { rows, centre, size, lift, yaw, pitch, lightAngle
   };
   BLADES.forEach((b, i) => {
     const [x, y] = screen(...b.at);
-    // The sunlight runs on from the entry the way it crosses the glass.
     const toward = b.sun
       ? Math.atan2(-(r1[0] * PATH.dir[0] + r1[1] * PATH.dir[1]), -(r0[0] * PATH.dir[0] + r0[1] * PATH.dir[1]))
       : b.angle[0] + (b.angle[1] - b.angle[0]) * tall;
@@ -240,19 +207,17 @@ export function aimBeams(out, { rows, centre, size, lift, yaw, pitch, lightAngle
     out.tone[k] = b.power * press * (b.sun ? sunIn : unfurl * (1 + .5 * spark));
     out.tone[k + 1] = b.side;
     out.tone[k + 2] = size * .08;
-    out.tone[k + 3] = 0;
+    out.tone[k + 3] = b.stria;
   });
-  // Inside the glass: the sheet's path through the upper bowl, where each
-  // reed's little spectrum falls as the B turns, and the flares at the exits.
   const { sun } = out;
   sun.path[0] = ENTRY[0]; sun.path[1] = ENTRY[1]; sun.path[2] = PATH.dir[0]; sun.path[3] = PATH.dir[1];
-  sun.look[0] = .05;
+  sun.look[0] = .072;
   sun.look[1] = Math.max(.001, PATH.length * crossing);
-  sun.look[2] = .8 * press * sunIn;
-  sun.look[3] = .5 + .5 * Math.sin(dyaw * 5.5 + lightAngle * 2.2 + Math.sin(time * .21) * .35) * .62;
-  const flare = breach * (1 + 1.4 * spark) * press;
-  sun.exitA[0] = EXIT[0]; sun.exitA[1] = EXIT[1]; sun.exitA[2] = .85 * flare; sun.exitA[3] = .045;
-  sun.exitB[0] = LOWER_EXIT[0]; sun.exitB[1] = LOWER_EXIT[1]; sun.exitB[2] = .5 * flare; sun.exitB[3] = .04;
+  sun.look[2] = .82 * press * sunIn;
+  sun.look[3] = .5 + .5 * Math.sin(dyaw * 4.8 + lightAngle * 2.2 + Math.sin(time * .21) * .35) * .62;
+  const flare = breach * (1 + 1.35 * spark) * press;
+  sun.exitA[0] = EXIT[0]; sun.exitA[1] = EXIT[1]; sun.exitA[2] = .78 * flare; sun.exitA[3] = .058;
+  sun.exitB[0] = LOWER_EXIT[0]; sun.exitB[1] = LOWER_EXIT[1]; sun.exitB[2] = .48 * flare; sun.exitB[3] = .052;
   return out;
 }
 
